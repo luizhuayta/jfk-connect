@@ -459,3 +459,322 @@ export const mockAnnouncements: Announcement[] = [
     audience: "todos",
   },
 ];
+
+// ─── Teacher Panel ────────────────────────────────────────────────────────────
+
+export type TeacherCourse = {
+  id: string;
+  subject: string;
+  grade: string;       // "1ro", "2do", ...
+  section: string;     // "A", "B", ...
+  shift: string;
+  room: string;
+  studentsTotal: number;
+  hoursPerWeek: number;
+  currentBimester: number;
+  avgGrade: number;    // promedio de la sección
+  attendanceRate: number;
+};
+
+export const mockTeacherCourses: TeacherCourse[] = [
+  {
+    id: "tc-1",
+    subject: "Matemáticas",
+    grade: "1ro",
+    section: "A",
+    shift: "Mañana",
+    room: "Aula A-101",
+    studentsTotal: 32,
+    hoursPerWeek: 6,
+    currentBimester: 2,
+    avgGrade: 14.6,
+    attendanceRate: 94,
+  },
+  {
+    id: "tc-2",
+    subject: "Lengua Castellana",
+    grade: "2do",
+    section: "B",
+    shift: "Mañana",
+    room: "Aula B-203",
+    studentsTotal: 30,
+    hoursPerWeek: 5,
+    currentBimester: 2,
+    avgGrade: 15.3,
+    attendanceRate: 96,
+  },
+  {
+    id: "tc-3",
+    subject: "Historia",
+    grade: "3ro",
+    section: "C",
+    shift: "Mañana",
+    room: "Aula C-305",
+    studentsTotal: 28,
+    hoursPerWeek: 4,
+    currentBimester: 2,
+    avgGrade: 14.2,
+    attendanceRate: 91,
+  },
+];
+
+// ─── Alumnos por curso ────────────────────────────────────────────────────────
+
+export type CourseStudent = {
+  id: string;
+  name: string;
+  initials: string;
+  order: number; // número de orden en el aula
+};
+
+export const mockCourseStudents: Record<string, CourseStudent[]> = {
+  "tc-1": [ // Matemáticas 1ro "A"
+    { id: "s1-01", name: "Adriana Castillo Vega",       initials: "AC", order: 1  },
+    { id: "s1-02", name: "Bruno Espinoza Ríos",          initials: "BE", order: 2  },
+    { id: "s1-03", name: "Camila Herrera Ponce",         initials: "CH", order: 3  },
+    { id: "s1-04", name: "Diego Torres Aguilar",         initials: "DT", order: 4  },
+    { id: "s1-05", name: "Estefanía Quispe Mamani",      initials: "EQ", order: 5  },
+    { id: "s1-06", name: "Fabricio Mendoza Ramos",       initials: "FM", order: 6  },
+    { id: "s1-07", name: "Grecia Soto Palomino",         initials: "GS", order: 7  },
+    { id: "s1-08", name: "Hernán Villanueva Chávez",     initials: "HV", order: 8  },
+    { id: "s1-09", name: "Ivana Paredes León",           initials: "IP", order: 9  },
+    { id: "s1-10", name: "Jorge Bazán Trigoso",          initials: "JB", order: 10 },
+    { id: "s1-11", name: "Karla Muñoz Alvarado",         initials: "KM", order: 11 },
+    { id: "s1-12", name: "Leonardo Salas Ccahuana",      initials: "LS", order: 12 },
+    { id: "s1-13", name: "Milagros Cárdenas Pinto",      initials: "MC", order: 13 },
+    { id: "s1-14", name: "Néstor Chávez Huamaní",        initials: "NC", order: 14 },
+  ],
+  "tc-2": [ // Lengua Castellana 2do "B"
+    { id: "s2-01", name: "Alessandra Fuentes Quiroz",   initials: "AF", order: 1  },
+    { id: "s2-02", name: "Brayan Condori Torres",        initials: "BC", order: 2  },
+    { id: "s2-03", name: "Cristina Vásquez Huanca",      initials: "CV", order: 3  },
+    { id: "s2-04", name: "Daniel Peña Zamora",           initials: "DP", order: 4  },
+    { id: "s2-05", name: "Estela Cárdenas Pilco",        initials: "EC", order: 5  },
+    { id: "s2-06", name: "Félix Quispe Apaza",           initials: "FQ", order: 6  },
+    { id: "s2-07", name: "Gissela Ramos Benites",        initials: "GR", order: 7  },
+    { id: "s2-08", name: "Harold Castro Meza",           initials: "HC", order: 8  },
+    { id: "s2-09", name: "Iris Delgado Ccoyo",           initials: "ID", order: 9  },
+    { id: "s2-10", name: "Josué Arroyo Neyra",           initials: "JA", order: 10 },
+    { id: "s2-11", name: "Karina Lozano Puca",           initials: "KL", order: 11 },
+    { id: "s2-12", name: "Luis Tapia Mamani",            initials: "LT", order: 12 },
+    { id: "s2-13", name: "Melissa Orihuela Ccari",       initials: "MO", order: 13 },
+  ],
+  "tc-3": [ // Historia 3ro "C"
+    { id: "s3-01", name: "Antonella Miranda Pino",       initials: "AM", order: 1  },
+    { id: "s3-02", name: "Bastian Olivera Chino",        initials: "BO", order: 2  },
+    { id: "s3-03", name: "Claudia Ríos Ccopa",           initials: "CR", order: 3  },
+    { id: "s3-04", name: "Delfín Cusi Huallpa",          initials: "DC", order: 4  },
+    { id: "s3-05", name: "Elena Gamarra Yupanqui",       initials: "EG", order: 5  },
+    { id: "s3-06", name: "Franklin Ticona Huayhua",      initials: "FT", order: 6  },
+    { id: "s3-07", name: "Gloria Condori Paucar",        initials: "GC", order: 7  },
+    { id: "s3-08", name: "Héctor Lazo Gutiérrez",        initials: "HL", order: 8  },
+    { id: "s3-09", name: "Ingrid Pinto Maquera",         initials: "IP", order: 9  },
+    { id: "s3-10", name: "Jefferson Colque Mamani",      initials: "JC", order: 10 },
+    { id: "s3-11", name: "Lucero Flores Hancco",         initials: "LF", order: 11 },
+    { id: "s3-12", name: "Marco Valdez Quispe",          initials: "MV", order: 12 },
+  ],
+};
+
+// ─── Notas por curso y bimestre ───────────────────────────────────────────────
+
+export type GradeEntry = {
+  studentId: string;
+  n1: number;
+  n2: number;
+  n3: number;
+  observation: string;
+};
+
+// null = bimestre aún no registrado
+export const mockCourseGrades: Record<string, Record<string, GradeEntry[]>> = {
+  "tc-1": {
+    "Bimestre 1": [
+      { studentId: "s1-01", n1: 16, n2: 17, n3: 15, observation: "Muy buena disposición" },
+      { studentId: "s1-02", n1: 14, n2: 13, n3: 15, observation: "Buen esfuerzo" },
+      { studentId: "s1-03", n1: 18, n2: 17, n3: 19, observation: "Sobresaliente" },
+      { studentId: "s1-04", n1: 12, n2: 13, n3: 11, observation: "Necesita refuerzo" },
+      { studentId: "s1-05", n1: 15, n2: 14, n3: 16, observation: "Progresando bien" },
+      { studentId: "s1-06", n1: 17, n2: 18, n3: 17, observation: "Excelente desempeño" },
+      { studentId: "s1-07", n1: 13, n2: 12, n3: 14, observation: "En proceso" },
+      { studentId: "s1-08", n1:  9, n2: 10, n3: 11, observation: "Bajo rendimiento, refuerzo urgente" },
+      { studentId: "s1-09", n1: 16, n2: 15, n3: 17, observation: "Buena alumna" },
+      { studentId: "s1-10", n1: 14, n2: 16, n3: 15, observation: "Satisfactorio" },
+      { studentId: "s1-11", n1: 19, n2: 18, n3: 20, observation: "Destacada, candidata a excelencia" },
+      { studentId: "s1-12", n1: 11, n2: 12, n3: 10, observation: "Requiere apoyo adicional" },
+      { studentId: "s1-13", n1: 15, n2: 16, n3: 15, observation: "Buen rendimiento" },
+      { studentId: "s1-14", n1: 13, n2: 14, n3: 13, observation: "Regular, puede mejorar" },
+    ],
+    "Bimestre 2": [
+      { studentId: "s1-01", n1: 17, n2: 16, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-02", n1: 15, n2: 14, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-03", n1: 19, n2: 18, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-04", n1: 13, n2: 12, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-05", n1: 16, n2: 15, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-06", n1: 18, n2: 17, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-07", n1: 14, n2: 13, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-08", n1: 11, n2: 10, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-09", n1: 17, n2: 16, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-10", n1: 15, n2: 17, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-11", n1: 20, n2: 19, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-12", n1: 12, n2: 13, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-13", n1: 16, n2: 15, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s1-14", n1: 14, n2: 13, n3: 0,  observation: "Pendiente examen" },
+    ],
+    "Bimestre 3": [],
+    "Bimestre 4": [],
+  },
+  "tc-2": {
+    "Bimestre 1": [
+      { studentId: "s2-01", n1: 17, n2: 16, n3: 18, observation: "Excelente comprensión lectora" },
+      { studentId: "s2-02", n1: 13, n2: 14, n3: 12, observation: "Mejorar ortografía" },
+      { studentId: "s2-03", n1: 15, n2: 16, n3: 15, observation: "Buen desempeño oral" },
+      { studentId: "s2-04", n1: 16, n2: 15, n3: 17, observation: "Muy buena redacción" },
+      { studentId: "s2-05", n1: 11, n2: 12, n3: 10, observation: "Refuerzo en comprensión" },
+      { studentId: "s2-06", n1: 18, n2: 19, n3: 17, observation: "Sobresaliente" },
+      { studentId: "s2-07", n1: 14, n2: 13, n3: 15, observation: "Progresando" },
+      { studentId: "s2-08", n1: 16, n2: 17, n3: 16, observation: "Buena participación" },
+      { studentId: "s2-09", n1: 12, n2: 13, n3: 14, observation: "En proceso de mejora" },
+      { studentId: "s2-10", n1: 15, n2: 16, n3: 14, observation: "Satisfactorio" },
+      { studentId: "s2-11", n1: 19, n2: 18, n3: 20, observation: "Destacada" },
+      { studentId: "s2-12", n1: 10, n2: 11, n3:  9, observation: "Bajo rendimiento" },
+      { studentId: "s2-13", n1: 15, n2: 14, n3: 16, observation: "Buena alumna" },
+    ],
+    "Bimestre 2": [
+      { studentId: "s2-01", n1: 18, n2: 17, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-02", n1: 14, n2: 15, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-03", n1: 16, n2: 15, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-04", n1: 17, n2: 16, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-05", n1: 12, n2: 13, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-06", n1: 19, n2: 18, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-07", n1: 14, n2: 15, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-08", n1: 17, n2: 16, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-09", n1: 13, n2: 14, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-10", n1: 16, n2: 15, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-11", n1: 20, n2: 19, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-12", n1: 11, n2: 12, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s2-13", n1: 15, n2: 16, n3: 0,  observation: "Pendiente examen" },
+    ],
+    "Bimestre 3": [],
+    "Bimestre 4": [],
+  },
+  "tc-3": {
+    "Bimestre 1": [
+      { studentId: "s3-01", n1: 15, n2: 16, n3: 14, observation: "Buena comprensión histórica" },
+      { studentId: "s3-02", n1: 13, n2: 12, n3: 14, observation: "Mejorar análisis de fuentes" },
+      { studentId: "s3-03", n1: 17, n2: 16, n3: 18, observation: "Excelente" },
+      { studentId: "s3-04", n1: 11, n2: 10, n3: 12, observation: "Necesita refuerzo" },
+      { studentId: "s3-05", n1: 16, n2: 15, n3: 17, observation: "Muy buena participación" },
+      { studentId: "s3-06", n1: 12, n2: 13, n3: 11, observation: "En proceso" },
+      { studentId: "s3-07", n1: 14, n2: 15, n3: 13, observation: "Satisfactorio" },
+      { studentId: "s3-08", n1: 18, n2: 17, n3: 19, observation: "Sobresaliente" },
+      { studentId: "s3-09", n1: 13, n2: 14, n3: 12, observation: "Regular" },
+      { studentId: "s3-10", n1:  8, n2:  9, n3: 10, observation: "Bajo rendimiento, citar a padres" },
+      { studentId: "s3-11", n1: 16, n2: 17, n3: 15, observation: "Buen trabajo" },
+      { studentId: "s3-12", n1: 15, n2: 14, n3: 16, observation: "Progresando" },
+    ],
+    "Bimestre 2": [
+      { studentId: "s3-01", n1: 16, n2: 15, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-02", n1: 14, n2: 13, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-03", n1: 18, n2: 17, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-04", n1: 12, n2: 11, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-05", n1: 17, n2: 16, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-06", n1: 13, n2: 14, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-07", n1: 15, n2: 14, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-08", n1: 19, n2: 18, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-09", n1: 14, n2: 13, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-10", n1: 10, n2: 11, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-11", n1: 17, n2: 16, n3: 0,  observation: "Pendiente examen" },
+      { studentId: "s3-12", n1: 16, n2: 15, n3: 0,  observation: "Pendiente examen" },
+    ],
+    "Bimestre 3": [],
+    "Bimestre 4": [],
+  },
+};
+
+// ─── Horario del docente ──────────────────────────────────────────────────────
+
+export type TeacherScheduleSlot = {
+  time: string;
+  subject: string;
+  grade: string;
+  section: string;
+  room: string;
+};
+
+// PERIODS y DAYS ya definidos arriba, se reusan aquí
+// mockTeacherSchedule[day][periodIndex] = slot | null
+export const mockTeacherSchedule: Record<string, (TeacherScheduleSlot | null)[]> = {
+  "Lunes": [
+    { time: "7:45 - 8:30",   subject: "Matemáticas",      grade: "1ro", section: "A", room: "Aula A-101" },
+    { time: "8:30 - 9:15",   subject: "Matemáticas",      grade: "1ro", section: "A", room: "Aula A-101" },
+    { time: "9:15 - 10:00",  subject: "Historia",          grade: "3ro", section: "C", room: "Aula C-305" },
+    { time: "10:20 - 11:05", subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    { time: "11:05 - 11:50", subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    null,
+    null,
+  ],
+  "Martes": [
+    { time: "7:45 - 8:30",   subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    { time: "8:30 - 9:15",   subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    { time: "9:15 - 10:00",  subject: "Matemáticas",      grade: "1ro", section: "A", room: "Aula A-101" },
+    { time: "10:20 - 11:05", subject: "Historia",          grade: "3ro", section: "C", room: "Aula C-305" },
+    { time: "11:05 - 11:50", subject: "Matemáticas",      grade: "1ro", section: "A", room: "Aula A-101" },
+    null,
+    null,
+  ],
+  "Miércoles": [
+    { time: "7:45 - 8:30",   subject: "Matemáticas",      grade: "1ro", section: "A", room: "Aula A-101" },
+    { time: "8:30 - 9:15",   subject: "Matemáticas",      grade: "1ro", section: "A", room: "Aula A-101" },
+    { time: "9:15 - 10:00",  subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    { time: "10:20 - 11:05", subject: "Historia",          grade: "3ro", section: "C", room: "Aula C-305" },
+    { time: "11:05 - 11:50", subject: "Historia",          grade: "3ro", section: "C", room: "Aula C-305" },
+    null,
+    null,
+  ],
+  "Jueves": [
+    { time: "7:45 - 8:30",   subject: "Historia",          grade: "3ro", section: "C", room: "Aula C-305" },
+    { time: "8:30 - 9:15",   subject: "Historia",          grade: "3ro", section: "C", room: "Aula C-305" },
+    { time: "9:15 - 10:00",  subject: "Matemáticas",      grade: "1ro", section: "A", room: "Aula A-101" },
+    { time: "10:20 - 11:05", subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    { time: "11:05 - 11:50", subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    null,
+    null,
+  ],
+  "Viernes": [
+    { time: "7:45 - 8:30",   subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    { time: "8:30 - 9:15",   subject: "Lengua Castellana", grade: "2do", section: "B", room: "Aula B-203" },
+    { time: "9:15 - 10:00",  subject: "Historia",          grade: "3ro", section: "C", room: "Aula C-305" },
+    { time: "10:20 - 11:05", subject: "Matemáticas",      grade: "1ro", section: "A", room: "Aula A-101" },
+    null,
+    null,
+    null,
+  ],
+};
+
+// ─── Materiales por curso ─────────────────────────────────────────────────────
+
+export type Material = {
+  id: string;
+  courseId: string;
+  title: string;
+  type: "pdf" | "pptx" | "docx" | "xlsx" | "img";
+  size: string;
+  uploadedAt: string;
+  topic: string;
+};
+
+export const mockMaterials: Material[] = [
+  { id: "m1",  courseId: "tc-1", title: "Cap. 1 – Números reales y propiedades",         type: "pdf",  size: "1.2 MB", uploadedAt: "2026-03-05", topic: "Álgebra" },
+  { id: "m2",  courseId: "tc-1", title: "Práctica calificada B1 – Ecuaciones",           type: "docx", size: "320 KB", uploadedAt: "2026-03-18", topic: "Álgebra" },
+  { id: "m3",  courseId: "tc-1", title: "Diapositivas – Funciones lineales",             type: "pptx", size: "2.8 MB", uploadedAt: "2026-04-02", topic: "Funciones" },
+  { id: "m4",  courseId: "tc-1", title: "Cap. 2 – Funciones y gráficas",                type: "pdf",  size: "980 KB", uploadedAt: "2026-04-10", topic: "Funciones" },
+  { id: "m5",  courseId: "tc-1", title: "Práctica calificada B2 – Funciones",           type: "docx", size: "290 KB", uploadedAt: "2026-05-07", topic: "Funciones" },
+  { id: "m6",  courseId: "tc-2", title: "Separata – Comprensión lectora Texto 1",       type: "pdf",  size: "740 KB", uploadedAt: "2026-03-08", topic: "Comprensión" },
+  { id: "m7",  courseId: "tc-2", title: "Guía – Redacción de párrafos",                 type: "docx", size: "410 KB", uploadedAt: "2026-03-20", topic: "Producción" },
+  { id: "m8",  courseId: "tc-2", title: "Diapositivas – Tipos de texto",                type: "pptx", size: "3.1 MB", uploadedAt: "2026-04-05", topic: "Producción" },
+  { id: "m9",  courseId: "tc-2", title: "Práctica – Análisis de texto literario",       type: "pdf",  size: "620 KB", uploadedAt: "2026-04-22", topic: "Literatura" },
+  { id: "m10", courseId: "tc-3", title: "Cap. 1 – El Perú prehispánico",                type: "pdf",  size: "1.5 MB", uploadedAt: "2026-03-06", topic: "Historia del Perú" },
+  { id: "m11", courseId: "tc-3", title: "Línea de tiempo – Virreinato",                 type: "img",  size: "890 KB", uploadedAt: "2026-03-25", topic: "Historia del Perú" },
+  { id: "m12", courseId: "tc-3", title: "Diapositivas – Independencia del Perú",        type: "pptx", size: "4.2 MB", uploadedAt: "2026-04-15", topic: "República" },
+  { id: "m13", courseId: "tc-3", title: "Práctica – La República aristocrática",        type: "docx", size: "380 KB", uploadedAt: "2026-05-03", topic: "República" },
+];
