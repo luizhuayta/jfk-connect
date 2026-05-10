@@ -763,6 +763,56 @@ export type Material = {
   topic: string;
 };
 
+// ─── Asistencia de clases (docente) ──────────────────────────────────────────
+
+export type SessionRecord = {
+  studentId: string;
+  status: "A" | "F" | "T";
+};
+
+export type ClassSession = {
+  date: string;       // YYYY-MM-DD
+  courseId: string;
+  records: SessionRecord[];
+};
+
+function buildSessions(
+  courseId: string,
+  dates: string[],
+  studentIds: string[],
+  seed: number
+): ClassSession[] {
+  return dates.map((date, di) => ({
+    date,
+    courseId,
+    records: studentIds.map((studentId, si) => {
+      const r = (seed * 37 + di * 13 + si * 7) % 100;
+      const status: "A" | "F" | "T" = r < 5 ? "F" : r < 9 ? "T" : "A";
+      return { studentId, status };
+    }),
+  }));
+}
+
+const recentDates = [
+  "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30",
+  "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08",
+];
+
+const ids1 = ["s1-01","s1-02","s1-03","s1-04","s1-05","s1-06","s1-07",
+               "s1-08","s1-09","s1-10","s1-11","s1-12","s1-13","s1-14"];
+const ids2 = ["s2-01","s2-02","s2-03","s2-04","s2-05","s2-06","s2-07",
+               "s2-08","s2-09","s2-10","s2-11","s2-12","s2-13"];
+const ids3 = ["s3-01","s3-02","s3-03","s3-04","s3-05","s3-06",
+               "s3-07","s3-08","s3-09","s3-10","s3-11","s3-12"];
+
+export const mockClassSessions: ClassSession[] = [
+  ...buildSessions("tc-1", recentDates, ids1, 3),
+  ...buildSessions("tc-2", recentDates, ids2, 7),
+  ...buildSessions("tc-3", recentDates, ids3, 11),
+];
+
+// ─── Materiales por curso ─────────────────────────────────────────────────────
+
 export const mockMaterials: Material[] = [
   { id: "m1",  courseId: "tc-1", title: "Cap. 1 – Números reales y propiedades",         type: "pdf",  size: "1.2 MB", uploadedAt: "2026-03-05", topic: "Álgebra" },
   { id: "m2",  courseId: "tc-1", title: "Práctica calificada B1 – Ecuaciones",           type: "docx", size: "320 KB", uploadedAt: "2026-03-18", topic: "Álgebra" },
