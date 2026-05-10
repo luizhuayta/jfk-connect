@@ -828,3 +828,184 @@ export const mockMaterials: Material[] = [
   { id: "m12", courseId: "tc-3", title: "Diapositivas – Independencia del Perú",        type: "pptx", size: "4.2 MB", uploadedAt: "2026-04-15", topic: "República" },
   { id: "m13", courseId: "tc-3", title: "Práctica – La República aristocrática",        type: "docx", size: "380 KB", uploadedAt: "2026-05-03", topic: "República" },
 ];
+
+// ─── Admin — Secciones ────────────────────────────────────────────────────────
+
+export type AdminSection = {
+  id: string;
+  grade: string;       // "1ro", "2do", ...
+  gradeNum: number;    // 1-5
+  section: string;     // "A", "B", ...
+  shift: "Mañana" | "Tarde";
+  room: string;
+  tutor: string;
+  studentsTotal: number;
+  avgGrade: number;
+  attendanceRate: number;
+};
+
+export const mockAdminSections: AdminSection[] = [
+  // 1ro — 6 secciones
+  { id: "sec-1A", grade: "1ro", gradeNum: 1, section: "A", shift: "Mañana", room: "A-101", tutor: "Prof. Cáceres Vásquez",   studentsTotal: 32, avgGrade: 14.6, attendanceRate: 93 },
+  { id: "sec-1B", grade: "1ro", gradeNum: 1, section: "B", shift: "Mañana", room: "A-102", tutor: "Prof. Quispe Mamani",     studentsTotal: 31, avgGrade: 13.9, attendanceRate: 91 },
+  { id: "sec-1C", grade: "1ro", gradeNum: 1, section: "C", shift: "Mañana", room: "A-103", tutor: "Prof. Torres Alvarado",   studentsTotal: 30, avgGrade: 15.1, attendanceRate: 95 },
+  { id: "sec-1D", grade: "1ro", gradeNum: 1, section: "D", shift: "Tarde",  room: "A-104", tutor: "Prof. Flores Condori",    studentsTotal: 33, avgGrade: 14.2, attendanceRate: 89 },
+  { id: "sec-1E", grade: "1ro", gradeNum: 1, section: "E", shift: "Tarde",  room: "A-105", tutor: "Prof. Salas Huanca",      studentsTotal: 29, avgGrade: 13.5, attendanceRate: 88 },
+  { id: "sec-1F", grade: "1ro", gradeNum: 1, section: "F", shift: "Tarde",  room: "A-106", tutor: "Prof. Paredes Ccopa",     studentsTotal: 31, avgGrade: 14.0, attendanceRate: 90 },
+  // 2do — 5 secciones
+  { id: "sec-2A", grade: "2do", gradeNum: 2, section: "A", shift: "Mañana", room: "B-201", tutor: "Prof. Mendoza Ríos",      studentsTotal: 30, avgGrade: 15.3, attendanceRate: 96 },
+  { id: "sec-2B", grade: "2do", gradeNum: 2, section: "B", shift: "Mañana", room: "B-203", tutor: "Prof. Ramos Benites",     studentsTotal: 30, avgGrade: 15.1, attendanceRate: 94 },
+  { id: "sec-2C", grade: "2do", gradeNum: 2, section: "C", shift: "Mañana", room: "B-205", tutor: "Prof. Castro Trigoso",    studentsTotal: 28, avgGrade: 14.7, attendanceRate: 92 },
+  { id: "sec-2D", grade: "2do", gradeNum: 2, section: "D", shift: "Tarde",  room: "B-207", tutor: "Prof. Delgado Puca",      studentsTotal: 31, avgGrade: 13.8, attendanceRate: 87 },
+  { id: "sec-2E", grade: "2do", gradeNum: 2, section: "E", shift: "Tarde",  room: "B-209", tutor: "Prof. Huamán Chino",      studentsTotal: 29, avgGrade: 14.4, attendanceRate: 91 },
+  // 3ro — 5 secciones
+  { id: "sec-3A", grade: "3ro", gradeNum: 3, section: "A", shift: "Mañana", room: "C-301", tutor: "Prof. Villanueva Pino",   studentsTotal: 29, avgGrade: 14.9, attendanceRate: 94 },
+  { id: "sec-3B", grade: "3ro", gradeNum: 3, section: "B", shift: "Mañana", room: "C-303", tutor: "Prof. Arroyo Neyra",      studentsTotal: 28, avgGrade: 15.5, attendanceRate: 97 },
+  { id: "sec-3C", grade: "3ro", gradeNum: 3, section: "C", shift: "Mañana", room: "C-305", tutor: "Prof. Gutiérrez Lazo",    studentsTotal: 28, avgGrade: 14.2, attendanceRate: 91 },
+  { id: "sec-3D", grade: "3ro", gradeNum: 3, section: "D", shift: "Tarde",  room: "C-307", tutor: "Prof. Lozano Hancco",     studentsTotal: 30, avgGrade: 13.6, attendanceRate: 88 },
+  { id: "sec-3E", grade: "3ro", gradeNum: 3, section: "E", shift: "Tarde",  room: "C-309", tutor: "Prof. Olivera Ccopa",     studentsTotal: 27, avgGrade: 14.1, attendanceRate: 90 },
+  // 4to — 4 secciones
+  { id: "sec-4A", grade: "4to", gradeNum: 4, section: "A", shift: "Mañana", room: "D-401", tutor: "Prof. Miranda Gamarra",   studentsTotal: 28, avgGrade: 15.8, attendanceRate: 97 },
+  { id: "sec-4B", grade: "4to", gradeNum: 4, section: "B", shift: "Mañana", room: "D-403", tutor: "Prof. Ticona Paucar",     studentsTotal: 27, avgGrade: 15.2, attendanceRate: 95 },
+  { id: "sec-4C", grade: "4to", gradeNum: 4, section: "C", shift: "Tarde",  room: "D-405", tutor: "Prof. Colque Maquera",    studentsTotal: 29, avgGrade: 14.5, attendanceRate: 89 },
+  { id: "sec-4D", grade: "4to", gradeNum: 4, section: "D", shift: "Tarde",  room: "D-407", tutor: "Prof. Valdez Yupanqui",   studentsTotal: 26, avgGrade: 14.9, attendanceRate: 92 },
+  // 5to — 4 secciones
+  { id: "sec-5A", grade: "5to", gradeNum: 5, section: "A", shift: "Mañana", room: "E-501", tutor: "Prof. Bazán Pilco",       studentsTotal: 28, avgGrade: 16.1, attendanceRate: 98 },
+  { id: "sec-5B", grade: "5to", gradeNum: 5, section: "B", shift: "Mañana", room: "E-503", tutor: "Prof. Herrera Ccahuana",  studentsTotal: 27, avgGrade: 15.7, attendanceRate: 96 },
+  { id: "sec-5C", grade: "5to", gradeNum: 5, section: "C", shift: "Tarde",  room: "E-505", tutor: "Prof. Espinoza Palomino", studentsTotal: 26, avgGrade: 15.4, attendanceRate: 94 },
+  { id: "sec-5D", grade: "5to", gradeNum: 5, section: "D", shift: "Tarde",  room: "E-507", tutor: "Prof. Cárdenas Apaza",    studentsTotal: 25, avgGrade: 16.0, attendanceRate: 97 },
+];
+
+// ─── Admin — Alumnos ──────────────────────────────────────────────────────────
+
+export type AdminStudent = {
+  id: string;
+  name: string;
+  initials: string;
+  dni: string;
+  grade: string;
+  gradeNum: number;
+  section: string;
+  shift: "Mañana" | "Tarde";
+  parentName: string;
+  parentPhone: string;
+  avgGrade: number;
+  attendanceRate: number;
+  status: "activo" | "retirado" | "trasladado";
+  enrolledAt: string;
+};
+
+export const mockAdminStudents: AdminStudent[] = [
+  { id: "a01", name: "Adriana Castillo Vega",      initials: "AC", dni: "74512301", grade: "1ro", gradeNum: 1, section: "A", shift: "Mañana", parentName: "Rosa Vega de Castillo",    parentPhone: "987 654 321", avgGrade: 16.0, attendanceRate: 95, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a02", name: "Bruno Espinoza Ríos",         initials: "BE", dni: "74512302", grade: "1ro", gradeNum: 1, section: "A", shift: "Mañana", parentName: "Jorge Espinoza Herrera",   parentPhone: "945 123 678", avgGrade: 14.0, attendanceRate: 91, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a03", name: "Camila Herrera Ponce",        initials: "CH", dni: "74512303", grade: "1ro", gradeNum: 1, section: "A", shift: "Mañana", parentName: "Elena Ponce de Herrera",   parentPhone: "912 345 678", avgGrade: 18.0, attendanceRate: 98, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a04", name: "Alessandra Fuentes Quiroz",  initials: "AF", dni: "74512304", grade: "2do", gradeNum: 2, section: "B", shift: "Mañana", parentName: "Marco Fuentes Apaza",      parentPhone: "956 789 012", avgGrade: 15.2, attendanceRate: 93, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a05", name: "Brayan Condori Torres",       initials: "BC", dni: "74512305", grade: "2do", gradeNum: 2, section: "B", shift: "Mañana", parentName: "Luz Torres de Condori",    parentPhone: "978 901 234", avgGrade: 13.1, attendanceRate: 88, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a06", name: "Antonella Miranda Pino",      initials: "AM", dni: "74512306", grade: "3ro", gradeNum: 3, section: "C", shift: "Mañana", parentName: "César Miranda Quispe",     parentPhone: "923 456 789", avgGrade: 14.7, attendanceRate: 92, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a07", name: "Bastian Olivera Chino",       initials: "BO", dni: "74512307", grade: "3ro", gradeNum: 3, section: "C", shift: "Mañana", parentName: "Patricia Chino de Olivera",parentPhone: "934 567 890", avgGrade: 13.5, attendanceRate: 89, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a08", name: "Diana Quispe Ccari",          initials: "DQ", dni: "74512308", grade: "3ro", gradeNum: 3, section: "B", shift: "Mañana", parentName: "Alfredo Quispe Lazo",      parentPhone: "945 678 901", avgGrade: 17.2, attendanceRate: 97, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a09", name: "Eduardo Tapia Huallpa",       initials: "ET", dni: "74512309", grade: "3ro", gradeNum: 3, section: "D", shift: "Tarde",  parentName: "Norma Huallpa de Tapia",   parentPhone: "956 789 123", avgGrade: 12.8, attendanceRate: 84, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a10", name: "Fernanda Castro Ccopa",       initials: "FC", dni: "74512310", grade: "4to", gradeNum: 4, section: "A", shift: "Mañana", parentName: "Roberto Castro Gutiérrez", parentPhone: "967 890 234", avgGrade: 16.5, attendanceRate: 98, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a11", name: "Gabriel Rojas Hancco",        initials: "GR", dni: "74512311", grade: "4to", gradeNum: 4, section: "B", shift: "Mañana", parentName: "Carmen Hancco de Rojas",   parentPhone: "978 901 345", avgGrade: 15.0, attendanceRate: 94, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a12", name: "Hilda Vargas Maquera",        initials: "HV", dni: "74512312", grade: "4to", gradeNum: 4, section: "C", shift: "Tarde",  parentName: "José Vargas Pinto",        parentPhone: "912 012 456", avgGrade: 14.3, attendanceRate: 90, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a13", name: "Iván Palomino Flores",        initials: "IP", dni: "74512313", grade: "4to", gradeNum: 4, section: "D", shift: "Tarde",  parentName: "Silvia Flores de Palomino",parentPhone: "923 123 567", avgGrade: 10.5, attendanceRate: 78, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a14", name: "Josefina Lara Ccahuana",      initials: "JL", dni: "74512314", grade: "5to", gradeNum: 5, section: "A", shift: "Mañana", parentName: "Miguel Lara Condori",      parentPhone: "934 234 678", avgGrade: 17.8, attendanceRate: 99, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a15", name: "Kevin Mamani Trigoso",        initials: "KM", dni: "74512315", grade: "5to", gradeNum: 5, section: "A", shift: "Mañana", parentName: "Beatriz Trigoso de Mamani",parentPhone: "945 345 789", avgGrade: 15.4, attendanceRate: 95, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a16", name: "Lorena Neyra Pilco",          initials: "LN", dni: "74512316", grade: "5to", gradeNum: 5, section: "B", shift: "Mañana", parentName: "Hernán Neyra Quispe",      parentPhone: "956 456 890", avgGrade: 16.2, attendanceRate: 97, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a17", name: "Manuel Ticona Paucar",        initials: "MT", dni: "74512317", grade: "5to", gradeNum: 5, section: "C", shift: "Tarde",  parentName: "Esperanza Paucar de Ticona",parentPhone: "967 567 901", avgGrade: 15.9, attendanceRate: 96, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a18", name: "Natalia Colque Yupanqui",     initials: "NC", dni: "74512318", grade: "5to", gradeNum: 5, section: "D", shift: "Tarde",  parentName: "Óscar Colque Mamani",      parentPhone: "978 678 012", avgGrade: 16.8, attendanceRate: 98, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a19", name: "Omar Valdez Huanca",          initials: "OV", dni: "74512319", grade: "2do", gradeNum: 2, section: "A", shift: "Mañana", parentName: "Isabel Huanca de Valdez",  parentPhone: "989 789 123", avgGrade:  9.8, attendanceRate: 72, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a20", name: "Paola Soto Zamora",           initials: "PS", dni: "74512320", grade: "2do", gradeNum: 2, section: "C", shift: "Mañana", parentName: "Fernando Soto Apaza",      parentPhone: "912 890 234", avgGrade: 14.9, attendanceRate: 93, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a21", name: "Rodrigo Cusi Herrera",        initials: "RC", dni: "74512321", grade: "1ro", gradeNum: 1, section: "B", shift: "Mañana", parentName: "Ana Herrera de Cusi",      parentPhone: "923 901 345", avgGrade: 13.2, attendanceRate: 87, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a22", name: "Sandra Benites Ramos",        initials: "SB", dni: "74512322", grade: "1ro", gradeNum: 1, section: "C", shift: "Mañana", parentName: "Luis Benites Ccopa",       parentPhone: "934 012 456", avgGrade: 15.7, attendanceRate: 96, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a23", name: "Tomás Arroyo Alvarado",       initials: "TA", dni: "74512323", grade: "2do", gradeNum: 2, section: "D", shift: "Tarde",  parentName: "Graciela Alvarado de Arroyo",parentPhone: "945 123 567", avgGrade: 11.4, attendanceRate: 82, status: "retirado",  enrolledAt: "2026-03-03" },
+  { id: "a24", name: "Úrsula Gamarra León",         initials: "UG", dni: "74512324", grade: "3ro", gradeNum: 3, section: "E", shift: "Tarde",  parentName: "Víctor Gamarra Quispe",    parentPhone: "956 234 678", avgGrade: 14.0, attendanceRate: 90, status: "activo",    enrolledAt: "2026-03-03" },
+  { id: "a25", name: "Vanessa Chávez Pinto",        initials: "VC", dni: "74512325", grade: "4to", gradeNum: 4, section: "A", shift: "Mañana", parentName: "Ricardo Chávez Flores",    parentPhone: "967 345 789", avgGrade: 17.1, attendanceRate: 97, status: "activo",    enrolledAt: "2026-03-03" },
+];
+
+// ─── Admin — Usuarios del sistema ────────────────────────────────────────────
+
+export type AdminUserRole = "admin" | "docente" | "padre";
+
+export type AdminUserRecord = {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  role: AdminUserRole;
+  phone: string;
+  status: "activo" | "inactivo";
+  createdAt: string;
+  lastLogin: string;
+  extra?: string; // cargo / especialidad / hijo vinculado
+};
+
+export const mockAdminUsers: AdminUserRecord[] = [
+  // Admin
+  { id: "u01", name: "Prof. Rosa Quispe Tantavilca",  initials: "RQ", email: "rquispe@ijfk.edu.pe",    role: "admin",   phone: "945 001 001", status: "activo",   createdAt: "2025-01-10", lastLogin: "2026-05-10", extra: "Directora" },
+  { id: "u02", name: "Prof. Hernán Bazán Trigoso",    initials: "HB", email: "hbazan@ijfk.edu.pe",     role: "admin",   phone: "945 001 002", status: "activo",   createdAt: "2025-01-10", lastLogin: "2026-05-09", extra: "Subdirector" },
+  // Docentes
+  { id: "u03", name: "Prof. María González Flores",   initials: "MG", email: "mgonzalez@ijfk.edu.pe",  role: "docente", phone: "945 100 101", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-08", extra: "Matemáticas · 1ro A" },
+  { id: "u04", name: "Prof. Carlos Cáceres Vásquez",  initials: "CC", email: "ccaceres@ijfk.edu.pe",   role: "docente", phone: "945 100 102", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-07", extra: "Comunicación · 2do B" },
+  { id: "u05", name: "Prof. Luz Quispe Mamani",       initials: "LQ", email: "lquispe@ijfk.edu.pe",    role: "docente", phone: "945 100 103", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-08", extra: "Historia · 3ro C" },
+  { id: "u06", name: "Prof. Julio Torres Alvarado",   initials: "JT", email: "jtorres@ijfk.edu.pe",    role: "docente", phone: "945 100 104", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-06", extra: "CTA · 4to A" },
+  { id: "u07", name: "Prof. Sandra Flores Condori",   initials: "SF", email: "sflores@ijfk.edu.pe",    role: "docente", phone: "945 100 105", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-05", extra: "Inglés · 5to B" },
+  { id: "u08", name: "Prof. Pedro Salas Huanca",      initials: "PS", email: "psalas@ijfk.edu.pe",     role: "docente", phone: "945 100 106", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-07", extra: "Ed. Física · 1ro D" },
+  { id: "u09", name: "Prof. Ana Paredes Ccopa",       initials: "AP", email: "aparedes@ijfk.edu.pe",   role: "docente", phone: "945 100 107", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-04", extra: "Arte · 2ro E" },
+  { id: "u10", name: "Prof. Marco Mendoza Ríos",      initials: "MM", email: "mmendoza@ijfk.edu.pe",   role: "docente", phone: "945 100 108", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-08", extra: "DPCC · 3ro B" },
+  { id: "u11", name: "Prof. Beatriz Ramos Benites",   initials: "BR", email: "bramos@ijfk.edu.pe",     role: "docente", phone: "945 100 109", status: "inactivo", createdAt: "2025-02-01", lastLogin: "2026-04-15", extra: "Religión · Licencia" },
+  { id: "u12", name: "Prof. David Castro Trigoso",    initials: "DC", email: "dcastro@ijfk.edu.pe",    role: "docente", phone: "945 100 110", status: "activo",   createdAt: "2025-02-01", lastLogin: "2026-05-09", extra: "EPT · 4to C" },
+  // Padres
+  { id: "u13", name: "Carlos Pérez Huamán",           initials: "CP", email: "cperez@gmail.com",        role: "padre",   phone: "987 654 321", status: "activo",   createdAt: "2026-03-05", lastLogin: "2026-05-09", extra: "Ana Pérez · 5to A" },
+  { id: "u14", name: "Rosa Vega de Castillo",         initials: "RV", email: "rvega@gmail.com",          role: "padre",   phone: "945 111 222", status: "activo",   createdAt: "2026-03-05", lastLogin: "2026-05-07", extra: "Adriana Castillo · 1ro A" },
+  { id: "u15", name: "Jorge Espinoza Herrera",        initials: "JE", email: "jespinoza@hotmail.com",    role: "padre",   phone: "945 222 333", status: "activo",   createdAt: "2026-03-05", lastLogin: "2026-05-06", extra: "Bruno Espinoza · 1ro A" },
+  { id: "u16", name: "Miguel Lara Condori",           initials: "ML", email: "mlara@gmail.com",          role: "padre",   phone: "934 333 444", status: "activo",   createdAt: "2026-03-05", lastLogin: "2026-05-08", extra: "Josefina Lara · 5to A" },
+  { id: "u17", name: "Isabel Huanca de Valdez",       initials: "IH", email: "ihuanca@gmail.com",        role: "padre",   phone: "923 444 555", status: "activo",   createdAt: "2026-03-05", lastLogin: "2026-05-01", extra: "Omar Valdez · 2do A" },
+  { id: "u18", name: "Alfredo Quispe Lazo",           initials: "AQ", email: "aquispe@outlook.com",      role: "padre",   phone: "912 555 666", status: "activo",   createdAt: "2026-03-05", lastLogin: "2026-05-03", extra: "Diana Quispe · 3ro B" },
+  { id: "u19", name: "Graciela Alvarado de Arroyo",  initials: "GA", email: "galvarado@gmail.com",      role: "padre",   phone: "978 666 777", status: "inactivo", createdAt: "2026-03-05", lastLogin: "2026-04-10", extra: "Tomás Arroyo · 2do D (retirado)" },
+  { id: "u20", name: "Silvia Flores de Palomino",     initials: "SF", email: "sflores2@gmail.com",       role: "padre",   phone: "967 777 888", status: "activo",   createdAt: "2026-03-05", lastLogin: "2026-05-05", extra: "Iván Palomino · 4to D" },
+];
+
+// ─── Admin — Matrículas y Pagos ───────────────────────────────────────────────
+
+export type AdminEnrollment = {
+  studentId: string;           // referencia a mockAdminStudents
+  code: string;                // código de matrícula
+  enrolledAt: string;
+  enrollmentStatus: "regular" | "condicional" | "pendiente";
+  docsTotal: number;
+  docsSubmitted: number;
+  apafaPaid: boolean;          // contribución APAFA S/ 50
+  apafaAmount: number;
+  actividadesPaid: boolean;    // cuota actividades S/ 30
+  actividadesAmount: number;
+  lastPaymentDate: string;
+};
+
+export const mockAdminEnrollments: AdminEnrollment[] = [
+  { studentId: "a01", code: "2026-1A-0001", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+  { studentId: "a02", code: "2026-1A-0002", enrolledAt: "2026-02-11", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 6, apafaPaid: true,  apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-03-05" },
+  { studentId: "a03", code: "2026-1A-0003", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+  { studentId: "a04", code: "2026-2B-0004", enrolledAt: "2026-02-12", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-03" },
+  { studentId: "a05", code: "2026-2B-0005", enrolledAt: "2026-02-14", enrollmentStatus: "condicional",  docsTotal: 7, docsSubmitted: 5, apafaPaid: false, apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-02-14" },
+  { studentId: "a06", code: "2026-3C-0006", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-02" },
+  { studentId: "a07", code: "2026-3C-0007", enrolledAt: "2026-02-13", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 6, apafaPaid: true,  apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-03-10" },
+  { studentId: "a08", code: "2026-3B-0008", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+  { studentId: "a09", code: "2026-3D-0009", enrolledAt: "2026-02-17", enrollmentStatus: "condicional",  docsTotal: 7, docsSubmitted: 4, apafaPaid: false, apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-02-17" },
+  { studentId: "a10", code: "2026-4A-0010", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+  { studentId: "a11", code: "2026-4B-0011", enrolledAt: "2026-02-11", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-04" },
+  { studentId: "a12", code: "2026-4C-0012", enrolledAt: "2026-02-12", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 6, apafaPaid: true,  apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-03-08" },
+  { studentId: "a13", code: "2026-4D-0013", enrolledAt: "2026-02-15", enrollmentStatus: "pendiente",    docsTotal: 7, docsSubmitted: 3, apafaPaid: false, apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-02-15" },
+  { studentId: "a14", code: "2026-5A-0014", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+  { studentId: "a15", code: "2026-5A-0015", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+  { studentId: "a16", code: "2026-5B-0016", enrolledAt: "2026-02-11", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-02" },
+  { studentId: "a17", code: "2026-5C-0017", enrolledAt: "2026-02-12", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-03" },
+  { studentId: "a18", code: "2026-5D-0018", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+  { studentId: "a19", code: "2026-2A-0019", enrolledAt: "2026-02-18", enrollmentStatus: "condicional",  docsTotal: 7, docsSubmitted: 4, apafaPaid: false, apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-02-18" },
+  { studentId: "a20", code: "2026-2C-0020", enrolledAt: "2026-02-11", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-03-06" },
+  { studentId: "a21", code: "2026-1B-0021", enrolledAt: "2026-02-13", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 6, apafaPaid: true,  apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-03-09" },
+  { studentId: "a22", code: "2026-1C-0022", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+  { studentId: "a23", code: "2026-2D-0023", enrolledAt: "2026-02-16", enrollmentStatus: "pendiente",    docsTotal: 7, docsSubmitted: 2, apafaPaid: false, apafaAmount: 50, actividadesPaid: false, actividadesAmount: 30, lastPaymentDate: "2026-02-16" },
+  { studentId: "a24", code: "2026-3E-0024", enrolledAt: "2026-02-11", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-04" },
+  { studentId: "a25", code: "2026-4A-0025", enrolledAt: "2026-02-10", enrollmentStatus: "regular",      docsTotal: 7, docsSubmitted: 7, apafaPaid: true,  apafaAmount: 50, actividadesPaid: true,  actividadesAmount: 30, lastPaymentDate: "2026-03-01" },
+];
