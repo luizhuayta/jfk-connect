@@ -1,0 +1,81 @@
+# =============================================================================
+# .dockerignore - archivos excluidos del contexto de Docker
+# =============================================================================
+
+# Dependencias (se instalan en el contenedor)
+node_modules
+.pnp
+.pnp.js
+
+# Builds (se generan dentro del contenedor)
+.next
+out
+build
+dist
+
+# Variables de entorno (van en runtime)
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker (no recursivo)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentación
+README.md
+*.md
+LICENSE
+AGENTS.md
+CLAUDE.md
+task-progress.md
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.vercel
+.netlify
+
+# Pruebas
+coverage
+.nyc_output
+__tests__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Cache y temporales
+.turbo
+.turbo-cache
+.eslintcache
+*.tsbuildinfo
+next-env.d.ts
+
+# Volúmenes típicos (no necesarios en la imagen)
+data/postgres
+data/storage
+data/mailpit

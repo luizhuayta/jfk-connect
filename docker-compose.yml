@@ -1,0 +1,183 @@
+# =============================================================================
+# IJFK - docker-compose.yml
+# Stack completo: Next.js + Supabase (Postgres) + Mailpit (alternativa a Mailgun)
+# =============================================================================
+#
+# Servicios:
+#   app       : Next.js 16 (puerto 3000)
+#   db        : Postgres con extensiones de Supabase (puerto 54322)
+#   pgadmin   : UI web para gestionar la base de datos (puerto 5050)
+#   mailpit   : SMTP + UI para testing de emails - alternativa a Mailgun
+#               (SMTP 1025, UI 8025)
+#
+# Perfiles disponibles:
+#   tools     : pgadmin, mailpit, supabase-studio
+#   production: optimiza la app para producción
+#
+# Uso:
+#   docker compose up -d            # Levanta app + db + mailpit
+#   docker compose --profile tools up -d  # También pgadmin y studio
+#   docker compose --profile production up -d  # Modo producción
+# =============================================================================
+
+name: ijfk
+
+services:
+  # ---------------------------------------------------------------------------
+  # Next.js 16 (App)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_BUILD_ID: ${NEXT_BUILD_ID:-local}
+    image: ijfk-app:latest
+    container_name: ijfk-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # --- App ---
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      # --- Supabase (Postgres) ---
+      # Apunta a la BD local por defecto (supabase_admin es el superuser de la imagen)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-supabase_admin}:${POSTGRES_PASSWORD:-ijfk_dev_password}@db:5432/${POSTGRES_DB:-ijfk}
+      # Si usas Supabase Cloud, sobrescribe estas en tu .env:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:54321}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-local-anon-key}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-local-service-key}
+      # --- Mail (Mailpit - alternativa a Mailgun) ---
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_SECURE: "false"
+      MAIL_USER: ""
+      MAIL_PASSWORD: ""
+      MAIL_FROM: ${MAIL_FROM:-no-reply@ijfk.local}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-IJFK Sistema Institucional}
+      # Para usar Mailgun real, descomenta y completa:
+      # MAIL_HOST: smtp.mailgun.org
+      # MAIL_PORT: 587
+      # MAIL_SECURE: "false"
+      # MAIL_USER: postmaster@tu-dominio.mailgun.org
+      # MAIL_PASSWORD: tu-clave-mailgun
+      # --- Seguridad ---
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    networks:
+      - ijfk-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Supabase - Postgres (imagen oficial con todas las extensiones)
+  # Compatible 100% con el protocolo de Supabase Cloud
+  #
+  # La imagen supabase/postgres usa 'supabase_admin' como superuser.
+  # POSTGRES_USER se mapea a supabase_admin en esta imagen.
+  # ---------------------------------------------------------------------------
+  db:
+    image: supabase/postgres:15.8.1.085
+    container_name: ijfk-db
+    restart: unless-stopped
+    ports:
+      - "54322:5432"   # Puerto de Supabase self-hosted
+    environment:
+      # Por defecto usamos supabase_admin (superuser de la imagen Supabase)
+      POSTGRES_USER: ${POSTGRES_USER:-supabase_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ijfk_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ijfk}
+      # Configuración de Supabase
+      JWT_SECRET: ${SUPABASE_JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      JWT_EXP: 3600
+      ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-local-anon-key}
+      SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-local-service-key}
+      DATABASE_BACKEND: "postgres"
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - ijfk-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-supabase_admin} -d ${POSTGRES_DB:-ijfk}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Mailpit - Alternativa moderna y ligera a Mailgun para desarrollo
+  # API compatible con SMTP estándar, UI web para revisar emails
+  # https://github.com/axllent/mailpit
+  # ---------------------------------------------------------------------------
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ijfk-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"    # SMTP
+      - "8025:8025"    # UI Web (http://localhost:8025)
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      MP_UI_AUTH: ""
+      MP_SENDMAIL_SMTP_PORT: 1025
+    volumes:
+      - mailpit-data:/data
+    networks:
+      - ijfk-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8025/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # pgAdmin - UI para gestionar la BD (perfil: tools)
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ijfk-pgadmin
+    restart: unless-stopped
+    profiles: ["tools"]
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@ijfk.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_LISTEN_PORT: 80
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - ijfk-net
+    depends_on:
+      - db
+
+# =============================================================================
+# Volúmenes persistentes
+# =============================================================================
+volumes:
+  supabase-db-data:
+    name: ijfk-supabase-data
+  mailpit-data:
+    name: ijfk-mailpit-data
+  pgadmin-data:
+    name: ijfk-pgadmin-data
+
+# =============================================================================
+# Red interna
+# =============================================================================
+networks:
+  ijfk-net:
+    name: ijfk-net
+    driver: bridge

@@ -1,0 +1,14 @@
+Plan de trabajo:
+- [ ] Esperar instalación de dependencias (npm install)
+- [ ] Leer documentación de Next.js 16
+- [ ] Crear Dockerfile optimizado para Next.js
+- [ ] Crear .dockerignore
+- [ ] Crear docker-compose.yml con servicios: app, postgres, supabase-studio, mailpit
+- [ ] Actualizar next.config.ts con output: standalone
+- [ ] Crear .env.example
+- [ ] Crear cliente de Supabase en lib/supabase.ts
+- [ ] Crear cliente de Mail en lib/mail.ts
+- [ ] Crear scripts SQL iniciales (supabase/migrations)
+- [ ] Actualizar package.json con scripts de Docker
+- [ ] Crear README actualizado con instrucciones Docker
+- [ ] Probar que el stack levante correctamente

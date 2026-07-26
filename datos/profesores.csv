@@ -1,0 +1,131 @@
+id,dni,nombres,apellido_paterno,apellido_materno,sexo,especialidad_principal,telefono,email,fecha_ingreso,condicion_laboral
+1,36116972,Alexander Adrian,Aquino,Ticona,M,Comunicacion,962701079,alexander.aquino560@colegio.edu.pe,2012-01-10,Nombrado
+2,57949368,Victor Wilson,Garcia,Cabanillas,M,Taller,920599728,victor.garcia229@colegio.edu.pe,2020-10-08,Nombrado
+3,51071205,Julia Flor,Mendoza,Diaz,F,Ingles,986628360,julia.mendoza982@colegio.edu.pe,2012-07-17,Contratado
+4,13433596,Juan Joaquin,Choque,Yupanqui,M,Matematica,987547517,juan.choque972@colegio.edu.pe,2020-08-17,Nombrado
+5,55153375,Walter Martin,Salazar,Cabrera,M,Ingles,979318603,walter.salazar663@colegio.edu.pe,2014-01-19,Nombrado
+6,27332847,Renzo Samuel,Herrera,Villanueva,M,Matematica,983822264,renzo.herrera436@colegio.edu.pe,2022-02-12,Contratado
+7,45358813,Anthony Rodrigo,Alvarez,Choque,M,Comprension Lectora,977647258,anthony.alvarez494@colegio.edu.pe,2020-02-19,Nombrado
+8,22498300,Luana Milagros,Cardenas,Rivera,F,Matematica,975682052,luana.cardenas361@colegio.edu.pe,2022-10-07,Nombrado
+9,38780985,Wilson Gustavo,Silva,Vilca,M,Ingles,994948214,wilson.silva99@colegio.edu.pe,2019-12-11,Nombrado
+10,77998284,Cristian Juan,Yupanqui,Alvarez,M,Comunicacion,954914524,cristian.yupanqui263@colegio.edu.pe,2011-07-29,Nombrado
+11,17692234,Dulce Xiomara,Paredes,Zavala,F,Matematica,913041189,dulce.paredes959@colegio.edu.pe,2018-01-07,Contratado
+12,38942204,Ariana Paula,Rojas,Rimac,F,Ciencia y Tecnologia (CTA),997615846,ariana.rojas299@colegio.edu.pe,2018-02-25,Nombrado
+13,49854883,Rosa Yolanda,Ccahuana,Palacios,F,Comunicacion,965908538,rosa.ccahuana58@colegio.edu.pe,2012-09-08,Nombrado
+14,50566123,Victor Carlos,Reyes,Cornejo,M,Ciencia y Tecnologia (CTA),906925666,victor.reyes246@colegio.edu.pe,2019-08-09,Nombrado
+15,63265435,Alberto Oscar,Flores,Cabanillas,M,Arte y Cultura,942300487,alberto.flores428@colegio.edu.pe,2016-01-30,Contratado
+16,15101456,Edgar Walter,Sanchez,Aguilar,M,Arte y Cultura,984585003,edgar.sanchez482@colegio.edu.pe,2011-06-21,Nombrado
+17,47012142,Erick Ian,Rimac,Apaza,M,Educacion Fisica,953557787,erick.rimac919@colegio.edu.pe,2023-03-09,Contratado
+18,10712938,Pedro Edgar,Ochoa,Romero,M,Educacion Religiosa,958602145,pedro.ochoa560@colegio.edu.pe,2016-02-09,Nombrado
+19,51165991,Ian Luis,Farfan,Cardenas,M,Ingles,990668828,ian.farfan108@colegio.edu.pe,2012-01-30,Nombrado
+20,35471405,Elena Ximena,Fernandez,Campos,F,Matematica,924484526,elena.fernandez194@colegio.edu.pe,2024-04-15,Nombrado
+21,13961138,Estefany Susan,Farfan,Ruiz,F,Arte y Cultura,925822018,estefany.farfan684@colegio.edu.pe,2024-08-04,Nombrado
+22,30699871,Luz Yesenia,Carrillo,Cardenas,F,Arte y Cultura,999321571,luz.carrillo895@colegio.edu.pe,2011-10-21,Contratado
+23,76941011,Nicole Patricia,Gutierrez,Choque,F,Educacion Religiosa,918835795,nicole.gutierrez85@colegio.edu.pe,2011-09-17,Nombrado
+24,53621033,Xiomara Patricia,Fernandez,Espinoza,F,Comprension Lectora,968855765,xiomara.fernandez181@colegio.edu.pe,2014-07-27,Contratado
+25,61221192,Samuel Marco,Choque,Choque,M,Educacion Civica,932792645,samuel.choque856@colegio.edu.pe,2012-10-21,Contratado
+26,45994093,Abigail Dulce,Leon,Fernandez,F,Comprension Lectora,935281449,abigail.leon470@colegio.edu.pe,2024-05-13,Contratado
+27,22751501,Rosa Ximena,Ccahuana,Ochoa,F,Ciencia y Tecnologia (CTA),978836550,rosa.ccahuana946@colegio.edu.pe,2019-02-16,Nombrado
+28,65649686,Adrian Hugo,Paredes,Reyes,M,Ciencia y Tecnologia (CTA),977500314,adrian.paredes335@colegio.edu.pe,2010-07-24,Nombrado
+29,35186307,Vanessa Alexandra,Ticona,Ramos,F,Arte y Cultura,980125373,vanessa.ticona621@colegio.edu.pe,2013-12-29,Contratado
+30,24503016,Julio Jhoel,Cornejo,Vilca,M,Comprension Lectora,904602883,julio.cornejo967@colegio.edu.pe,2020-09-20,Contratado
+31,53893672,Susan Isabel,Villanueva,Paredes,F,Educacion Religiosa,940720754,susan.villanueva857@colegio.edu.pe,2020-08-13,Nombrado
+32,17272944,Alexandra Vanessa,Rimac,Carrillo,F,Educacion Fisica,961884791,alexandra.rimac874@colegio.edu.pe,2021-08-04,Contratado
+33,20478103,Isabel Alessandra,Condori,Apaza,F,Comprension Lectora,982488619,isabel.condori220@colegio.edu.pe,2010-10-23,Contratado
+34,78945163,Fernando Piero,Bautista,Salvador,M,Comprension Lectora,934728556,fernando.bautista546@colegio.edu.pe,2023-12-18,Nombrado
+35,18197733,Elmer Hugo,Romero,Castillo,M,Comprension Lectora,904422485,elmer.romero132@colegio.edu.pe,2020-06-02,Nombrado
+36,75732098,Marco Juan,Alvarez,Romero,M,Educacion Civica,980438581,marco.alvarez477@colegio.edu.pe,2019-04-15,Nombrado
+37,11015315,Diana Grecia,Bautista,Garcia,F,Educacion Religiosa,901594502,diana.bautista516@colegio.edu.pe,2014-06-15,Nombrado
+38,40152415,Alessandra Estefany,Medina,Ruiz,F,Educacion Fisica,973528667,alessandra.medina877@colegio.edu.pe,2018-04-23,Nombrado
+39,74667003,Paula Ashley,Leon,Vilca,F,Ingles,913311592,paula.leon118@colegio.edu.pe,2014-01-09,Nombrado
+40,46068525,Lucia Estefany,Flores,Ibarra,F,Comprension Lectora,945607874,lucia.flores861@colegio.edu.pe,2018-02-08,Contratado
+41,58183454,Cesar Benjamin,Castillo,Vilca,M,Educacion Fisica,976990854,cesar.castillo991@colegio.edu.pe,2011-12-06,Contratado
+42,47059680,Susan Teresa,Salvador,Salvador,F,Comunicacion,940190187,susan.salvador578@colegio.edu.pe,2012-08-08,Contratado
+43,52736672,Nicole Brenda,Cabanillas,Huaman,F,Comprension Lectora,920161284,nicole.cabanillas19@colegio.edu.pe,2011-03-14,Nombrado
+44,73187140,Ivan Leonardo,Ccahuana,Romero,M,Taller,935736385,ivan.ccahuana429@colegio.edu.pe,2011-02-02,Contratado
+45,73929344,Elmer Alberto,Leon,Herrera,M,Comunicacion,996780736,elmer.leon748@colegio.edu.pe,2010-12-04,Contratado
+46,67943072,Gonzalo Sebastian,Cornejo,Vega,M,Taller,990598281,gonzalo.cornejo577@colegio.edu.pe,2018-06-05,Nombrado
+47,24181213,Hugo Pedro,Marin,Rimac,M,Comunicacion,966033042,hugo.marin538@colegio.edu.pe,2016-02-20,Contratado
+48,25527561,Mateo Pedro,Rojas,Cardenas,M,Arte y Cultura,978057803,mateo.rojas667@colegio.edu.pe,2024-10-07,Contratado
+49,37460898,Gonzalo Jorge,Ruiz,Torres,M,Taller,904907418,gonzalo.ruiz172@colegio.edu.pe,2022-06-10,Nombrado
+50,62744893,Luana Ana,Cabanillas,Yupanqui,F,Educacion Fisica,971300668,luana.cabanillas92@colegio.edu.pe,2020-01-21,Nombrado
+51,55243717,Sebastian Pedro,Vilca,Medina,M,Arte y Cultura,964271051,sebastian.vilca766@colegio.edu.pe,2013-01-31,Nombrado
+52,76434800,Dulce Britany,Romero,Huaraca,F,Comprension Lectora,981206176,dulce.romero687@colegio.edu.pe,2022-11-15,Contratado
+53,25513083,Julia Ashley,Huaman,Paredes,F,Educacion Fisica,963499924,julia.huaman765@colegio.edu.pe,2022-01-29,Nombrado
+54,23030600,Alexis Erick,Aguilar,Marin,M,Ingles,937298711,alexis.aguilar131@colegio.edu.pe,2010-04-02,Contratado
+55,49659950,Jhoel Mateo,Huaman,Leon,M,Ingles,926079113,jhoel.huaman852@colegio.edu.pe,2017-06-12,Contratado
+56,49916108,Leonardo Anthony,Silva,Leon,M,Educacion Religiosa,947967452,leonardo.silva105@colegio.edu.pe,2023-11-24,Nombrado
+57,53678616,Fernando Marco,Palacios,Rimac,M,Educacion Fisica,921362958,fernando.palacios405@colegio.edu.pe,2014-10-27,Contratado
+58,33572288,Britany Antonella,Choque,Soto,F,Educacion Fisica,984093426,britany.choque687@colegio.edu.pe,2023-03-08,Nombrado
+59,51221953,Yesica Paula,Aquino,Gonzales,F,Ingles,909858463,yesica.aquino708@colegio.edu.pe,2024-04-12,Contratado
+60,11811890,Abigail Susan,Cutipa,Salvador,F,Educacion Fisica,968669538,abigail.cutipa599@colegio.edu.pe,2018-08-21,Contratado
+61,62827763,Cesar Sebastian,Cardenas,Aguilar,M,Educacion Religiosa,972683508,cesar.cardenas87@colegio.edu.pe,2012-06-09,Nombrado
+62,23215746,Jhon Victor,Marin,Choque,M,Arte y Cultura,963540115,jhon.marin675@colegio.edu.pe,2013-07-17,Contratado
+63,75191287,Milagros Daniela,Vargas,Herrera,F,Arte y Cultura,959211532,milagros.vargas455@colegio.edu.pe,2020-08-14,Nombrado
+64,66779946,Nayeli Gabriela,Sanchez,Huaman,F,Educacion Religiosa,917707751,nayeli.sanchez49@colegio.edu.pe,2019-04-22,Nombrado
+65,43295853,Paula Luz,Paredes,Cabanillas,F,Arte y Cultura,961520299,paula.paredes811@colegio.edu.pe,2017-01-22,Contratado
+66,65095231,Emily Milagros,Espinoza,Apaza,F,Comunicacion,919945699,emily.espinoza319@colegio.edu.pe,2015-05-30,Nombrado
+67,71752358,Antonella Carmen,Vilca,Paredes,F,Arte y Cultura,946439725,antonella.vilca835@colegio.edu.pe,2021-10-05,Contratado
+68,55316662,Patricia Fiorella,Delgado,Quispe,F,Educacion Fisica,951566979,patricia.delgado386@colegio.edu.pe,2012-07-20,Contratado
+69,60655016,Nayeli Zoe,Soto,Huaraca,F,Ingles,950565470,nayeli.soto369@colegio.edu.pe,2019-06-08,Contratado
+70,17337456,Elmer Luis,Palacios,Cabanillas,M,Arte y Cultura,915646440,elmer.palacios212@colegio.edu.pe,2015-01-22,Nombrado
+71,71221053,Diego Alberto,Rodriguez,Apaza,M,Ingles,919889042,diego.rodriguez111@colegio.edu.pe,2019-07-19,Nombrado
+72,62096035,Marco Miguel,Vargas,Vasquez,M,Ingles,902780465,marco.vargas571@colegio.edu.pe,2020-01-22,Nombrado
+73,32144470,Jhoel Rodrigo,Romero,Ortiz,M,Arte y Cultura,996017967,jhoel.romero452@colegio.edu.pe,2024-06-01,Nombrado
+74,35728622,Gonzalo Aaron,Cruz,Reyes,M,Educacion Civica,947892352,gonzalo.cruz782@colegio.edu.pe,2016-10-12,Nombrado
+75,62467500,Raul Franco,Cutipa,Vasquez,M,Ciencia y Tecnologia (CTA),910591483,raul.cutipa200@colegio.edu.pe,2017-10-16,Contratado
+76,19819074,Rodrigo Oscar,Vilca,Chavez,M,Arte y Cultura,937852223,rodrigo.vilca566@colegio.edu.pe,2015-10-25,Nombrado
+77,35187945,Antonella Rafaella,Espinoza,Apaza,F,Educacion Fisica,925719294,antonella.espinoza818@colegio.edu.pe,2022-02-23,Nombrado
+78,50990310,Renata Camila,Silva,Espinoza,F,Matematica,924761341,renata.silva265@colegio.edu.pe,2019-06-16,Nombrado
+79,19118778,Isabel Yolanda,Carrillo,Reyes,F,Matematica,946133800,isabel.carrillo323@colegio.edu.pe,2014-09-11,Nombrado
+80,54875765,Milagros Antonella,Aquino,Cornejo,F,Educacion Civica,989305977,milagros.aquino707@colegio.edu.pe,2019-10-13,Nombrado
+81,56225057,Dulce Yesenia,Medina,Cabanillas,F,Taller,968106709,dulce.medina41@colegio.edu.pe,2020-10-04,Nombrado
+82,25815935,Ruth Fiorella,Yupanqui,Gutierrez,F,Taller,936334370,ruth.yupanqui125@colegio.edu.pe,2011-01-09,Contratado
+83,50473923,Katherine Ruth,Reyes,Medina,F,Ingles,924646686,katherine.reyes206@colegio.edu.pe,2012-03-02,Contratado
+84,75725729,Renata Yesenia,Cardenas,Cabanillas,F,Ingles,945358134,renata.cardenas192@colegio.edu.pe,2011-12-09,Contratado
+85,64526378,Diego Ivan,Espinoza,Campos,M,Ingles,977044104,diego.espinoza854@colegio.edu.pe,2020-07-30,Contratado
+86,52201479,Yamil Anthony,Salvador,Bautista,M,Educacion Civica,961141082,yamil.salvador254@colegio.edu.pe,2017-06-19,Contratado
+87,32845799,Mateo Wilson,Ortiz,Mamani,M,Taller,994747818,mateo.ortiz132@colegio.edu.pe,2016-02-16,Contratado
+88,59694461,Maria Katherine,Paucar,Sanchez,F,Ingles,968080100,maria.paucar734@colegio.edu.pe,2011-02-15,Contratado
+89,24526215,Luis Luis,Pacheco,Rodriguez,M,Matematica,970392733,luis.pacheco40@colegio.edu.pe,2018-07-15,Contratado
+90,74082405,Raul Carlos,Campos,Salvador,M,Arte y Cultura,978166114,raul.campos411@colegio.edu.pe,2015-07-05,Contratado
+91,78680664,Jorge Jose,Alvarez,Flores,M,Educacion Fisica,930040300,jorge.alvarez317@colegio.edu.pe,2013-11-25,Contratado
+92,23231370,Yamil Renzo,Sanchez,Cabrera,M,Educacion Religiosa,955293012,yamil.sanchez429@colegio.edu.pe,2020-01-15,Nombrado
+93,55524540,Benjamin Manuel,Soto,Espinoza,M,Matematica,979299239,benjamin.soto869@colegio.edu.pe,2021-07-25,Nombrado
+94,23523163,Raul Gabriel,Gonzales,Reyes,M,Educacion Religiosa,986158129,raul.gonzales881@colegio.edu.pe,2023-06-30,Nombrado
+95,52148125,Melissa Rosa,Rimac,Espinoza,F,Ciencia y Tecnologia (CTA),948506635,melissa.rimac99@colegio.edu.pe,2019-01-06,Contratado
+96,72255145,Emily Abigail,Cornejo,Castillo,F,Ciencia y Tecnologia (CTA),934812417,emily.cornejo916@colegio.edu.pe,2013-10-10,Contratado
+97,79380298,Camila Luana,Ochoa,Paucar,F,Comprension Lectora,929092082,camila.ochoa722@colegio.edu.pe,2017-02-12,Nombrado
+98,31895987,Luis Erick,Palacios,Diaz,M,Educacion Civica,983709506,luis.palacios62@colegio.edu.pe,2024-09-05,Nombrado
+99,72083883,Maria Patricia,Gutierrez,Vega,F,Comunicacion,980133252,maria.gutierrez394@colegio.edu.pe,2023-06-06,Contratado
+100,72783925,Kiara Lucia,Espinoza,Salvador,F,Comprension Lectora,960821961,kiara.espinoza180@colegio.edu.pe,2012-04-07,Nombrado
+101,32341241,Ruth Ana,Marin,Garcia,F,Matematica,923869695,ruth.marin210@colegio.edu.pe,2015-12-31,Nombrado
+102,14564136,Gabriel Gonzalo,Paucar,Vega,M,Ciencia y Tecnologia (CTA),913510063,gabriel.paucar899@colegio.edu.pe,2021-01-11,Nombrado
+103,40390957,Luz Daniela,Gutierrez,Ruiz,F,Taller,935165850,luz.gutierrez609@colegio.edu.pe,2022-08-21,Contratado
+104,24537657,Aaron Cesar,Huaraca,Paredes,M,Educacion Fisica,961030225,aaron.huaraca2@colegio.edu.pe,2013-09-02,Nombrado
+105,21293389,Abigail Karen,Quispe,Ticona,F,Comunicacion,948294183,abigail.quispe296@colegio.edu.pe,2012-10-06,Nombrado
+106,40480829,Dylan Fernando,Bautista,Rimac,M,Comunicacion,952122238,dylan.bautista908@colegio.edu.pe,2025-01-26,Contratado
+107,63104400,Gabriel Benjamin,Farfan,Alarcon,M,Educacion Religiosa,904054246,gabriel.farfan533@colegio.edu.pe,2017-06-14,Contratado
+108,19454289,Mateo Ricardo,Soto,Cabrera,M,Taller,929744766,mateo.soto41@colegio.edu.pe,2016-05-08,Contratado
+109,58521405,Diego Wilson,Rivera,Paucar,M,Matematica,950496570,diego.rivera585@colegio.edu.pe,2019-06-05,Nombrado
+110,78295787,Estefany Antonella,Espinoza,Rivera,F,Educacion Fisica,979268771,estefany.espinoza11@colegio.edu.pe,2024-02-26,Contratado
+111,42757085,Antonella Yolanda,Rimac,Campos,F,Matematica,972056832,antonella.rimac847@colegio.edu.pe,2019-08-08,Contratado
+112,61247480,Nicolas Alexis,Cutipa,Lazo,M,Ingles,951648078,nicolas.cutipa537@colegio.edu.pe,2014-02-01,Nombrado
+113,69259508,Julio Piero,Ruiz,Alvarez,M,Matematica,969539711,julio.ruiz7@colegio.edu.pe,2010-09-29,Contratado
+114,27148943,Alessandra Rosa,Flores,Aguilar,F,Arte y Cultura,920701692,alessandra.flores633@colegio.edu.pe,2021-11-08,Contratado
+115,60914754,Katherine Melissa,Cornejo,Castillo,F,Matematica,924431774,katherine.cornejo436@colegio.edu.pe,2018-10-18,Contratado
+116,73692578,Pedro Edgar,Salazar,Chavez,M,Educacion Civica,977921415,pedro.salazar855@colegio.edu.pe,2015-01-02,Contratado
+117,57101006,Katty Daniela,Paucar,Leon,F,Comprension Lectora,921899033,katty.paucar173@colegio.edu.pe,2011-10-18,Nombrado
+118,31090036,Grecia Ruth,Bautista,Zavala,F,Ingles,927138312,grecia.bautista900@colegio.edu.pe,2022-11-04,Contratado
+119,60199721,Julia Yesenia,Flores,Reyes,F,Ingles,929207425,julia.flores395@colegio.edu.pe,2017-05-14,Contratado
+120,49825725,Nicolas Cesar,Pacheco,Rimac,M,Educacion Fisica,952606450,nicolas.pacheco879@colegio.edu.pe,2011-10-01,Nombrado
+121,67732171,Yesenia Nicole,Nunez,Ochoa,F,Matematica,958450074,yesenia.nunez730@colegio.edu.pe,2021-11-09,Contratado
+122,24964281,Ian Gonzalo,Cabanillas,Chavez,M,Matematica,933156040,ian.cabanillas568@colegio.edu.pe,2014-08-10,Contratado
+123,19446287,Elmer Alexis,Zavala,Torres,M,Matematica,901954446,elmer.zavala67@colegio.edu.pe,2018-05-20,Nombrado
+124,16667344,Melissa Susan,Delgado,Diaz,F,Comunicacion,925490921,melissa.delgado564@colegio.edu.pe,2024-07-17,Nombrado
+125,50108465,Rafaella Ariana,Ccahuana,Delgado,F,Comunicacion,923733697,rafaella.ccahuana580@colegio.edu.pe,2017-04-25,Nombrado
+126,71941349,Pilar Isabel,Nunez,Castillo,F,Taller,944805949,pilar.nunez514@colegio.edu.pe,2011-03-06,Contratado
+127,54022018,Yesenia Pilar,Yupanqui,Cabrera,F,Comprension Lectora,928456186,yesenia.yupanqui723@colegio.edu.pe,2014-12-21,Contratado
+128,59825089,Alexander Bryan,Rimac,Ramos,M,Educacion Fisica,975069426,alexander.rimac665@colegio.edu.pe,2018-10-25,Nombrado
+129,20946806,Alessandra Valentina,Delgado,Vasquez,F,Educacion Religiosa,943074777,alessandra.delgado396@colegio.edu.pe,2014-07-11,Contratado
+130,79744801,Oscar Jose,Campos,Ortiz,M,Comunicacion,961340695,oscar.campos434@colegio.edu.pe,2015-04-09,Nombrado
