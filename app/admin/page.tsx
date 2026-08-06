@@ -89,6 +89,7 @@ export default function AdminDashboard() {
           icon: GraduationCap,
           iconBg: "bg-blue-50",
           iconColor: "text-blue-500",
+          borderColor: "border-l-blue-500",
         },
         {
           label: "Total Profesores",
@@ -96,6 +97,7 @@ export default function AdminDashboard() {
           icon: Users,
           iconBg: "bg-purple-50",
           iconColor: "text-purple-500",
+          borderColor: "border-l-purple-500",
         },
         {
           label: "Padres Registrados",
@@ -103,6 +105,7 @@ export default function AdminDashboard() {
           icon: UserCog,
           iconBg: "bg-orange-50",
           iconColor: "text-orange-500",
+          borderColor: "border-l-orange-500",
         },
         {
           label: "Tasa de Asistencia",
@@ -110,6 +113,7 @@ export default function AdminDashboard() {
           icon: TrendingUp,
           iconBg: "bg-emerald-50",
           iconColor: "text-emerald-500",
+          borderColor: "border-l-emerald-500",
           showProgress: true,
           progressValue: data.stats.attendanceRate,
         },
@@ -144,23 +148,23 @@ export default function AdminDashboard() {
           stats.map((stat) => (
             <Card
               key={stat.label}
-              className="border-none shadow-sm rounded-xl"
+              className={`border-none shadow-sm rounded-xl border-l-4 ${stat.borderColor}`}
             >
-              <CardContent className="p-6">
+              <CardContent className="p-5">
                 <div className="flex items-start justify-between">
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{stat.label}</p>
                     <p className="text-3xl font-bold text-[#0F172A]">{stat.value}</p>
                   </div>
                   <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full ${stat.iconBg}`}
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.iconBg}`}
                   >
                     <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
                   </div>
                 </div>
                 {stat.showProgress && (
-                  <div className="mt-4">
-                    <Progress value={stat.progressValue} className="h-2" />
+                  <div className="mt-3">
+                    <Progress value={stat.progressValue} className="h-1.5" />
                   </div>
                 )}
               </CardContent>
@@ -204,7 +208,7 @@ export default function AdminDashboard() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`py-2 text-sm font-medium rounded-md transition-colors ${
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-colors ${
                     activeTab === tab.id
                       ? "bg-white text-[#0F172A] shadow-sm"
                       : "text-[#64748B] hover:text-[#0F172A]"
@@ -321,13 +325,13 @@ export default function AdminDashboard() {
               key={action.label}
               className="border-none shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer rounded-xl"
             >
-              <CardContent className="p-6 flex flex-col items-center text-center space-y-3">
+              <CardContent className="p-4 flex flex-col items-center text-center space-y-2">
                 <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-xl ${action.iconBg}`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl ${action.iconBg}`}
                 >
                   <action.icon className={`h-5 w-5 ${action.iconColor}`} />
                 </div>
-                <p className="text-sm font-semibold text-[#0F172A]">
+                <p className="text-xs font-semibold text-[#0F172A]">
                   {action.label}
                 </p>
               </CardContent>

@@ -100,7 +100,7 @@ export default function ForgotPasswordPage() {
                   Si el correo <strong>{email}</strong> está registrado, te enviamos un código de recuperación.
                 </p>
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                  💡 Revisa Mailpit en <a href="http://localhost:8025" target="_blank" className="underline">http://localhost:8025</a>
+                  💡 Si el correo no llega, revisa tu bandeja de spam.
                 </p>
                 <Link href={`/reset-password?email=${encodeURIComponent(email)}`}>
                   <Button className="w-full bg-[#1E2A5E] text-white hover:bg-[#162043]">

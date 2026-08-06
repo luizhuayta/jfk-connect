@@ -38,6 +38,9 @@ const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string 
 
 const DAY_SHORT: Record<string, string> = { Lunes: "Lun", Martes: "Mar", Miércoles: "Mié", Jueves: "Jue", Viernes: "Vie" };
 
+const TODAY_DAY = new Date().toLocaleDateString("es-PE", { weekday: "long" });
+const TODAY_CAPITALIZED = TODAY_DAY.charAt(0).toUpperCase() + TODAY_DAY.slice(1);
+
 function subjectStyle(subject: string) {
   return SUBJECT_COLORS[subject] ?? { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200" };
 }
@@ -127,8 +130,8 @@ export default function AdminSchedulePage() {
           {visibleSections.map((s) => {
             const isActive = activeSectionId === s.id;
             return (
-              <button key={s.id} onClick={() => setActiveSectionId(s.id)} className={`px-4 py-2.5 rounded-xl border-2 transition-all text-left ${isActive ? "border-[#2563EB] bg-[#2563EB]/5" : "border-gray-200 bg-white hover:border-[#2563EB]/30"}`}>
-                <p className={`text-sm font-bold ${isActive ? "text-[#2563EB]" : "text-[#0F172A]"}`}>{s.grade} &quot;{s.section}&quot;</p>
+              <button key={s.id} onClick={() => setActiveSectionId(s.id)} className={`px-3 py-2 rounded-lg border transition-all text-left ${isActive ? "border-[#2563EB] bg-[#2563EB]/5" : "border-gray-200 bg-white hover:border-[#2563EB]/30"}`}>
+                <p className={`text-xs font-bold ${isActive ? "text-[#2563EB]" : "text-[#0F172A]"}`}>{s.grade} &quot;{s.section}&quot;</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">{s.shift === "Mañana" ? <Sun className="h-2.5 w-2.5" /> : <Moon className="h-2.5 w-2.5" />}{s.shift} · {s.room}</p>
               </button>
             );
@@ -150,11 +153,17 @@ export default function AdminSchedulePage() {
         <CardContent className="p-0">
           <div className="grid grid-cols-[100px_repeat(5,1fr)] bg-[#1E2A5E]">
             <div className="p-3 text-xs font-semibold text-white/50 flex items-center justify-center">Período</div>
-            {DAYS.map((day) => (
-              <div key={day} className="p-3 text-center text-xs font-bold text-white border-l border-white/10">
-                <span className="hidden sm:block">{day}</span><span className="sm:hidden">{DAY_SHORT[day]}</span>
-              </div>
-            ))}
+            {DAYS.map((day) => {
+              const isToday = day === TODAY_CAPITALIZED;
+              return (
+                <div key={day} className={`relative p-3 text-center text-xs font-bold text-white border-l border-white/10 ${isToday ? "bg-[#F4C15C]/25 ring-2 ring-[#F4C15C] ring-inset" : ""}`}>
+                  <span className="hidden sm:block">{day}</span><span className="sm:hidden">{DAY_SHORT[day]}</span>
+                  {isToday && (
+                    <span className="block text-[10px] text-[#F4C15C] mt-0.5 font-bold tracking-wide">● HOY</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
           {PERIODS.map((period, pi) => (
             <Fragment key={period}>
@@ -169,10 +178,14 @@ export default function AdminSchedulePage() {
                 {DAYS.map((day) => {
                   const slot = schedule[day]?.[pi] ?? null;
                   const style = slot ? subjectStyle(slot.subject) : null;
+                  const isToday = day === TODAY_CAPITALIZED;
                   return (
-                    <div key={day} className={`p-1.5 border-l border-gray-100 ${editMode ? "cursor-pointer hover:ring-2 hover:ring-[#2563EB]/30 hover:ring-inset" : ""}`}>
+                    <div key={day} className={`relative p-1.5 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.04]" : ""} ${editMode ? "cursor-pointer hover:ring-2 hover:ring-[#2563EB]/30 hover:ring-inset" : ""}`}>
+                      {isToday && (
+                        <span className="absolute inset-y-0 left-0 w-0.5 bg-[#F4C15C]" />
+                      )}
                       {slot && style ? (
-                        <div className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${style.bg} ${style.border} ${editMode ? "ring-1 ring-inset ring-transparent hover:ring-[#2563EB]/40" : ""}`}>
+                        <div className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${style.bg} ${style.border} ${isToday ? "shadow-sm" : ""} ${editMode ? "ring-1 ring-inset ring-transparent hover:ring-[#2563EB]/40" : ""}`}>
                           <p className={`text-[11px] font-bold leading-tight ${style.text}`}>{slot.subject}</p>
                           <p className={`text-[10px] leading-tight hidden sm:block ${style.text} opacity-70`}>{slot.teacher}</p>
                           <div className={`hidden md:flex items-center gap-0.5 text-[10px] leading-tight ${style.text} opacity-60`}><MapPin className="h-2.5 w-2.5 shrink-0" />{slot.room}</div>

@@ -138,6 +138,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Solo se ejecuta el middleware en las rutas protegidas (ni APIs ni auth)
-  matcher: ["/admin/:path*", "/father/:path*", "/teacher/:path*"],
+  // Solo se ejecuta el middleware en las rutas protegidas.
+  // Excluye APIs, _next internals, archivos estáticos, y la ruta tunnel
+  // "/monitoring" usada por Sentry para evitar ad-blockers.
+  matcher: [
+    "/((?!monitoring|api|_next/static|_next/image|favicon.ico).*)",
+  ],
 };

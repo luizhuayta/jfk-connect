@@ -170,12 +170,14 @@ export default function SchedulePage() {
               return (
                 <div
                   key={day}
-                  className={`p-3 text-center text-xs font-bold text-white border-l border-white/10 ${isToday ? "bg-[#F4C15C]/20" : ""}`}
+                  className={`relative p-3 text-center text-xs font-bold text-white border-l border-white/10 ${
+                    isToday ? "bg-[#F4C15C]/25 ring-2 ring-[#F4C15C] ring-inset" : ""
+                  }`}
                 >
                   <span className="hidden sm:block">{day}</span>
                   <span className="sm:hidden">{DAY_SHORT[day]}</span>
                   {isToday && (
-                    <span className="block text-[10px] text-[#F4C15C] mt-0.5">Hoy</span>
+                    <span className="block text-[10px] text-[#F4C15C] mt-0.5 font-bold tracking-wide">● HOY</span>
                   )}
                 </div>
               );
@@ -214,10 +216,15 @@ export default function SchedulePage() {
                   return (
                     <div
                       key={day}
-                      className={`p-1.5 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.02]" : ""}`}
+                      className={`relative p-1.5 border-l border-gray-100 ${
+                        isToday ? "bg-[#1E2A5E]/[0.04]" : ""
+                      }`}
                     >
+                      {isToday && (
+                        <span className="absolute inset-y-0 left-0 w-0.5 bg-[#F4C15C]" />
+                      )}
                       {slot && style ? (
-                        <div className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${style.bg} ${style.border}`}>
+                        <div className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${style.bg} ${style.border} ${isToday ? "shadow-sm" : ""}`}>
                           <p className={`text-[11px] font-bold leading-tight ${style.text}`}>
                             {slot.subject}
                           </p>
@@ -246,20 +253,20 @@ export default function SchedulePage() {
       {/* Course legend */}
       <div className="space-y-3">
         <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">
-          Cursos asignados
+          Leyenda · Cursos asignados
         </p>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2">
           {courses.map((c) => {
             const style = SUBJECT_STYLES[c.subject] ?? { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", dot: "bg-gray-400" };
             return (
               <div
                 key={c.id}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border ${style.bg} ${style.border}`}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border ${style.bg} ${style.border}`}
               >
-                <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`} />
+                <span className={`h-2 w-2 rounded-full ${style.dot}`} />
                 <div>
-                  <p className={`text-sm font-bold ${style.text}`}>{c.subject}</p>
-                  <p className={`text-xs ${style.text} opacity-70`}>
+                  <p className={`text-xs font-bold leading-tight ${style.text}`}>{c.subject}</p>
+                  <p className={`text-[10px] ${style.text} opacity-70`}>
                     {c.grade} &quot;{c.section}&quot; · {c.room} · {c.hoursPerWeek} hrs/sem
                   </p>
                 </div>

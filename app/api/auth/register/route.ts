@@ -145,7 +145,6 @@ export async function POST(request: NextRequest) {
       ok: true,
       message: "Registro iniciado. Revisa tu correo para obtener el código de verificación.",
       email,
-      info: "Si usas Mailpit, revisa http://localhost:8025",
     });
   } catch (err) {
     logger.error({ err, route: "register" }, "error inesperado");

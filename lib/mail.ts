@@ -1,10 +1,23 @@
 /**
- * Cliente de correo para IJFK
+ * Cliente de correo para IJFK — SMTP (Gmail / cualquier proveedor)
  *
- * Diseñado para funcionar con:
- *  - Mailpit (Docker, desarrollo) - API compatible con SMTP estándar
- *  - Mailgun (producción) - sólo cambiar variables de entorno
- *  - Cualquier servidor SMTP estándar
+ * Usa nodemailer con SMTP estándar. Configurado por defecto para Gmail,
+ * pero funciona con cualquier servidor SMTP cambiando las variables de entorno.
+ *
+ * Para Gmail necesitas una "contraseña de aplicación" (no tu contraseña normal):
+ *   - Activa la verificación en 2 pasos de tu Gmail:
+ *     https://myaccount.google.com/security → "Verificación en 2 pasos"
+ *   - Crea una app password: https://myaccount.google.com/apppasswords
+ *   - El MAIL_PASSWORD será esa clave de 16 caracteres.
+ *
+ * Variables de entorno:
+ *   MAIL_HOST       (default smtp.gmail.com)
+ *   MAIL_PORT       (default 587)
+ *   MAIL_SECURE     ("true" para 465 SSL, "false" para 587 STARTTLS)
+ *   MAIL_USER       (tu correo Gmail)
+ *   MAIL_PASSWORD   (tu app password)
+ *   MAIL_FROM       (correo remitente)
+ *   MAIL_FROM_NAME  (nombre que se muestra)
  *
  * Uso:
  *   import { sendEmail } from "@/lib/mail";
@@ -17,32 +30,37 @@
 
 import nodemailer, { Transporter } from "nodemailer";
 
-const MAIL_HOST = process.env.MAIL_HOST ?? "mailpit";
-const MAIL_PORT = parseInt(process.env.MAIL_PORT ?? "1025", 10);
+const MAIL_HOST = process.env.MAIL_HOST ?? "smtp.gmail.com";
+const MAIL_PORT = parseInt(process.env.MAIL_PORT ?? "587", 10);
 const MAIL_SECURE = process.env.MAIL_SECURE === "true";
 const MAIL_USER = process.env.MAIL_USER ?? "";
 const MAIL_PASSWORD = process.env.MAIL_PASSWORD ?? "";
-const MAIL_FROM = process.env.MAIL_FROM ?? "no-reply@ijfk.local";
+const MAIL_FROM = process.env.MAIL_FROM ?? "";
 const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME ?? "IJFK Sistema Institucional";
 
 let transporter: Transporter | null = null;
 
 /**
- * Crea (o reutiliza) el transporter SMTP
+ * Crea (o reutiliza) el transporter SMTP.
+ * Devuelve null si falta la configuración necesaria.
  */
-function getTransporter(): Transporter {
+function getTransporter(): Transporter | null {
   if (transporter) return transporter;
+
+  if (!MAIL_HOST || !MAIL_USER || !MAIL_PASSWORD) {
+    return null;
+  }
 
   transporter = nodemailer.createTransport({
     host: MAIL_HOST,
     port: MAIL_PORT,
-    secure: MAIL_SECURE, // true para 465, false para 587/1025
-    auth:
-      MAIL_USER && MAIL_PASSWORD
-        ? { user: MAIL_USER, pass: MAIL_PASSWORD }
-        : undefined,
-    // En desarrollo ser permisivos con certificados
+    secure: MAIL_SECURE, // true para 465, false para 587/STARTTLS
+    auth: {
+      user: MAIL_USER,
+      pass: MAIL_PASSWORD,
+    },
     tls: {
+      // Permitir certificados auto-firmados solo en dev
       rejectUnauthorized: process.env.NODE_ENV === "production",
     },
   });
@@ -61,7 +79,7 @@ export type SendEmailOptions = {
   cc?: string | string[];
   bcc?: string | string[];
   attachments?: Array<{
-    filename: string;
+    filename?: string;
     content?: string | Buffer;
     path?: string;
     contentType?: string;
@@ -69,22 +87,32 @@ export type SendEmailOptions = {
 };
 
 /**
- * Envía un email usando la configuración SMTP
+ * Envía un email usando la configuración SMTP.
  */
 export async function sendEmail(options: SendEmailOptions): Promise<{
   success: boolean;
   messageId?: string;
   error?: string;
 }> {
-  try {
-    const t = getTransporter();
-    const fromName = options.fromName ?? MAIL_FROM_NAME;
-    const fromAddr = options.from ?? MAIL_FROM;
-    const to = Array.isArray(options.to) ? options.to.join(", ") : options.to;
+  const t = getTransporter();
+  if (!t) {
+    return {
+      success: false,
+      error: "Configuración de SMTP incompleta (MAIL_USER/MAIL_PASSWORD/MAIL_HOST).",
+    };
+  }
 
+  const fromName = options.fromName ?? MAIL_FROM_NAME;
+  const fromAddr = options.from ?? MAIL_FROM;
+
+  if (!fromAddr) {
+    return { success: false, error: "MAIL_FROM no configurado." };
+  }
+
+  try {
     const info = await t.sendMail({
       from: `"${fromName}" <${fromAddr}>`,
-      to,
+      to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
       subject: options.subject,
       html: options.html,
       text: options.text ?? stripHtml(options.html),
@@ -103,11 +131,12 @@ export async function sendEmail(options: SendEmailOptions): Promise<{
 }
 
 /**
- * Verifica la conexión con el servidor SMTP
+ * Verifica la conexión con el servidor SMTP.
  */
 export async function verifyMailConnection(): Promise<boolean> {
+  const t = getTransporter();
+  if (!t) return false;
   try {
-    const t = getTransporter();
     await t.verify();
     return true;
   } catch (err) {

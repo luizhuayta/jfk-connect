@@ -45,3 +45,8 @@ next-env.d.ts
 .VSCodeCounter/
 dev-server.log
 
+# Respaldos y config local de herramientas (no van a GitHub)
+.sentry-backup/
+.sentry-skill-refs/
+.mcp.json
+

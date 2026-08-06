@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bell, AlertTriangle, Info, Megaphone, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Bell, AlertTriangle, Info, Megaphone, ChevronDown, Loader2 } from "lucide-react";
 
 type AnnouncementCategory = "urgente" | "importante" | "general" | "informativo";
 
@@ -20,12 +20,12 @@ type Announcement = {
 
 const CATEGORY_CONFIG: Record<
   AnnouncementCategory,
-  { label: string; bg: string; text: string; border: string; icon: React.ElementType }
+  { label: string; bg: string; text: string; border: string; bar: string; icon: React.ElementType }
 > = {
-  urgente:     { label: "Urgente",     bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200",    icon: AlertTriangle },
-  importante:  { label: "Importante",  bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  icon: Bell },
-  general:     { label: "General",     bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   icon: Megaphone },
-  informativo: { label: "Informativo", bg: "bg-gray-50",   text: "text-gray-600",   border: "border-gray-200",   icon: Info },
+  urgente:     { label: "Urgente",     bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200",    bar: "bg-red-500",   icon: AlertTriangle },
+  importante:  { label: "Importante",  bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  bar: "bg-amber-500", icon: Bell },
+  general:     { label: "General",     bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   bar: "bg-blue-500",  icon: Megaphone },
+  informativo: { label: "Informativo", bg: "bg-gray-50",   text: "text-gray-600",   border: "border-gray-200",   bar: "bg-gray-400",  icon: Info },
 };
 
 const FILTERS = [
@@ -178,15 +178,16 @@ export default function AnnouncementsPage() {
           return (
             <Card
               key={aviso.id}
-              className={`border shadow-sm rounded-xl transition-all overflow-hidden ${
+              className={`relative border shadow-sm rounded-xl transition-all overflow-hidden hover:shadow-md ${
                 !isRead ? "border-[#1E2A5E]/20 shadow-[#1E2A5E]/5" : "border-gray-100"
               }`}
             >
+              <span className={`absolute inset-y-0 left-0 w-1 ${cfg.bar}`} />
               <button
                 className="w-full text-left"
                 onClick={() => toggle(aviso.id)}
               >
-                <CardContent className="p-5">
+                <CardContent className="p-5 pl-7">
                   <div className="flex items-start gap-4">
                     {/* Category icon */}
                     <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${cfg.bg} ${cfg.border}`}>
@@ -196,7 +197,7 @@ export default function AnnouncementsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Badge className={`text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border} hover:${cfg.bg}`}>
+                          <Badge className={`text-[11px] font-bold border ${cfg.bg} ${cfg.text} ${cfg.border} hover:${cfg.bg}`}>
                             {cfg.label}
                           </Badge>
                           {!isRead && (
@@ -216,13 +217,14 @@ export default function AnnouncementsPage() {
                         <p className="text-xs text-muted-foreground">
                           {aviso.sender} · {formatDate(aviso.date)}
                         </p>
-                        {isExpanded
-                          ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
-                          : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                        }
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-300 ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
                       </div>
 
-                      {/* Body — expandable */}
+                      {/* Body — preview cuando colapsado */}
                       {!isExpanded && (
                         <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
                           {aviso.body}
@@ -230,15 +232,21 @@ export default function AnnouncementsPage() {
                       )}
                     </div>
                   </div>
-
-                  {/* Expanded content */}
-                  {isExpanded && (
-                    <div className={`mt-4 ml-14 p-4 rounded-xl border text-sm text-[#334155] leading-relaxed ${cfg.bg} ${cfg.border}`}>
-                      {aviso.body}
-                    </div>
-                  )}
                 </CardContent>
               </button>
+
+              {/* Expanded content con animación */}
+              <div
+                className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                  isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                }`}
+              >
+                <div className="px-5 pb-5 pl-7">
+                  <div className={`ml-14 p-4 rounded-xl border text-sm text-[#334155] leading-relaxed ${cfg.bg} ${cfg.border}`}>
+                    {aviso.body}
+                  </div>
+                </div>
+              </div>
             </Card>
           );
         })}

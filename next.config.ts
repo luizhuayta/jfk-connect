@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 /**
  * Configuración de Next.js 16 para IJFK
@@ -7,6 +8,12 @@ import type { NextConfig } from "next";
  *  - Turbopack es el bundler por defecto para dev y build (ya no requiere --turbopack)
  *  - output: "standalone" genera un build mínimo ideal para Docker
  *  - Los params/cookies/headers ahora son promesas (Async Request APIs)
+ *
+ * Sentry SDK:
+ *  - withSentryConfig() inyecta automáticamente el plugin de webpack/turbopack
+ *    que sube sourcemaps al hacer build y configura el SDK.
+ *  - Los archivos sentry.server.config.ts, sentry.edge.config.ts e
+ *    instrumentation-client.ts son cargados automáticamente por @sentry/nextjs.
  */
 const nextConfig: NextConfig = {
   // Build standalone optimizado para contenedor (genera un .next/standalone)
@@ -55,4 +62,25 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// ---------------------------------------------------------------------------
+// Wrapper de Sentry
+// ---------------------------------------------------------------------------
+// Sigue la guía oficial: https://skills.sentry.dev/instrument
+// ---------------------------------------------------------------------------
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Token para subir sourcemaps (build-time secret; distinto del DSN)
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Sube más archivos del cliente para mejor resolución de stack traces
+  widenClientFileUpload: true,
+
+  // Crea una ruta proxy en Next.js para evitar que ad-blockers bloqueen
+  // los requests a Sentry. La ruta "/monitoring" se sirve automáticamente.
+  tunnelRoute: "/monitoring",
+
+  // Silencia la salida del plugin en builds locales; mantén en CI para debug
+  silent: !process.env.CI,
+});

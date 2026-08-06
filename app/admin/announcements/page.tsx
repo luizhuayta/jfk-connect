@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bell, AlertTriangle, Info, Megaphone, Plus, Pencil, Trash2, ChevronDown, ChevronUp, CalendarDays, Users, X, Send, Eye, Loader2 } from "lucide-react";
+import { Bell, AlertTriangle, Info, Megaphone, Plus, Pencil, Trash2, ChevronDown, CalendarDays, Users, X, Send, Loader2 } from "lucide-react";
 
 type AnnouncementCategory = "urgente" | "importante" | "general" | "informativo";
 type Announcement = {
@@ -12,11 +12,11 @@ type Announcement = {
   sender: string; date: string; read: boolean; audience: string;
 };
 
-const CAT_META: Record<AnnouncementCategory, { label: string; icon: typeof Bell; badge: string; cardBg: string; dot: string }> = {
-  urgente: { label: "Urgente", icon: AlertTriangle, badge: "bg-red-100 text-red-700", cardBg: "bg-red-50/50 border-red-200", dot: "bg-red-500" },
-  importante: { label: "Importante", icon: Megaphone, badge: "bg-amber-100 text-amber-700", cardBg: "bg-amber-50/50 border-amber-200", dot: "bg-amber-500" },
-  general: { label: "General", icon: Bell, badge: "bg-blue-100 text-blue-700", cardBg: "bg-blue-50/50 border-blue-200", dot: "bg-blue-400" },
-  informativo: { label: "Informativo", icon: Info, badge: "bg-gray-100 text-gray-600", cardBg: "bg-white border-gray-200", dot: "bg-gray-400" },
+const CAT_META: Record<AnnouncementCategory, { label: string; icon: typeof Bell; badge: string; cardBg: string; dot: string; bar: string }> = {
+  urgente: { label: "Urgente", icon: AlertTriangle, badge: "bg-red-100 text-red-700", cardBg: "bg-white border-gray-100", dot: "bg-red-500", bar: "bg-red-500" },
+  importante: { label: "Importante", icon: Megaphone, badge: "bg-amber-100 text-amber-700", cardBg: "bg-white border-gray-100", dot: "bg-amber-500", bar: "bg-amber-500" },
+  general: { label: "General", icon: Bell, badge: "bg-blue-100 text-blue-700", cardBg: "bg-white border-gray-100", dot: "bg-blue-400", bar: "bg-blue-500" },
+  informativo: { label: "Informativo", icon: Info, badge: "bg-gray-100 text-gray-600", cardBg: "bg-white border-gray-100", dot: "bg-gray-400", bar: "bg-gray-400" },
 };
 
 const AUDIENCE_LABELS: Record<string, string> = {
@@ -184,7 +184,8 @@ export default function AdminAnnouncementsPage() {
           const Icon = meta.icon;
           const isActive = filter === cat;
           return (
-            <button key={cat} onClick={() => setFilter(isActive ? "all" : cat)} className={`rounded-xl border-2 p-4 text-left transition-all ${isActive ? "border-[#1E2A5E] shadow-sm" : "border-transparent"} ${meta.cardBg}`}>
+            <button key={cat} onClick={() => setFilter(isActive ? "all" : cat)} className={`relative overflow-hidden rounded-xl border p-4 text-left transition-all hover:shadow-sm bg-white border-gray-100 ${isActive ? "ring-2 ring-[#1E2A5E]" : ""}`}>
+              <span className={`absolute inset-y-0 left-0 w-1 ${meta.bar}`} />
               <div className="flex items-center gap-2 mb-1"><Icon className={`h-4 w-4 ${meta.badge.split(" ")[1]}`} /><span className={`text-xs font-semibold ${meta.badge.split(" ")[1]}`}>{meta.label}</span></div>
               <p className="text-2xl font-bold text-[#0F172A]">{counts[cat]}</p>
             </button>
@@ -199,29 +200,43 @@ export default function AdminAnnouncementsPage() {
           const Icon = meta.icon;
           const isExpanded = expandedIds.has(a.id);
           return (
-            <Card key={a.id} className={`border shadow-sm rounded-xl overflow-hidden ${meta.cardBg}`}>
+            <Card key={a.id} className="relative border border-gray-100 shadow-sm rounded-xl overflow-hidden bg-white hover:shadow-md transition-all">
+              <span className={`absolute inset-y-0 left-0 w-1 ${meta.bar}`} />
               <CardContent className="p-0">
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${meta.dot}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <Badge className={`text-[11px] font-bold border-0 gap-1 hover:opacity-90 ${meta.badge}`}><Icon className="h-3 w-3" />{meta.label}</Badge>
+                <div className="p-5 pl-7">
+                  <div className="flex items-start gap-4">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${meta.badge.replace("text-", "border-").replace("100", "200")}`}>
+                      <Icon className={`h-5 w-5 ${meta.badge.split(" ")[1]}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge className={`text-[11px] font-bold border-0 gap-1 hover:opacity-90 ${meta.badge}`}>{meta.label}</Badge>
                           <span className="flex items-center gap-1 text-[10px] text-muted-foreground bg-[#1E2A5E]/8 rounded px-1.5 py-0.5 font-medium"><Users className="h-2.5 w-2.5" />{AUDIENCE_LABELS[a.audience] ?? a.audience}</span>
                         </div>
-                        <h3 className="text-sm font-bold text-[#0F172A]">{a.title}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">{a.sender}<span className="opacity-40">·</span><CalendarDays className="h-3 w-3" />{fmtDate(a.date)}</p>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => toggleExpand(a.id)} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors" title={isExpanded ? "Colapsar" : "Ver contenido"}>
+                            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                          </button>
+                          <button onClick={() => openEdit(a)} className="p-1.5 rounded-lg hover:bg-[#2563EB]/10 transition-colors" title="Editar"><Pencil className="h-4 w-4 text-[#2563EB]" /></button>
+                          <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar"><Trash2 className="h-4 w-4 text-red-500" /></button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => toggleExpand(a.id)} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors" title={isExpanded ? "Colapsar" : "Ver contenido"}>{isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}</button>
-                      <button onClick={() => openEdit(a)} className="p-1.5 rounded-lg hover:bg-[#2563EB]/10 transition-colors" title="Editar"><Pencil className="h-4 w-4 text-[#2563EB]" /></button>
-                      <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar"><Trash2 className="h-4 w-4 text-red-500" /></button>
+                      <h3 className="mt-1.5 text-sm font-bold text-[#0F172A]">{a.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">{a.sender}<span className="opacity-40">·</span><CalendarDays className="h-3 w-3" />{fmtDate(a.date)}</p>
+                      {!isExpanded && (
+                        <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{a.body}</p>
+                      )}
                     </div>
                   </div>
                 </div>
-                {isExpanded && (<div className="px-5 pb-5 pt-0"><div className="ml-5 bg-white/80 rounded-xl p-4 border border-black/5"><p className="text-sm text-[#334155] leading-relaxed">{a.body}</p></div></div>)}
+                <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}>
+                  <div className="px-5 pb-5 pl-7">
+                    <div className="ml-14 bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      <p className="text-sm text-[#334155] leading-relaxed">{a.body}</p>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           );

@@ -30,6 +30,11 @@ COPY . .
 ARG NEXT_BUILD_ID=local
 ENV NEXT_BUILD_ID=$NEXT_BUILD_ID
 
+# NEXT_PUBLIC_* se inlinan en el bundle del cliente en build-time.
+# Pasarlo como build arg para que el SDK de Sentry del navegador reciba el DSN.
+ARG NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+
 # Build de Next.js (en v16 usa Turbopack por defecto)
 RUN npm run build
 

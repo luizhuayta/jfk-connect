@@ -22,18 +22,18 @@
     "docker:shell:app": "docker compose exec app sh",
     "docker:shell:db": "docker compose exec db psql -U postgres -d ijfk",
     "docker:psql": "docker compose exec db psql -U postgres -d ijfk -c",
-    "docker:reset": "docker compose down -v && docker compose up -d",
-    "mail:test": "curl -s --user 'admin:admin' http://localhost:8025/api/v1/info"
+    "docker:reset": "docker compose down -v && docker compose up -d"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
+    "@sentry/nextjs": "^10.69.0",
     "@supabase/supabase-js": "^2.45.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "csv-parse": "^7.0.1",
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
-    "nodemailer": "^6.9.14",
+    "nodemailer": "^9.0.4",
     "pg": "^8.22.0",
     "pino": "^10.3.1",
     "react": "19.2.4",
@@ -47,7 +47,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/nodemailer": "^6.4.16",
+    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",

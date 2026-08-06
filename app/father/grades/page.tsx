@@ -169,35 +169,45 @@ export default function GradesPage() {
       </div>
 
       {/* Bimester strip */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-2">
         {bimesterAverages.map((b, i) => {
           const isActive = activeBimester === b.label;
+          const ltr = letterGrade(b.avg);
           return (
             <button
               key={b.label}
               onClick={() => setActiveBimester(b.label)}
-              className={`rounded-xl p-4 text-center transition-all border-2 ${
+              className={`rounded-xl p-3 text-center transition-all border-2 ${
                 isActive
-                  ? "bg-[#1E2A5E] border-[#1E2A5E] text-white"
+                  ? "bg-[#1E2A5E] border-[#1E2A5E] text-white shadow-sm"
                   : "bg-white border-gray-100 hover:border-[#1E2A5E]/30 shadow-sm"
               }`}
             >
               <p
-                className={`text-xs font-medium mb-1 ${
+                className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${
                   isActive ? "text-white/70" : "text-muted-foreground"
                 }`}
               >
                 Bimestre {i + 1}
               </p>
+              <div className="flex items-center justify-center gap-2">
+                <p
+                  className={`text-xl font-bold ${
+                    isActive ? "text-[#F4C15C]" : "text-[#1E2A5E]"
+                  }`}
+                >
+                  {b.avg.toFixed(1)}
+                </p>
+                {ltr && (
+                  <span className={`h-6 w-6 rounded-md border flex items-center justify-center text-[11px] font-bold ${
+                    isActive ? "border-white/30 text-white" : letterGradeColor(ltr)
+                  }`}>
+                    {ltr}
+                  </span>
+                )}
+              </div>
               <p
-                className={`text-2xl font-bold ${
-                  isActive ? "text-[#F4C15C]" : "text-[#1E2A5E]"
-                }`}
-              >
-                {b.avg.toFixed(1)}
-              </p>
-              <p
-                className={`text-xs mt-1 font-medium ${
+                className={`text-[10px] mt-1 font-medium ${
                   isActive ? "text-white/60" : "text-muted-foreground"
                 }`}
               >
@@ -210,8 +220,8 @@ export default function GradesPage() {
 
       {/* Grades Card */}
       <Card className="border-none shadow-sm rounded-xl overflow-hidden">
-        <CardContent className="p-6 space-y-6">
-          <h2 className="text-lg font-bold text-[#0F172A]">
+        <CardContent className="p-5 space-y-4">
+          <h2 className="text-base font-bold text-[#0F172A]">
             Bimestre {activeBimester} — {student?.name}
           </h2>
 
@@ -236,56 +246,72 @@ export default function GradesPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {notes.map((row, idx) => (
-                  <TableRow key={idx} className="hover:bg-gray-50/50">
-                    <TableCell className="text-sm font-medium text-[#0F172A]">
-                      {row.course}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`text-sm font-bold ${
-                          row.note >= 17
-                            ? "text-emerald-600"
-                            : row.note >= 14
-                            ? "text-[#1E2A5E]"
-                            : "text-amber-600"
-                        }`}
-                      >
-                        {row.note.toFixed(1)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <Badge
-                          className={`text-xs font-bold ${
-                            row.level === "AD"
-                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                              : "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                {notes.map((row, idx) => {
+                  const ltr = letterGrade(row.note);
+                  const rowBg =
+                    row.note >= 17
+                      ? "border-l-emerald-400"
+                      : row.note >= 14
+                      ? "border-l-blue-400"
+                      : "border-l-amber-400";
+                  return (
+                    <TableRow key={idx} className={`border-l-4 hover:bg-gray-50/50 ${rowBg}`}>
+                      <TableCell className="text-sm font-medium text-[#0F172A] py-2.5">
+                        {row.course}
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <span
+                          className={`text-sm font-bold ${
+                            row.note >= 17
+                              ? "text-emerald-600"
+                              : row.note >= 14
+                              ? "text-[#1E2A5E]"
+                              : "text-amber-600"
                           }`}
                         >
-                          {row.level ?? "—"}
-                        </Badge>
-                        {letterGrade(row.note) && (
-                          <Badge className={`text-xs font-bold ${letterGradeColor(letterGrade(row.note))}`}>
-                            {letterGrade(row.note)}
+                          {row.note.toFixed(1)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <Badge
+                            className={`text-[11px] font-bold ${
+                              row.level === "AD"
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                                : "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                            }`}
+                          >
+                            {row.level ?? "—"}
                           </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">
-                      {row.observation}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          {ltr && (
+                            <Badge className={`text-[11px] font-bold ${letterGradeColor(ltr)}`}>
+                              {ltr}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground py-2.5">
+                        {row.observation}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
 
           {/* Promedio */}
           <div className="flex items-center justify-between bg-[#1E2A5E] rounded-xl px-6 py-5">
-            <div>
-              <p className="text-sm text-white/80">Promedio del Bimestre {activeBimester}</p>
-              <p className="text-3xl font-bold text-[#F4C15C]">{average.toFixed(1)}</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-white/60">Promedio del Bimestre {activeBimester}</p>
+                <p className="text-3xl font-bold text-[#F4C15C] mt-1">{average.toFixed(1)}</p>
+              </div>
+              {letterGrade(average) && (
+                <div className={`h-14 w-14 rounded-xl border-2 flex items-center justify-center font-bold text-xl ${letterGradeColor(letterGrade(average))}`}>
+                  {letterGrade(average)}
+                </div>
+              )}
             </div>
             <Badge className="bg-[#F4C15C] text-[#1E2A5E] font-bold text-sm px-3 py-1 hover:bg-[#F4C15C]">
               {levelLabel}

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, FileImage, Presentation, Sheet, UploadCloud, Search, BookOpen, Filter, Loader2, Trash2, X } from "lucide-react";
+import { FileText, FileImage, Presentation, Sheet, UploadCloud, Search, BookOpen, Filter, Loader2, Trash2, X, Upload } from "lucide-react";
 
 type Material = {
   id: string;
@@ -48,6 +48,8 @@ export default function MaterialsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [form, setForm] = useState({ courseId: "", title: "", type: "pdf" as Material["type"], size: "", topic: "" });
+  const [isDragging, setIsDragging] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
 
   const loadMaterials = async (courseList: TeacherCourse[]) => {
     const results = await Promise.all(
@@ -322,9 +324,50 @@ export default function MaterialsPage() {
               <h2 className="text-xl font-bold text-[#1E2A5E]">Subir material</h2>
               <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
             </div>
+
+            {/* Drop zone visual */}
+            <div
+              ref={dropRef}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) {
+                  const ext = file.name.split(".").pop()?.toLowerCase();
+                  const typeMap: Record<string, Material["type"]> = {
+                    pdf: "pdf", pptx: "pptx", docx: "docx", xlsx: "xlsx",
+                    jpg: "img", jpeg: "img", png: "img", gif: "img", webp: "img",
+                  };
+                  const detected = ext && typeMap[ext] ? typeMap[ext] : "pdf";
+                  const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                  setForm((f) => ({
+                    ...f,
+                    title: f.title || file.name.replace(/\.[^/.]+$/, ""),
+                    type: detected,
+                    size: `${sizeMB} MB`,
+                  }));
+                }
+              }}
+              className={`rounded-xl border-2 border-dashed p-5 text-center transition-colors ${
+                isDragging
+                  ? "border-[#2563EB] bg-[#2563EB]/5"
+                  : "border-gray-200 bg-gray-50/50"
+              }`}
+            >
+              <Upload className={`h-6 w-6 mx-auto mb-2 ${isDragging ? "text-[#2563EB]" : "text-gray-400"}`} />
+              <p className="text-sm font-semibold text-[#0F172A]">
+                Arrastra un archivo aquí
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                PDF, PPTX, DOCX, XLSX o imagen · o completa el formulario abajo
+              </p>
+            </div>
+
             <div className="space-y-3">
               <div>
-                <label className="text-sm font-semibold text-[#1E2A5E]">Curso *</label>
+                <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Curso *</label>
                 <select
                   value={form.courseId}
                   onChange={(e) => setForm({ ...form, courseId: e.target.value })}
@@ -336,7 +379,7 @@ export default function MaterialsPage() {
                 </select>
               </div>
               <div>
-                <label className="text-sm font-semibold text-[#1E2A5E]">Título *</label>
+                <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Título *</label>
                 <input
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -346,7 +389,7 @@ export default function MaterialsPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-semibold text-[#1E2A5E]">Tipo</label>
+                  <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Tipo</label>
                   <select
                     value={form.type}
                     onChange={(e) => setForm({ ...form, type: e.target.value as Material["type"] })}
@@ -360,7 +403,7 @@ export default function MaterialsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-[#1E2A5E]">Tamaño</label>
+                  <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Tamaño</label>
                   <input
                     value={form.size}
                     onChange={(e) => setForm({ ...form, size: e.target.value })}
@@ -370,7 +413,7 @@ export default function MaterialsPage() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-semibold text-[#1E2A5E]">Tema</label>
+                <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Tema</label>
                 <input
                   value={form.topic}
                   onChange={(e) => setForm({ ...form, topic: e.target.value })}

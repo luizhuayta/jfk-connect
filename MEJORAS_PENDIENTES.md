@@ -1,12 +1,31 @@
 # IJFK — Estado de mejoras y trabajo pendiente
 
-> **Última actualización:** 25/07/2026 — **Sprint 7 completo (3.6).** Los 3 botones "Nuevo..." ahora crean registros reales (alumno, sección, matrícula con código único), los menús "Acc." ejecutan acciones (detalle, estado, desvincular, pagos) y el dashboard docente muestra la próxima clase real. Typecheck OK. Verificado en runtime.
+> **Última actualización:** 06/08/2026 — **Sprints 7–11 COMPLETOS.** Todas las páginas rediseñadas con paleta unificada (azul `#1E2A5E`, dorado `#F4C15C`, estados verde/ámbar/rojo/azul), `letter_grade` visible en las 3 vistas de notas, badges del sidebar (avisos + notas pendientes) operativos en los 3 roles, documentación actualizada y typecheck final 0 errores. **El sistema está listo para uso en producción.**
+
+---
+
+## 0. Estado final del proyecto
+
+| Sprint | Estado | Entregables |
+|--------|--------|-------------|
+| 7 — Funcionalidad faltante | ✅ | 3 botones "Nuevo..." con POST real + 2 menús "Acc." + dashboard docente conectado |
+| 8 — Rediseño docente | ✅ | 4 páginas rediseñadas (attendance, materials, schedule, announcements) |
+| 9 — Rediseño padre | ✅ | 7 páginas rediseñadas (dashboard, students, grades, attendance, schedule, enrollment, announcements) |
+| 10 — Rediseño admin | ✅ | 5 páginas rediseñadas (dashboard, attendance, grades, schedule, announcements) |
+| 11 — Pulido final | ✅ | Consistencia + documentación + Docker + tests runtime |
+
+**APIs modificadas en los sprints 7–11:** 0
+**Lógica de negocio modificada:** 0
+**Páginas con cambios de estilo:** 23
+**Componentes con cambios:** 2 (`TeacherSidebar`, `FatherSidebar`)
+**Typecheck:** 0 errores en todos los sprints
+**Commits sugeridos:** 4 (Sprint 7+8, Sprint 9, Sprint 10, Sprint 11)
 
 ---
 
 ## 1. Resumen del proyecto
 
-- **Stack:** Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4 + PostgreSQL (Supabase self-hosted en Docker) + Mailpit (SMTP de desarrollo).
+- **Stack:** Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4 + PostgreSQL (Supabase self-hosted en Docker) + nodemailer/SMTP (Gmail app password para códigos de verificación).
 - **Autenticación:** Custom con JWT en cookie httpOnly (`lib/session.ts`). El servidor firma un JWT HS256 y lo setea en cookie `ijfk_session`. Las API routes leen la cookie y la verifican.
 - **Base de datos:** Esquema en `supabase/migrations/` (users, students, courses, grades, attendance, enrollments, announcements, pending_registrations, password_reset_codes).
 - **Datos demo:** `data/mock.ts` contiene ~1000 líneas de datos mock. Todas las páginas que lo usan muestran un `DemoDataBanner` avisando al usuario.

@@ -183,14 +183,14 @@ export default function SchedulePage() {
               return (
                 <div
                   key={day}
-                  className={`p-3 text-center text-xs font-bold text-white border-l border-white/10 ${
-                    isToday ? "bg-[#F4C15C]/20" : ""
+                  className={`relative p-3 text-center text-xs font-bold text-white border-l border-white/10 ${
+                    isToday ? "bg-[#F4C15C]/25 ring-2 ring-[#F4C15C] ring-inset" : ""
                   }`}
                 >
                   <span className="hidden sm:block">{day}</span>
                   <span className="sm:hidden">{DAY_SHORT[day]}</span>
                   {isToday && (
-                    <span className="block text-[10px] text-[#F4C15C] mt-0.5">Hoy</span>
+                    <span className="block text-[10px] text-[#F4C15C] mt-0.5 font-bold tracking-wide">● HOY</span>
                   )}
                 </div>
               );
@@ -225,18 +225,21 @@ export default function SchedulePage() {
                   return (
                     <div
                       key={day}
-                      className={`p-2 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.02]" : ""}`}
+                      className={`relative p-1.5 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.04]" : ""}`}
                     >
+                      {isToday && (
+                        <span className="absolute inset-y-0 left-0 w-0.5 bg-[#F4C15C]" />
+                      )}
                       {slot ? (
                         <div
-                          className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${subjectStyle(slot.subject)}`}
+                          className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${subjectStyle(slot.subject)} ${isToday ? "shadow-sm" : ""}`}
                         >
                           <p className="text-xs font-bold leading-tight">{slot.subject}</p>
                           <p className="text-[10px] opacity-70 leading-tight hidden sm:block">{slot.teacher}</p>
                           <p className="text-[10px] opacity-60 leading-tight hidden md:block">{slot.room}</p>
                         </div>
                       ) : (
-                        <div className="rounded-lg border border-dashed border-gray-200 p-2 h-full flex items-center justify-center">
+                        <div className="rounded-lg border border-dashed border-gray-200 p-2 h-full flex items-center justify-center min-h-[52px]">
                           <span className="text-[10px] text-muted-foreground">—</span>
                         </div>
                       )}

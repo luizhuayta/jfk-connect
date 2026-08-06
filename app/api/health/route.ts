@@ -8,13 +8,10 @@
  */
 
 import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
 import { query } from "@/lib/db";
+import { verifyMailConnection } from "@/lib/mail";
 
 export const dynamic = "force-dynamic";
-
-const MAIL_HOST = process.env.MAIL_HOST ?? "";
-const MAIL_PORT = parseInt(process.env.MAIL_PORT ?? "1025", 10);
 
 async function checkDatabase(): Promise<{ ok: boolean; latency?: number; error?: string }> {
   const start = Date.now();
@@ -30,16 +27,12 @@ async function checkDatabase(): Promise<{ ok: boolean; latency?: number; error?:
 }
 
 async function checkMail(): Promise<{ ok: boolean; error?: string }> {
-  if (!MAIL_HOST) return { ok: false, error: "MAIL_HOST no configurado" };
+  if (!process.env.MAIL_HOST || !process.env.MAIL_USER) {
+    return { ok: false, error: "Configuración de SMTP incompleta" };
+  }
   try {
-    const t = nodemailer.createTransport({
-      host: MAIL_HOST,
-      port: MAIL_PORT,
-      secure: false,
-      tls: { rejectUnauthorized: false },
-    });
-    await t.verify();
-    return { ok: true };
+    const ok = await verifyMailConnection();
+    return ok ? { ok: true } : { ok: false, error: "No se pudo conectar al servidor SMTP" };
   } catch (err) {
     return {
       ok: false,

@@ -177,7 +177,7 @@ export default function AttendancePage() {
 
       {/* Year summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Card className="border-none shadow-sm rounded-xl col-span-2 sm:col-span-1">
+        <Card className="border-none shadow-sm rounded-xl col-span-2 sm:col-span-1 border-l-4 border-l-[#1E2A5E]">
           <CardContent className="p-4 flex flex-col items-center justify-center text-center">
             <TrendingUp className="h-5 w-5 text-[#1E2A5E] mb-1" />
             <p className="text-2xl font-bold text-[#1E2A5E]">{annualAttendance}%</p>
@@ -187,8 +187,9 @@ export default function AttendancePage() {
         {(["A", "F", "T", "J"] as AttendanceStatus[]).map((s) => {
           const cfg = STATUS_CONFIG[s];
           const Icon = s === "A" ? CheckCircle2 : s === "F" ? XCircle : s === "T" ? Clock : FileCheck;
+          const borderColor = s === "A" ? "border-l-emerald-500" : s === "F" ? "border-l-red-500" : s === "T" ? "border-l-amber-500" : "border-l-blue-400";
           return (
-            <Card key={s} className="border-none shadow-sm rounded-xl">
+            <Card key={s} className={`border-none shadow-sm rounded-xl border-l-4 ${borderColor}`}>
               <CardContent className="p-4 flex flex-col items-center justify-center text-center">
                 <Icon className={`h-5 w-5 mb-1 ${cfg.text}`} />
                 <p className={`text-2xl font-bold ${cfg.text}`}>{allCounts[s]}</p>
@@ -236,11 +237,11 @@ export default function AttendancePage() {
           </div>
 
           {/* Calendar grid */}
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {/* Day names header */}
-            <div className="grid grid-cols-7 mb-1">
+            <div className="grid grid-cols-7 mb-0.5">
               {DAY_NAMES.map((d) => (
-                <div key={d} className="text-center text-xs font-semibold text-muted-foreground py-2">
+                <div key={d} className="text-center text-[10px] font-bold uppercase tracking-wide text-muted-foreground py-1.5">
                   {d}
                 </div>
               ))}
@@ -248,7 +249,7 @@ export default function AttendancePage() {
 
             {/* Weeks */}
             {weeks.map((week, wi) => (
-              <div key={wi} className="grid grid-cols-7 gap-1">
+              <div key={wi} className="grid grid-cols-7 gap-0.5">
                 {week.map((day, di) => {
                   if (!day) return <div key={di} />;
                   const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -258,9 +259,9 @@ export default function AttendancePage() {
                   return (
                     <div
                       key={di}
-                      className={`relative flex flex-col items-center justify-center rounded-lg aspect-square text-sm font-medium transition-colors ${
+                      className={`relative flex flex-col items-center justify-center rounded-md aspect-square text-xs font-medium transition-colors ${
                         weekend
-                          ? "text-gray-300"
+                          ? "text-gray-300 bg-gray-50/50"
                           : status
                           ? `${STATUS_CONFIG[status].bg} border ${STATUS_CONFIG[status].text} font-bold`
                           : "text-gray-400 border border-dashed border-gray-200"
@@ -268,7 +269,7 @@ export default function AttendancePage() {
                     >
                       {day}
                       {status && !weekend && (
-                        <span className={`text-[9px] font-bold leading-none mt-0.5 ${STATUS_CONFIG[status].text}`}>
+                        <span className={`text-[8px] font-bold leading-none mt-0.5 ${STATUS_CONFIG[status].text}`}>
                           {STATUS_CONFIG[status].short}
                         </span>
                       )}

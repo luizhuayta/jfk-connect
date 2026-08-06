@@ -17,13 +17,13 @@ interface FatherUser {
 }
 
 const MENU = [
-  { href: "/father",               label: "Inicio",      icon: LayoutDashboard, exact: true  },
-  { href: "/father/students",      label: "Mis Hijos",   icon: Baby,            exact: false },
-  { href: "/father/grades",        label: "Notas",       icon: FileText,        exact: false },
-  { href: "/father/attendance",    label: "Asistencia",  icon: Calendar,        exact: false },
-  { href: "/father/schedule",      label: "Horario",     icon: Clock,           exact: false },
-  { href: "/father/enrollment",    label: "Matrícula",   icon: BookOpen,        exact: false },
-  { href: "/father/announcements", label: "Avisos",      icon: Bell,            exact: false },
+  { href: "/father",               label: "Inicio",      icon: LayoutDashboard, exact: true,  badge: false },
+  { href: "/father/students",      label: "Mis Hijos",   icon: Baby,            exact: false, badge: false },
+  { href: "/father/grades",        label: "Notas",       icon: FileText,        exact: false, badge: false },
+  { href: "/father/attendance",    label: "Asistencia",  icon: Calendar,        exact: false, badge: false },
+  { href: "/father/schedule",      label: "Horario",     icon: Clock,           exact: false, badge: false },
+  { href: "/father/enrollment",    label: "Matrícula",   icon: BookOpen,        exact: false, badge: false },
+  { href: "/father/announcements", label: "Avisos",      icon: Bell,            exact: false, badge: true  },
 ];
 
 function getInitials(name: string): string {
@@ -42,6 +42,7 @@ export default function FatherSidebar({ children }: { children: React.ReactNode 
   const [user, setUser] = useState<FatherUser | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
 
   useEffect(() => {
     // La sesión vive en la cookie httpOnly; consultamos /api/auth/me sin userId
@@ -55,6 +56,17 @@ export default function FatherSidebar({ children }: { children: React.ReactNode 
         }
       })
       .catch(() => router.push("/login"));
+    // Contador de avisos no leídos
+    fetch("/api/announcements")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && Array.isArray(data.announcements)) {
+          setUnreadAnnouncements(
+            data.announcements.filter((a: { read: boolean }) => !a.read).length
+          );
+        }
+      })
+      .catch(() => {});
   }, [router]);
 
   useEffect(() => {
@@ -141,6 +153,7 @@ export default function FatherSidebar({ children }: { children: React.ReactNode 
           {MENU.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href, item.exact);
+            const showBadge = item.badge && unreadAnnouncements > 0 && !collapsed;
             return (
               <Link
                 key={item.href}
@@ -153,8 +166,24 @@ export default function FatherSidebar({ children }: { children: React.ReactNode 
                   ${collapsed ? "justify-center" : ""}
                 `}
               >
-                <Icon className="h-5 w-5 shrink-0" />
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                <div className="relative shrink-0">
+                  <Icon className="h-5 w-5" />
+                  {item.badge && unreadAnnouncements > 0 && collapsed && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-white text-[8px] font-bold">
+                      {unreadAnnouncements > 9 ? "9+" : unreadAnnouncements}
+                    </span>
+                  )}
+                </div>
+                {!collapsed && (
+                  <>
+                    <span className="truncate flex-1">{item.label}</span>
+                    {showBadge && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5">
+                        {unreadAnnouncements > 9 ? "9+" : unreadAnnouncements}
+                      </span>
+                    )}
+                  </>
+                )}
               </Link>
             );
           })}

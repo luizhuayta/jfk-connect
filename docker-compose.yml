@@ -1,21 +1,26 @@
 # =============================================================================
 # IJFK - docker-compose.yml
-# Stack completo: Next.js + Supabase (Postgres) + Mailpit (alternativa a Mailgun)
+# Stack completo: Next.js + Supabase (Postgres)
 # =============================================================================
 #
 # Servicios:
 #   app       : Next.js 16 (puerto 3000)
 #   db        : Postgres con extensiones de Supabase (puerto 54322)
 #   pgadmin   : UI web para gestionar la base de datos (puerto 5050)
-#   mailpit   : SMTP + UI para testing de emails - alternativa a Mailgun
-#               (SMTP 1025, UI 8025)
+#   (El email se envía vía SMTP/Gmail — ver MAIL_USER/MAIL_PASSWORD en .env)
+#
+# Monitoreo de errores:
+#   El SDK de @sentry/nextjs está instalado y configurado en la app.
+#   Apunta a sentry.io (SaaS free tier). Configura SENTRY_DSN y
+#   NEXT_PUBLIC_SENTRY_DSN en tu .env con el DSN de tu proyecto en
+#   https://sentry.io. Si dejas los DSN vacíos, el SDK queda inactivo.
 #
 # Perfiles disponibles:
-#   tools     : pgadmin, mailpit, supabase-studio
+#   tools     : pgadmin, supabase-studio
 #   production: optimiza la app para producción
 #
 # Uso:
-#   docker compose up -d            # Levanta app + db + mailpit
+#   docker compose up -d            # Levanta app + db
 #   docker compose --profile tools up -d  # También pgadmin y studio
 #   docker compose --profile production up -d  # Modo producción
 # =============================================================================
@@ -32,6 +37,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_BUILD_ID: ${NEXT_BUILD_ID:-local}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
     image: ijfk-app:latest
     container_name: ijfk-app
     restart: unless-stopped
@@ -48,27 +54,38 @@ services:
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:54321}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-local-anon-key}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-local-service-key}
-      # --- Mail (Mailpit - alternativa a Mailgun) ---
-      MAIL_HOST: mailpit
-      MAIL_PORT: 1025
-      MAIL_SECURE: "false"
-      MAIL_USER: ""
-      MAIL_PASSWORD: ""
-      MAIL_FROM: ${MAIL_FROM:-no-reply@ijfk.local}
+      # --- Mail (SMTP / Gmail) ---
+      # Se toman del .env. Para Gmail: MAIL_USER + MAIL_PASSWORD (app password).
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_SECURE: "${MAIL_SECURE:-false}"
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-IJFK Sistema Institucional}
-      # Para usar Mailgun real, descomenta y completa:
-      # MAIL_HOST: smtp.mailgun.org
-      # MAIL_PORT: 587
-      # MAIL_SECURE: "false"
-      # MAIL_USER: postmaster@tu-dominio.mailgun.org
-      # MAIL_PASSWORD: tu-clave-mailgun
       # --- Seguridad ---
       NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
+      # --- Sentry (SaaS - free tier en sentry.io) ---
+      # Para activar el monitoreo:
+      #   1. Crea un proyecto JS/Next en https://sentry.io
+      #   2. Copia el DSN y pégalo en SENTRY_DSN y NEXT_PUBLIC_SENTRY_DSN
+      #   3. Reinicia el contenedor: docker compose up -d --build app
+      # Si dejas los DSN vacíos, el SDK queda inactivo (sin errores enviados).
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-local}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-ijfk-app@${NEXT_BUILD_ID:-local}}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      SENTRY_DEBUG: ${SENTRY_DEBUG:-false}
+      # Client: NEXT_PUBLIC_ se inyecta al bundle del navegador
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+      NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-local}
+      NEXT_PUBLIC_SENTRY_RELEASE: ${SENTRY_RELEASE:-ijfk-app@${NEXT_BUILD_ID:-local}}
+      NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      # Activar Sentry solo si el DSN está configurado (no rompe dev/tests sin él)
+      NEXT_PUBLIC_SENTRY_ENABLED: ${NEXT_PUBLIC_SENTRY_ENABLED:-true}
     depends_on:
       db:
         condition: service_healthy
-      mailpit:
-        condition: service_started
     networks:
       - ijfk-net
     healthcheck:
@@ -115,34 +132,6 @@ services:
       start_period: 15s
 
   # ---------------------------------------------------------------------------
-  # Mailpit - Alternativa moderna y ligera a Mailgun para desarrollo
-  # API compatible con SMTP estándar, UI web para revisar emails
-  # https://github.com/axllent/mailpit
-  # ---------------------------------------------------------------------------
-  mailpit:
-    image: axllent/mailpit:latest
-    container_name: ijfk-mailpit
-    restart: unless-stopped
-    ports:
-      - "1025:1025"    # SMTP
-      - "8025:8025"    # UI Web (http://localhost:8025)
-    environment:
-      MP_MAX_MESSAGES: 5000
-      MP_SMTP_AUTH_ACCEPT_ANY: 1
-      MP_SMTP_AUTH_ALLOW_INSECURE: 1
-      MP_UI_AUTH: ""
-      MP_SENDMAIL_SMTP_PORT: 1025
-    volumes:
-      - mailpit-data:/data
-    networks:
-      - ijfk-net
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8025/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
-  # ---------------------------------------------------------------------------
   # pgAdmin - UI para gestionar la BD (perfil: tools)
   # ---------------------------------------------------------------------------
   pgadmin:
@@ -169,8 +158,6 @@ services:
 volumes:
   supabase-db-data:
     name: ijfk-supabase-data
-  mailpit-data:
-    name: ijfk-mailpit-data
   pgadmin-data:
     name: ijfk-pgadmin-data
 
@@ -181,3 +168,4 @@ networks:
   ijfk-net:
     name: ijfk-net
     driver: bridge
+

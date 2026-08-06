@@ -133,23 +133,24 @@ export default function AdminAttendancePage() {
         <p className="text-muted-foreground mt-1">Seguimiento de asistencia por curso y sesión · Año Lectivo 2026</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         {courses.map((c) => {
           const stat = courseStats[c.id] ?? { pct: c.attendanceRate, faltas: 0, sesiones: 0 };
           const color = SUBJECT_COLORS[c.subject] ?? { bg: "bg-gray-50", text: "text-gray-700" };
           const isActive = activeCourseId === c.id;
+          const borderColor = stat.pct >= 90 ? "border-l-emerald-500" : stat.pct >= 75 ? "border-l-amber-500" : "border-l-red-500";
           return (
-            <button key={c.id} onClick={() => handleCourse(c.id)} className={`text-left rounded-xl border-2 transition-all ${isActive ? "border-[#2563EB]" : "border-transparent"}`}>
-              <Card className="border-none shadow-sm rounded-xl">
-                <CardContent className="p-5 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${color.bg} shrink-0`}><Users className={`h-4 w-4 ${color.text}`} /></div>
-                    <div><p className="text-sm font-bold text-[#0F172A]">{c.subject}</p><p className="text-xs text-muted-foreground">{c.grade} &quot;{c.section}&quot;</p></div>
+            <button key={c.id} onClick={() => handleCourse(c.id)} className={`text-left rounded-xl transition-all ${isActive ? "ring-2 ring-[#2563EB] ring-offset-1" : ""}`}>
+              <Card className={`border-none shadow-sm rounded-xl border-l-4 ${borderColor}`}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${color.bg} shrink-0`}><Users className={`h-4 w-4 ${color.text}`} /></div>
+                    <div className="min-w-0"><p className="text-sm font-bold text-[#0F172A] truncate">{c.subject}</p><p className="text-xs text-muted-foreground">{c.grade} &quot;{c.section}&quot;</p></div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="text-center"><p className={`text-xl font-bold ${stat.pct >= 90 ? "text-emerald-600" : stat.pct >= 75 ? "text-amber-600" : "text-red-500"}`}>{stat.pct}%</p><p className="text-[10px] text-muted-foreground">Asistencia</p></div>
-                    <div className="text-center"><p className="text-xl font-bold text-red-500">{stat.faltas}</p><p className="text-[10px] text-muted-foreground">Faltas total</p></div>
-                    <div className="text-center"><p className="text-xl font-bold text-[#0F172A]">{stat.sesiones}</p><p className="text-[10px] text-muted-foreground">Sesiones</p></div>
+                    <div className="text-center"><p className={`text-lg font-bold ${stat.pct >= 90 ? "text-emerald-600" : stat.pct >= 75 ? "text-amber-600" : "text-red-500"}`}>{stat.pct}%</p><p className="text-[10px] text-muted-foreground">Asist.</p></div>
+                    <div className="text-center"><p className="text-lg font-bold text-red-500">{stat.faltas}</p><p className="text-[10px] text-muted-foreground">Faltas</p></div>
+                    <div className="text-center"><p className="text-lg font-bold text-[#0F172A]">{stat.sesiones}</p><p className="text-[10px] text-muted-foreground">Sesiones</p></div>
                   </div>
                 </CardContent>
               </Card>
@@ -160,25 +161,25 @@ export default function AdminAttendancePage() {
 
       <div className="space-y-2">
         <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5" /> Sesiones recientes — {course?.subject} {course?.grade} &quot;{course?.section}&quot;</p>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap">
           {RECENT_DATES.map((d) => {
             const hasRecord = datesWithRecords.has(d);
             return (
-              <button key={d} onClick={() => handleDate(d)} className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${activeDate === d ? "bg-[#1E2A5E] text-white border-[#1E2A5E]" : hasRecord ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : "bg-white text-[#64748B] border-gray-200"}`}>{fmtDate(d)}</button>
+              <button key={d} onClick={() => handleDate(d)} className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold border transition-all ${activeDate === d ? "bg-[#1E2A5E] text-white border-[#1E2A5E]" : hasRecord ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : "bg-white text-[#64748B] border-gray-200"}`}>{fmtDate(d)}</button>
             );
           })}
         </div>
       </div>
 
       {Object.keys(records).length > 0 && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
-            { label: "Presentes", value: counts.A, cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-            { label: "Tardanzas", value: counts.T, cls: "bg-amber-50 border-amber-200 text-amber-700" },
-            { label: "Faltas", value: counts.F, cls: "bg-red-50 border-red-200 text-red-600" },
-            { label: "% Asistencia", value: `${pct}%`, cls: "bg-[#1E2A5E]/5 border-[#1E2A5E]/10 text-[#1E2A5E]" },
+            { label: "Presentes", value: counts.A, cls: "bg-emerald-50 border-emerald-200 text-emerald-700", border: "border-l-4 border-l-emerald-500" },
+            { label: "Tardanzas", value: counts.T, cls: "bg-amber-50 border-amber-200 text-amber-700", border: "border-l-4 border-l-amber-500" },
+            { label: "Faltas", value: counts.F, cls: "bg-red-50 border-red-200 text-red-600", border: "border-l-4 border-l-red-500" },
+            { label: "% Asistencia", value: `${pct}%`, cls: "bg-[#1E2A5E]/5 border-[#1E2A5E]/10 text-[#1E2A5E]", border: "border-l-4 border-l-[#1E2A5E]" },
           ].map((s) => (
-            <div key={s.label} className={`rounded-xl border p-3 text-center ${s.cls}`}><p className="text-xl font-bold">{s.value}</p><p className="text-xs font-medium mt-0.5">{s.label}</p></div>
+            <div key={s.label} className={`rounded-xl border ${s.border} p-2.5 text-center ${s.cls}`}><p className="text-lg font-bold">{s.value}</p><p className="text-[10px] font-medium mt-0.5 uppercase tracking-wide">{s.label}</p></div>
           ))}
         </div>
       )}
@@ -207,8 +208,9 @@ export default function AdminAttendancePage() {
                   const status = (records[st.id] ?? null) as "A" | "F" | "T" | null;
                   const meta = status ? STATUS_META[status] : null;
                   const Icon = meta?.icon;
+                  const rowBorder = status === "F" ? "border-l-red-400" : status === "T" ? "border-l-amber-400" : status === "A" ? "border-l-emerald-400" : "border-l-transparent";
                   return (
-                    <TableRow key={st.id} className={`hover:bg-gray-50/50 ${status === "F" ? "bg-red-50/30" : status === "T" ? "bg-amber-50/30" : ""}`}>
+                    <TableRow key={st.id} className={`hover:bg-gray-50/50 border-l-4 ${rowBorder}`}>
                       <TableCell className="pl-5 text-xs text-muted-foreground font-medium">{String(st.order).padStart(2, "0")}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2.5">

@@ -166,7 +166,12 @@ export default function EnrollmentPage() {
       {enrollment ? (
         <>
           {/* Status banner */}
-          <div className="flex items-center justify-between bg-[#1E2A5E] rounded-xl px-6 py-5 flex-wrap gap-4">
+          <div className="relative flex items-center justify-between bg-[#1E2A5E] rounded-xl px-6 py-5 flex-wrap gap-4 overflow-hidden">
+            <span className={`absolute inset-y-0 left-0 w-1.5 ${
+              enrollment.status === "regular" ? "bg-emerald-500" :
+              enrollment.status === "condicional" ? "bg-amber-500" :
+              "bg-red-500"
+            }`} />
             <div className="flex items-center gap-4">
               <Avatar className="h-14 w-14 border-2 border-[#F4C15C]/40">
                 <AvatarFallback className="bg-[#F4C15C]/20 text-[#F4C15C] font-bold text-lg">
@@ -188,9 +193,9 @@ export default function EnrollmentPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Enrollment details */}
             <Card className="border-none shadow-sm rounded-xl">
-              <CardContent className="p-6 space-y-5">
+              <CardContent className="p-5 space-y-4">
                 <h2 className="text-base font-bold text-[#0F172A]">Datos de Matrícula</h2>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {[
                     { icon: Hash,         label: "Código",          value: enrollment.code },
                     { icon: CalendarDays, label: "Fecha de matrícula", value: enrolledDate },
@@ -199,13 +204,13 @@ export default function EnrollmentPage() {
                     { icon: BookOpen,     label: "Aula asignada",   value: enrollment.classroom },
                     { icon: User,         label: "Tutor",           value: enrollment.tutor },
                   ].map((row) => (
-                    <div key={row.label} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1E2A5E]/8 shrink-0">
-                        <row.icon className="h-4 w-4 text-[#1E2A5E]" />
+                    <div key={row.label} className="flex items-center gap-3 py-1.5 border-b border-gray-50 last:border-0">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#1E2A5E]/8 shrink-0">
+                        <row.icon className="h-3.5 w-3.5 text-[#1E2A5E]" />
                       </div>
-                      <div className="flex-1 flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{row.label}</span>
-                        <span className="text-sm font-semibold text-[#0F172A]">{row.value}</span>
+                      <div className="flex-1 flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">{row.label}</span>
+                        <span className="text-sm font-semibold text-[#0F172A] text-right">{row.value}</span>
                       </div>
                     </div>
                   ))}
@@ -220,7 +225,7 @@ export default function EnrollmentPage() {
 
             {/* Documents checklist */}
             <Card className="border-none shadow-sm rounded-xl">
-              <CardContent className="p-6 space-y-5">
+              <CardContent className="p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-base font-bold text-[#0F172A]">Documentos</h2>
                   <Badge
@@ -235,15 +240,15 @@ export default function EnrollmentPage() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Progreso</span>
-                    <span className="font-semibold text-[#1E2A5E]">{docsPercent}%</span>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Progreso</span>
+                    <span className="text-base font-bold text-[#1E2A5E]">{docsPercent}%</span>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        docsPercent === 100 ? "bg-emerald-500" : "bg-[#F4C15C]"
+                        docsPercent === 100 ? "bg-emerald-500" : docsPercent >= 50 ? "bg-amber-500" : "bg-red-500"
                       }`}
                       style={{ width: `${docsPercent}%` }}
                     />

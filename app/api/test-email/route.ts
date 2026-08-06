@@ -4,7 +4,7 @@
  * POST /api/test-email
  * Body: { to: string, subject?: string, body?: string }
  *
- * Útil para validar que la integración con Mailpit/Mailgun está OK.
+ * Útil para validar que la integración de email está OK.
  *
  * Seguridad:
  *  - Requiere sesión autenticada (cualquier usuario logueado).
@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
       ok: true,
       message: "Email enviado correctamente",
       messageId: result.messageId,
-      info: "Si usas Mailpit, revisa http://localhost:8025",
     });
   } catch (err) {
     return NextResponse.json(

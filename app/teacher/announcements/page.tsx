@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bell, AlertTriangle, Info, Megaphone, BookOpen, ChevronDown, ChevronUp, CalendarDays, Loader2 } from "lucide-react";
+import { Bell, AlertTriangle, Info, Megaphone, BookOpen, ChevronDown, CalendarDays, Loader2 } from "lucide-react";
 
 type AnnouncementCategory = "urgente" | "importante" | "general" | "informativo";
 
@@ -20,12 +20,12 @@ type Announcement = {
 
 const CAT_META: Record<AnnouncementCategory, {
   label: string; icon: typeof Bell;
-  badge: string; card: string; dot: string;
+  badge: string; card: string; dot: string; bar: string;
 }> = {
-  urgente:    { label: "Urgente",    icon: AlertTriangle, badge: "bg-red-100 text-red-700",     card: "border-red-200 bg-red-50/40",    dot: "bg-red-500"    },
-  importante: { label: "Importante", icon: Megaphone,     badge: "bg-amber-100 text-amber-700", card: "border-amber-200 bg-amber-50/40",dot: "bg-amber-500"  },
-  general:    { label: "General",    icon: Bell,          badge: "bg-blue-100 text-blue-700",   card: "border-blue-200 bg-blue-50/40",  dot: "bg-blue-400"   },
-  informativo:{ label: "Informativo",icon: Info,          badge: "bg-gray-100 text-gray-600",   card: "border-gray-200 bg-white",       dot: "bg-gray-400"   },
+  urgente:    { label: "Urgente",    icon: AlertTriangle, badge: "bg-red-100 text-red-700",     card: "border-red-200 bg-red-50/40",    dot: "bg-red-500",    bar: "bg-red-500"   },
+  importante: { label: "Importante", icon: Megaphone,     badge: "bg-amber-100 text-amber-700", card: "border-amber-200 bg-amber-50/40",dot: "bg-amber-500",  bar: "bg-amber-500" },
+  general:    { label: "General",    icon: Bell,          badge: "bg-blue-100 text-blue-700",   card: "border-blue-200 bg-blue-50/40",  dot: "bg-blue-400",   bar: "bg-blue-500"  },
+  informativo:{ label: "Informativo",icon: Info,          badge: "bg-gray-100 text-gray-600",   card: "border-gray-200 bg-white",       dot: "bg-gray-400",   bar: "bg-gray-400"  },
 };
 
 function fmtDate(iso: string) {
@@ -150,16 +150,17 @@ export default function TeacherAnnouncementsPage() {
           return (
             <Card
               key={a.id}
-              className={`border shadow-sm rounded-xl overflow-hidden transition-all ${
+              className={`relative border shadow-sm rounded-xl overflow-hidden transition-all hover:shadow-md ${
                 !isRead ? "border-[#1E2A5E]/20 shadow-md" : "border-gray-100"
               }`}
             >
+              <span className={`absolute inset-y-0 left-0 w-1 ${meta.bar}`} />
               <CardContent className="p-0">
                 <button
                   onClick={() => toggle(a.id)}
                   className="w-full text-left p-5"
                 >
-                  <div className="flex items-start gap-4">
+                  <div className="flex items-start gap-4 pl-3">
                     {/* Dot */}
                     <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${!isRead ? meta.dot : "bg-gray-300"}`} />
 
@@ -186,10 +187,11 @@ export default function TeacherAnnouncementsPage() {
                             <CalendarDays className="h-3 w-3" />
                             {fmtDate(a.date)}
                           </span>
-                          {isExpanded
-                            ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                            : <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                          }
+                          <ChevronDown
+                            className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                          />
                         </div>
                       </div>
 
@@ -201,13 +203,17 @@ export default function TeacherAnnouncementsPage() {
                   </div>
                 </button>
 
-                {isExpanded && (
-                  <div className="px-5 pb-5 pt-0">
+                <div
+                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                    isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                  }`}
+                >
+                  <div className="pl-3 pr-5 pb-5 pt-0">
                     <div className="ml-6 bg-gray-50 rounded-xl p-4 border border-gray-100">
                       <p className="text-sm text-[#334155] leading-relaxed">{a.body}</p>
                     </div>
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           );

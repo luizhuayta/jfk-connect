@@ -6,8 +6,7 @@ Intranet institucional con diseno y mockups completos de los dashboards principa
 Login, Panel del Padre de Familia, Panel del Profesor y Panel del Administrador.
 
 > **Estado actual:** El proyecto esta dockerizado y listo para trabajar con
-> Supabase (PostgreSQL self-hosted) y un servicio de email tipo Mailgun
-> (Mailpit para dev, Mailgun para produccion).
+> Supabase (PostgreSQL self-hosted) y envio de email via **SMTP (Gmail)**.
 
 ---
 
@@ -24,8 +23,7 @@ Login, Panel del Padre de Familia, Panel del Profesor y Panel del Administrador.
 | Cliente BD | @supabase/supabase-js |
 | Graficos | Recharts |
 | Iconos | Lucide React |
-| Email dev | Mailpit (alternativa moderna a Mailgun) |
-| Email prod | Mailgun (compatible con SMTP) |
+| Email | nodemailer + SMTP (Gmail app password) |
 | Contenedores | Docker + Docker Compose |
 
 ---
@@ -45,7 +43,7 @@ cd jfk-connect-main
 # 2. Copiar las variables de entorno
 copy .env.example .env
 
-# 3. Levantar los servicios (App + Postgres + Mailpit)
+# 3. Levantar los servicios (App + Postgres)
 docker compose up -d
 
 # 4. Ver los logs en tiempo real
@@ -57,7 +55,6 @@ Despues de unos segundos, tendras disponible:
 | Servicio | URL | Credenciales |
 |----------|-----|--------------|
 | **App IJFK** | http://localhost:3000 | - |
-| **Mailpit UI** (emails) | http://localhost:8025 | sin auth |
 | **Postgres** | localhost:54322 | `postgres` / `ijfk_dev_password` / db: `ijfk` |
 | **Healthcheck** | http://localhost:3000/api/health | - |
 
@@ -103,7 +100,7 @@ jfk-connect-main/
   data/mock.ts                  # Datos de prueba (UI)
   lib/                          # Logica reutilizable
     supabase.ts                 # Cliente de Supabase (server + browser)
-    mail.ts                     # Cliente de email (Mailpit/Mailgun)
+    mail.ts                     # Cliente de email (SMTP / Gmail)
     utils.ts                    # Helpers (cn, etc.)
     constants.ts                # Constantes de la app
   supabase/
@@ -164,8 +161,6 @@ npm run docker:reset       # Limpiar + levantar desde cero
 npm run docker:shell:app   # Shell dentro del contenedor de la app
 npm run docker:shell:db    # psql directo en la BD
 npm run docker:psql "SELECT 1"  # Ejecutar SQL rapido
-
-npm run mail:test          # Comprobar que Mailpit responde
 ```
 
 ---
@@ -221,36 +216,36 @@ Para verlas: conecta con pgAdmin o usa `docker compose exec db psql -U postgres 
 
 ---
 
-## Integracion de Email (alternativa a Mailgun)
+## Integracion de Email (SMTP / Gmail)
 
-Se eligio **Mailpit** como reemplazo de Mailgun para desarrollo porque:
-- Es 100% compatible con SMTP estandar (no requiere cambiar codigo)
-- Tiene una UI web moderna para revisar los emails enviados
-- Es muy ligero (imagen ~30 MB)
-- API HTTP para integracion
-- Evolucion moderna de MailHog (con mejor UI y mas features)
+El envio de emails usa **nodemailer + SMTP**, configurado por defecto para
+Gmail. No necesitas dominio propio ni autorizacion de IP: tu Gmail envia a
+**cualquier correo**.
 
-### En desarrollo (Mailpit - incluido en docker-compose)
+> **Lo que la app envia:** codigos de verificacion (registro y recuperacion de
+> contraseña). No usa correo corporativo ni plantillas de marketing.
 
-Los emails enviados se capturan en Mailpit y se pueden revisar en:
-**http://localhost:8025** (sin autenticacion)
+### Configuracion (Gmail)
 
-### En produccion (Mailgun real)
-
-Edita tu `.env` y cambia la configuracion SMTP:
+1. Activa la **verificacion en 2 pasos** de tu Gmail:
+   https://myaccount.google.com/security → "Verificacion en 2 pasos"
+2. Crea una **contraseña de aplicacion** (16 caracteres):
+   https://myaccount.google.com/apppasswords (nombre: "IJFK")
+3. Edita tu `.env`:
 
 ```env
-MAIL_HOST=smtp.mailgun.org
+MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
 MAIL_SECURE=false
-MAIL_USER=postmaster@tu-dominio.mailgun.org
-MAIL_PASSWORD=tu-clave-mailgun-secreta
-MAIL_FROM=no-reply@tudominio.edu.pe
+MAIL_USER=tu-cuenta@gmail.com
+MAIL_PASSWORD=la-clave-de-16-caracteres
+MAIL_FROM=tu-cuenta@gmail.com
 MAIL_FROM_NAME=IJFK Sistema Institucional
 ```
 
-Tambien puedes usar **cualquier otro proveedor SMTP** (SendGrid, Resend,
-Amazon SES, Postmark, etc.) - solo cambia las variables.
+> ⚠️ `MAIL_PASSWORD` debe ser la **app password**, no tu contraseña normal de
+> Gmail (Google rechaza la normal con error 535). Si en el futuro usas otro
+> proveedor SMTP, solo cambia las variables.
 
 ### Uso en el codigo
 
@@ -285,9 +280,9 @@ curl -X POST http://localhost:3000/api/test-email \
 Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/test-email `
   -ContentType "application/json" `
   -Body '{"to":"test@ijfk.local","subject":"Hola","body":"Prueba"}'
-
-# Luego revisa http://localhost:8025
 ```
+
+Revisa la bandeja del destinatario (los emails de Gmail a veces caen en spam).
 
 ---
 
@@ -345,10 +340,11 @@ migraciones SQL). Puedes comprobar:
 docker compose exec db pg_isready -U postgres
 ```
 
-### Los emails no aparecen en Mailpit
-- Comprueba que MAIL_HOST=mailpit en `.env` (no `localhost`!)
-- Verifica los logs: `docker compose logs app`
-- Abre http://localhost:8025 directamente
+### Los emails no llegan
+- Comprueba que `MAIL_USER` y `MAIL_PASSWORD` esten en `.env`
+- Para Gmail, `MAIL_PASSWORD` debe ser una **app password** (16 caracteres), no
+  la contraseña normal. Si usas la normal, Gmail devuelve error 535.
+- Revisa spam: los emails de Gmail a veces caen ahi
 
 ### Quiero usar mi propia BD de Supabase Cloud
 Sobrescribe en `.env`:
@@ -365,6 +361,117 @@ docker image rm ijfk-app
 docker compose build --no-cache
 docker compose up -d
 ```
+
+---
+
+## Estado del proyecto (Sprints 7–11)
+
+> **Fecha de cierre:** 06/08/2026 — Sistema listo para uso.
+
+### Sprints completados
+
+| Sprint | Tipo | Resultado |
+|--------|------|-----------|
+| **7** | Funcionalidad | 3 botones "Nuevo..." (alumno/sección/matrícula) con POST real + 2 menús "Acc." + dashboard docente con próxima clase real |
+| **8** | Visual docente | 4 páginas rediseñadas (attendance, materials, schedule, announcements) |
+| **9** | Visual padre | 7 páginas rediseñadas (dashboard, students, grades, attendance, schedule, enrollment, announcements) |
+| **10** | Visual admin | 5 páginas rediseñadas (dashboard, attendance, grades, schedule, announcements) |
+| **11** | Pulido | Paleta unificada + `letter_grade` en 3 vistas + badges sidebar + docs |
+
+### Sistema de diseño
+
+**Paleta de colores (consistente en las 23 páginas):**
+- Azul institucional: `#1E2A5E` (texto, headers, acciones primarias)
+- Dorado: `#F4C15C` (acentos, día destacado, badges activos)
+- Verde: `emerald-500/50/400` (asistencia, aprobaciones, estados óptimos)
+- Ámbar: `amber-500/400` (advertencias, tardanzas, estados regulares)
+- Rojo: `red-500/400` (errores, faltas, estados críticos)
+- Azul claro: `blue-500/400` (información, justificaciones)
+
+**Patrones visuales aplicados:**
+- **Día destacado:** ring + barra vertical `#F4C15C` + etiqueta `● HOY`
+- **Color por estado:** `border-l-4` en cards y filas de tabla
+- **Letter grade:** chips de color A/B/C/D al lado del promedio numérico
+- **Expansión animada:** `max-h-96/0 opacity-100/0 transition-all duration-300` con chevron `rotate-180`
+- **Badges del sidebar:** rojo para avisos sin leer, ámbar para notas pendientes
+
+### Despliegue manual (paso a paso)
+
+```bash
+# 1. Clonar el repositorio
+git clone <url-del-repo>
+cd jfk-connect-main
+
+# 2. Crear el archivo .env desde el ejemplo
+cp .env.example .env
+
+# 3. Levantar el stack completo (App + Postgres)
+docker compose up -d --build
+
+# 4. Esperar ~30 segundos a que Postgres inicialice las migraciones
+docker compose logs -f db
+# (esperar a ver "database system is ready to accept connections")
+
+# 5. Poblar la BD con datos demo (idempotente)
+docker compose exec app npm run seed
+
+# 6. Hashear las contraseñas de los usuarios seed (si no se hizo en el seed)
+docker compose exec app npm run hash-passwords
+
+# 7. Abrir la app
+# http://localhost:3000
+```
+
+### Despliegue en producción (Linux + Docker)
+
+```bash
+# 1. Instalar Docker + Docker Compose
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh
+
+# 2. Configurar dominio y SSL con Caddy o Nginx (reverse proxy -> :3000)
+
+# 3. Levantar el stack
+docker compose -f docker-compose.yml up -d --build
+
+# 4. Configurar backups automáticos del volumen `postgres-data`
+# Cron sugerido: pg_dump diario a las 3am
+0 3 * * * docker compose exec -T db pg_dump -U postgres postgres | gzip > /backups/ijfk-$(date +\%Y\%m\%d).sql.gz
+```
+
+### Credenciales demo
+
+Tras ejecutar `npm run seed`:
+- **Admin:** `admin@ijfk.edu.pe` / `Demo2026!`
+- **Docente:** `docente1@ijfk.edu.pe` / `Demo2026!`
+- **Padre:** `padre1@ijfk.edu.pe` / `Demo2026!`
+
+> Nota: Todos los usuarios seed tienen `must_change_password = true` por seguridad.
+
+### Verificación post-despliegue
+
+```bash
+# Typecheck (debe dar 0 errores)
+docker compose exec app npm run typecheck
+
+# Logs de la app
+docker compose logs -f app
+
+# Probar login en los 3 roles desde el navegador
+# - http://localhost:3000/login
+# - http://localhost:3000/father (después de login como padre)
+# - http://localhost:3000/teacher (después de login como docente)
+# - http://localhost:3000/admin (después de login como admin)
+```
+
+### Pruebas funcionales sugeridas
+
+1. **Login con los 3 roles** → redirige correctamente al dashboard correspondiente
+2. **Reclamo de hijo** (rol padre) → ingresar `enrollment_code` generado por admin
+3. **Panel admin → crear alumno/sección/matrícula** → ver aparecer en la lista paginada
+4. **Paginación** → navegar entre páginas en admin/students y admin/enrollments
+5. **Marcar asistencia** (rol docente) → ver reflejo en vista del padre al cambiar de día
+6. **Registrar notas** (rol docente) → ver promedio actualizado en padre y admin
 
 ---
 

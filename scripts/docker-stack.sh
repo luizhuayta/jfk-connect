@@ -31,8 +31,8 @@ case "${1:-help}" in
     $COMPOSE up -d
     ok "Stack levantado"
     info "App:        http://localhost:3000"
-    info "Mailpit:    http://localhost:8025"
     info "Postgres:   localhost:54322 (user: postgres, db: ijfk)"
+    info "Email:      vía SMTP/Gmail (ver MAIL_USER/MAIL_PASSWORD en .env)"
     ;;
   down)
     header "Deteniendo stack"
@@ -81,7 +81,7 @@ case "${1:-help}" in
         -H "Content-Type: application/json" \
         -d '{"to":"test@ijfk.local","subject":"Prueba desde bash","body":"Email de prueba"}'
       echo ""
-      info "Revisa http://localhost:8025"
+      info "Revisa la bandeja del destinatario (envío vía SMTP/Gmail)"
     else
       fail "curl no está instalado"
     fi
@@ -105,7 +105,7 @@ case "${1:-help}" in
     echo "Uso: ./scripts/docker-stack.sh <comando>"
     echo ""
     echo "Comandos disponibles:"
-    echo "  up         Levanta el stack (app + postgres + mailpit)"
+    echo "  up         Levanta el stack (app + postgres)"
     echo "  down       Detiene el stack"
     echo "  restart    Reinicia los servicios"
     echo "  reset      Detiene y borra volúmenes, luego levanta (BORRA LA BD)"

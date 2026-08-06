@@ -14,8 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, FileCheck, AlertCircle, CalendarDays, Loader2, Plus, GraduationCap } from "lucide-react";
+import { Clock, FileCheck, AlertCircle, CalendarDays, Loader2, Plus, GraduationCap, CheckCircle2, XCircle, TrendingUp } from "lucide-react";
 import ClaimChildModal from "@/components/father/ClaimChildModal";
+import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
 
 const quickAccess = [
   {
@@ -272,7 +273,7 @@ export default function FatherDashboard() {
 
       {/* Notas Recientes */}
       <Card className="border-none shadow-sm rounded-xl overflow-hidden">
-        <CardContent className="p-6 space-y-6">
+        <CardContent className="p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <h2 className="text-lg font-bold text-[#0F172A]">Notas Recientes</h2>
             <div className="flex gap-2">
@@ -280,9 +281,9 @@ export default function FatherDashboard() {
                 <button
                   key={s.id}
                   onClick={() => handleSelectChild(s.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                     activeChild === s.id
-                      ? "bg-[#1E2A5E] text-white"
+                      ? "bg-[#1E2A5E] text-white shadow-sm"
                       : "bg-gray-100 text-[#64748B] hover:bg-gray-200"
                   }`}
                 >
@@ -305,9 +306,9 @@ export default function FatherDashboard() {
                 <button
                   key={b}
                   onClick={() => setActiveBimester(b)}
-                  className={`py-2 text-sm font-medium rounded-md transition-colors ${
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-colors ${
                     activeBimester === b
-                      ? "bg-[#1E2A5E] text-white"
+                      ? "bg-[#1E2A5E] text-white shadow-sm"
                       : "text-[#64748B] hover:text-[#0F172A]"
                   }`}
                 >
@@ -338,39 +339,62 @@ export default function FatherDashboard() {
                     </TableCell>
                   </TableRow>
                 )}
-                {currentNotes.map((row, idx) => (
-                  <TableRow key={idx} className="hover:bg-gray-50/50">
-                    <TableCell className="text-sm font-medium text-[#0F172A]">
-                      {row.course}
-                    </TableCell>
-                    <TableCell className="text-sm font-semibold text-[#1E2A5E]">
-                      {row.note.toFixed(1)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={`text-xs font-bold ${
-                          row.level === "AD"
-                            ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                            : "bg-blue-100 text-blue-700 hover:bg-blue-100"
-                        }`}
-                      >
-                        {row.level ?? "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">
-                      {row.observation}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {currentNotes.map((row, idx) => {
+                  const ltr = letterGrade(row.note);
+                  const rowBg =
+                    row.note >= 17
+                      ? "border-l-emerald-400"
+                      : row.note >= 14
+                      ? "border-l-blue-400"
+                      : "border-l-amber-400";
+                  return (
+                    <TableRow key={idx} className={`border-l-4 hover:bg-gray-50/50 ${rowBg}`}>
+                      <TableCell className="text-sm font-medium text-[#0F172A] py-2.5">
+                        {row.course}
+                      </TableCell>
+                      <TableCell className="text-sm font-semibold text-[#1E2A5E] py-2.5">
+                        {row.note.toFixed(1)}
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <Badge
+                            className={`text-[11px] font-bold ${
+                              row.level === "AD"
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                                : "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                            }`}
+                          >
+                            {row.level ?? "—"}
+                          </Badge>
+                          {ltr && (
+                            <Badge className={`text-[11px] font-bold ${letterGradeColor(ltr)}`}>
+                              {ltr}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground py-2.5">
+                        {row.observation}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
 
           {/* Promedio */}
           <div className="flex items-center justify-between bg-[#1E2A5E] rounded-xl px-6 py-5">
-            <div>
-              <p className="text-sm text-white/80">Promedio del Bimestre</p>
-              <p className="text-3xl font-bold text-[#F4C15C]">{average.toFixed(1)}</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-white/60">Promedio del Bimestre</p>
+                <p className="text-3xl font-bold text-[#F4C15C] mt-1">{average.toFixed(1)}</p>
+              </div>
+              {letterGrade(average) && (
+                <div className={`h-14 w-14 rounded-xl border-2 flex items-center justify-center font-bold text-xl ${letterGradeColor(letterGrade(average))}`}>
+                  {letterGrade(average)}
+                </div>
+              )}
             </div>
             <Badge className="bg-[#F4C15C] text-[#1E2A5E] font-bold text-sm px-3 py-1 hover:bg-[#F4C15C]">
               {levelLabel}

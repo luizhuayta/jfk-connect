@@ -238,4 +238,60 @@ Los Sprints 8, 9 y 10 son independientes entre sí y pueden ejecutarse en cualqu
 
 ---
 
+## 3. ESTADO FINAL DE EJECUCIÓN
+
+> **Última actualización:** 06/08/2026 — **Sprints 7–11 COMPLETOS.**
+
+### Sprint 7 — Funcionalidad faltante ✅
+- 7.1 Modal "Nuevo alumno" con `POST /api/admin/students` ✅
+- 7.2 Modal "Nueva sección" con `POST /api/admin/sections` ✅
+- 7.3 Modal "Nueva matrícula" con `POST /api/admin/enrollments` (código único) ✅
+- 7.4 Menú "Acc." en `admin/students` (detalle / estado / desvincular) ✅
+- 7.5 Menú "Acc." en `admin/enrollment` (editar pagos / detalle) ✅
+- 7.6 Dashboard docente conectado a `/api/teacher/schedule` ✅
+- 7.7 Asistencia del día simplificada a link directo ✅
+- 7.8 Typecheck + runtime OK ✅
+
+### Sprint 8 — Rediseño docente ✅
+- 8.1 `teacher/attendance` — selectors compactos, `STATUS.rowBg/rowBorder`, toggle pill ✅
+- 8.2 `teacher/materials` — tarjetas con detección de tipo, modal drag-drop ✅
+- 8.3 `teacher/schedule` — día HOY destacado (ring + barra vertical `#F4C15C`) ✅
+- 8.4 `teacher/announcements` — `CAT_META.bar`, expansión animada `max-h-96/0`, `rotate-180` ✅
+- 8.5 Typecheck: 0 errores ✅
+
+### Sprint 9 — Rediseño padre ✅
+- 9.1 `father/page` — letter grade chip `h-14 w-14`, border-l-4 en tablas ✅
+- 9.2 `father/students` — letter grade chip `h-12 w-12` en header ✅
+- 9.3 `father/grades` — letter grade inline + chips, border-l-4 por nota ✅
+- 9.4 `father/attendance` — calendario compacto, border-l-4 en stats ✅
+- 9.5 `father/schedule` — día HOY destacado (mismo patrón que teacher) ✅
+- 9.6 `father/enrollment` — status banner con barra lateral, progress bar `h-3` ✅
+- 9.7 `father/announcements` — expansión animada + chevron rotate-180 ✅
+- 9.8 Typecheck: 0 errores ✅
+
+### Sprint 10 — Rediseño admin ✅
+- 10.1 `admin/page` — stats con `border-l-4` (azul/púrpura/naranja/esmeralda) ✅
+- 10.2 `admin/attendance` — course cards con semáforo (verde/ámbar/rojo), tabla con `border-l-4` por estado ✅
+- 10.3 `admin/grades` — selectores compactos, tabla con `border-l-4` por promedio ✅
+- 10.4 `admin/schedule` — día HOY destacado (ring + barra vertical + etiqueta `● HOY`) ✅
+- 10.5 `admin/announcements` — paleta unificada, expansión animada, color bar por categoría ✅
+- 10.6 Typecheck: 0 errores ✅
+
+### Sprint 11 — Pulido final ✅
+- 11.1 Paleta de íconos consistente en las 23 páginas rediseñadas ✅
+- 11.2 `letter_grade` visible en `father/grades`, `teacher/grades`, `admin/grades` ✅
+- 11.3 Badges del sidebar: avisos (rojo) + notas pendientes (ámbar) en `TeacherSidebar` y `FatherSidebar` ✅
+- 11.4 `PLAN_FINAL_IJFK_AGENTE.md` actualizado (este archivo) ✅
+- 11.5 `MEJORAS_PENDIENTES.md` actualizado ✅
+- 11.6 `README.md` actualizado ✅
+- 11.7 `docker compose up -d --build app` reconstruido ✅
+- 11.8 Pruebas runtime en los 3 roles ✅
+- 11.9 Typecheck final: **0 errores** ✅
+
+**Total commits del refactor:** 4 (uno por sprint mayor + documentación).
+**APIs modificadas:** 0 (solo frontend).
+**Lógica de negocio modificada:** 0 (solo capa visual).
+
+---
+
 *Plan reorganizado para ejecución directa por el agente. Cada sprint es una unidad cerrable con su propio checklist de verificación.*

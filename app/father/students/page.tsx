@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, TrendingUp, CheckCircle2, Loader2, Plus, GraduationCap } from "lucide-react";
 import ClaimChildModal from "@/components/father/ClaimChildModal";
+import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
 
 type Student = {
   id: string;
@@ -102,7 +103,7 @@ export default function StudentsPage() {
 
       {/* Stats summary */}
       <div className="grid grid-cols-3 gap-4">
-        <Card className="border-none shadow-sm rounded-xl">
+        <Card className="border-none shadow-sm rounded-xl border-l-4 border-l-[#1E2A5E]">
           <CardContent className="p-5 flex items-center gap-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1E2A5E]/10">
               <CheckCircle2 className="h-5 w-5 text-[#1E2A5E]" />
@@ -113,7 +114,7 @@ export default function StudentsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm rounded-xl">
+        <Card className="border-none shadow-sm rounded-xl border-l-4 border-l-amber-500">
           <CardContent className="p-5 flex items-center gap-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50">
               <BookOpen className="h-5 w-5 text-amber-600" />
@@ -124,7 +125,7 @@ export default function StudentsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm rounded-xl">
+        <Card className="border-none shadow-sm rounded-xl border-l-4 border-l-emerald-500">
           <CardContent className="p-5 flex items-center gap-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50">
               <TrendingUp className="h-5 w-5 text-emerald-600" />
@@ -187,45 +188,50 @@ export default function StudentsPage() {
               key={student.id}
               className="border-none shadow-sm hover:shadow-md transition-shadow rounded-xl"
             >
-              <CardContent className="p-6 space-y-5">
+              <CardContent className="p-5 space-y-4">
                 {/* Header */}
                 <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16 border-2 border-[#F4C15C]/30">
-                    <AvatarFallback className="bg-[#1E2A5E]/10 text-[#1E2A5E] font-bold text-lg">
+                  <Avatar className="h-14 w-14 border-2 border-[#F4C15C]/30">
+                    <AvatarFallback className="bg-[#1E2A5E]/10 text-[#1E2A5E] font-bold text-base">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <p className="font-semibold text-[#0F172A] text-base">{student.name}</p>
-                    <div className="flex gap-2 mt-1.5 flex-wrap">
+                    <p className="font-semibold text-[#0F172A] text-base leading-tight">{student.name}</p>
+                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
                       <Badge
                         variant="secondary"
-                        className="bg-gray-100 text-[#64748B] text-xs"
+                        className="bg-gray-100 text-[#64748B] text-[11px]"
                       >
                         {student.grade} &quot;{student.section}&quot;
                       </Badge>
-                      <Badge className="bg-emerald-100 text-emerald-700 text-xs hover:bg-emerald-100">
+                      <Badge className="bg-emerald-100 text-emerald-700 text-[11px] hover:bg-emerald-100">
                         Matriculado
                       </Badge>
                     </div>
                   </div>
+                  {letterGrade(annualAvg) && (
+                    <div className={`h-12 w-12 rounded-xl border-2 flex items-center justify-center font-bold text-lg shrink-0 ${letterGradeColor(letterGrade(annualAvg))}`}>
+                      {letterGrade(annualAvg)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Stats grid */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className={`rounded-xl ${avgBg} p-3 text-center`}>
-                    <p className={`text-xl font-bold ${avgTextColor}`}>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className={`rounded-xl ${avgBg} p-2.5 text-center`}>
+                    <p className={`text-lg font-bold leading-tight ${avgTextColor}`}>
                       {annualAvg.toFixed(1)}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Promedio</p>
+                    <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mt-0.5">Promedio</p>
                   </div>
-                  <div className="rounded-xl bg-gray-50 p-3 text-center">
-                    <p className={`text-xl font-bold ${level.color.split(" ")[1]}`}>{level.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Nivel</p>
+                  <div className="rounded-xl bg-gray-50 p-2.5 text-center">
+                    <p className={`text-lg font-bold leading-tight ${level.color.split(" ")[1]}`}>{level.label}</p>
+                    <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mt-0.5">Nivel</p>
                   </div>
-                  <div className="rounded-xl bg-gray-50 p-3 text-center">
-                    <p className="text-xl font-bold text-[#1E2A5E]">12</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Cursos</p>
+                  <div className="rounded-xl bg-gray-50 p-2.5 text-center">
+                    <p className="text-lg font-bold leading-tight text-[#1E2A5E]">12</p>
+                    <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mt-0.5">Cursos</p>
                   </div>
                 </div>
 

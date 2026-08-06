@@ -154,15 +154,15 @@ export default function AdminGradesPage() {
         })}
       </div>
 
-      <div className="space-y-4">
-        <div className="flex gap-3 flex-wrap">
+      <div className="space-y-3">
+        <div className="flex gap-2 flex-wrap">
           {courses.map((c) => {
             const isActive = activeCourseId === c.id;
             const color = SUBJECT_COLORS[c.subject] ?? { bg: "bg-gray-50", text: "text-gray-700" };
             return (
-              <button key={c.id} onClick={() => handleCourse(c.id)} className={`px-5 py-3 rounded-xl border-2 transition-all text-left ${isActive ? "border-[#2563EB] bg-[#2563EB]/5" : "border-gray-200 bg-white hover:border-[#2563EB]/30"}`}>
-                <p className={`text-sm font-bold ${isActive ? "text-[#2563EB]" : "text-[#0F172A]"}`}>{c.subject}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{c.grade} &quot;{c.section}&quot; · {c.studentsTotal} alumnos</p>
+              <button key={c.id} onClick={() => handleCourse(c.id)} className={`px-3 py-2 rounded-lg border transition-all text-left ${isActive ? "border-[#2563EB] bg-[#2563EB]/5" : "border-gray-200 bg-white hover:border-[#2563EB]/30"}`}>
+                <p className={`text-xs font-bold ${isActive ? "text-[#2563EB]" : "text-[#0F172A]"}`}>{c.subject}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{c.grade} &quot;{c.section}&quot; · {c.studentsTotal}</p>
               </button>
             );
           })}
@@ -173,26 +173,26 @@ export default function AdminGradesPage() {
             const done = stat?.hasData ?? false;
             const prog = stat?.inProgress ?? false;
             return (
-              <button key={b} onClick={() => handleBimester(b)} className={`relative px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeBimester === b ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>
+              <button key={b} onClick={() => handleBimester(b)} className={`relative px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${activeBimester === b ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>
                 Bimestre {b}
-                {done && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-500 border border-white" />}
-                {prog && !done && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-amber-500 border border-white" />}
+                {done && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-500 border border-white" />}
+                {prog && !done && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500 border border-white" />}
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
-          { label: "Registrados", value: `${stats.registered}/${stats.total}`, icon: Users, cls: "bg-gray-50 border-gray-200 text-[#0F172A]" },
-          { label: "Aprobados", value: stats.approved, icon: CheckCircle2, cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-          { label: "Desaprobados", value: stats.failed, icon: AlertTriangle, cls: "bg-red-50 border-red-200 text-red-600" },
-          { label: "Promedio aula", value: stats.classAvg > 0 ? stats.classAvg.toFixed(1) : "—", icon: TrendingUp, cls: "bg-blue-50 border-blue-200 text-blue-700" },
+          { label: "Registrados", value: `${stats.registered}/${stats.total}`, icon: Users, cls: "bg-gray-50 border-gray-200 text-[#0F172A]", border: "border-l-gray-300" },
+          { label: "Aprobados", value: stats.approved, icon: CheckCircle2, cls: "bg-emerald-50 border-emerald-200 text-emerald-700", border: "border-l-emerald-500" },
+          { label: "Desaprobados", value: stats.failed, icon: AlertTriangle, cls: "bg-red-50 border-red-200 text-red-600", border: "border-l-red-500" },
+          { label: "Promedio aula", value: stats.classAvg > 0 ? stats.classAvg.toFixed(1) : "—", icon: TrendingUp, cls: "bg-blue-50 border-blue-200 text-blue-700", border: "border-l-blue-500" },
         ].map((s) => (
-          <div key={s.label} className={`rounded-xl border p-3 flex items-center gap-3 ${s.cls}`}>
+          <div key={s.label} className={`rounded-xl border-l-4 ${s.border} border p-3 flex items-center gap-3 ${s.cls}`}>
             <s.icon className="h-4 w-4 shrink-0 opacity-70" />
-            <div><p className="text-xl font-bold">{s.value}</p><p className="text-xs font-medium opacity-70">{s.label}</p></div>
+            <div><p className="text-xl font-bold">{s.value}</p><p className="text-[10px] font-medium opacity-70 uppercase tracking-wide">{s.label}</p></div>
           </div>
         ))}
       </div>
@@ -223,8 +223,9 @@ export default function AdminGradesPage() {
                   const complete = row && row.n1 > 0 && row.n2 > 0 && row.n3 > 0;
                   const average = complete ? avg3(row.n1, row.n2, row.n3) : null;
                   const level = average !== null ? levelBadge(average) : null;
+                  const rowBorder = average === null ? "border-l-transparent" : average >= 17 ? "border-l-emerald-400" : average >= 11 ? "border-l-blue-400" : "border-l-red-400";
                   return (
-                    <TableRow key={st.id} className={`hover:bg-gray-50/50 ${average !== null && average < 11 ? "bg-red-50/30" : ""}`}>
+                    <TableRow key={st.id} className={`hover:bg-gray-50/50 border-l-4 ${rowBorder}`}>
                       <TableCell className="pl-5 text-xs text-muted-foreground font-medium">{String(st.order).padStart(2, "0")}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2.5">

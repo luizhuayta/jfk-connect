@@ -47,8 +47,8 @@ switch ($Command) {
     if ($LASTEXITCODE -eq 0) {
       Success "Stack levantado"
       Info "App:        http://localhost:3000"
-      Info "Mailpit:    http://localhost:8025"
       Info "Postgres:   localhost:54322 (user: postgres, db: ijfk)"
+      Info "Email:      vía SMTP/Gmail (ver MAIL_USER/MAIL_PASSWORD en .env)"
     }
   }
   "down" {
@@ -97,7 +97,7 @@ switch ($Command) {
       $body = @{ to = "test@ijfk.local"; subject = "Prueba desde PowerShell"; body = "Email de prueba" } | ConvertTo-Json
       $r = Invoke-RestMethod -Method Post -Uri "http://localhost:3000/api/test-email" -ContentType "application/json" -Body $body
       Success $r.message
-      Info "Revisa http://localhost:8025"
+      Info "Revisa la bandeja del destinatario (envío vía SMTP/Gmail)"
     } catch {
       Fail "No se pudo enviar: $_"
       Info "Asegurate de que la app este levantada (docker compose up -d)"
@@ -122,7 +122,7 @@ switch ($Command) {
     Write-Host "Uso: .\scripts\docker-stack.ps1 <comando>"
     Write-Host ""
     Write-Host "Comandos disponibles:"
-    Write-Host "  up         Levanta el stack (app + postgres + mailpit)"
+    Write-Host "  up         Levanta el stack (app + postgres)"
     Write-Host "  down       Detiene el stack"
     Write-Host "  restart    Reinicia los servicios"
     Write-Host "  reset      Detiene y borra volumenes, luego levanta (BORRA LA BD)"

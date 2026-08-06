@@ -36,9 +36,9 @@ type CourseStudent = {
 type SessionSummary = { date: string; a: number; f: number; t: number; j: number; total: number };
 
 const STATUS = {
-  A: { label: "Presente",  short: "A", btn: "bg-emerald-500 text-white hover:bg-emerald-600", text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", icon: CheckCircle2 },
-  F: { label: "Falta",     short: "F", btn: "bg-red-500 text-white hover:bg-red-600",         text: "text-red-600",    bg: "bg-red-50 border-red-200",         icon: XCircle },
-  T: { label: "Tardanza",  short: "T", btn: "bg-amber-500 text-white hover:bg-amber-600",     text: "text-amber-700",  bg: "bg-amber-50 border-amber-200",     icon: Clock },
+  A: { label: "Presente",  short: "A", btn: "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm", text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", rowBg: "bg-emerald-50/30", rowBorder: "border-l-emerald-400", icon: CheckCircle2 },
+  F: { label: "Falta",     short: "F", btn: "bg-red-500 text-white hover:bg-red-600 shadow-sm",         text: "text-red-600",    bg: "bg-red-50 border-red-200",         rowBg: "bg-red-50/40",    rowBorder: "border-l-red-500",    icon: XCircle },
+  T: { label: "Tardanza",  short: "T", btn: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",     text: "text-amber-700",  bg: "bg-amber-50 border-amber-200",     rowBg: "bg-amber-50/40",  rowBorder: "border-l-amber-500",  icon: Clock },
 };
 
 const RECENT_DATES = [
@@ -242,19 +242,19 @@ export default function AttendancePage() {
         <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide flex items-center gap-2">
           <CalendarDays className="h-3.5 w-3.5" /> Sesiones recientes
         </p>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap">
           {RECENT_DATES.map((d) => {
             const hasRecord = datesWithRecords.has(d);
             return (
               <button
                 key={d}
                 onClick={() => handleDate(d)}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold border transition-all ${
                   activeDate === d
-                    ? "bg-[#1E2A5E] text-white border-[#1E2A5E]"
+                    ? "bg-[#1E2A5E] text-white border-[#1E2A5E] shadow-sm"
                     : hasRecord
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                    : "bg-white text-[#64748B] border-gray-200 hover:border-[#1E2A5E]/30"
+                    : "bg-white text-[#64748B] border-gray-200 hover:border-[#1E2A5E]/40"
                 }`}
               >
                 {fmtDate(d)}
@@ -266,7 +266,7 @@ export default function AttendancePage() {
 
       {/* Attendance card */}
       <Card className="border-none shadow-sm rounded-xl overflow-hidden">
-        <CardContent className="p-6 space-y-5">
+        <CardContent className="p-5 space-y-4">
           {/* Session header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -279,19 +279,21 @@ export default function AttendancePage() {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-muted-foreground">Marcar todos:</span>
-              {(["A", "F", "T"] as Status[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setAll(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border ${
-                    s === "A" ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" :
-                    s === "F" ? "border-red-200 text-red-600 hover:bg-red-50" :
-                               "border-amber-200 text-amber-700 hover:bg-amber-50"
-                  }`}
-                >
-                  Todos {STATUS[s].label}
-                </button>
-              ))}
+              <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-0.5 gap-0.5">
+                {(["A", "T", "F"] as Status[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setAll(s)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${
+                      s === "A" ? "text-emerald-700 hover:bg-emerald-50" :
+                      s === "F" ? "text-red-600 hover:bg-red-50" :
+                                 "text-amber-700 hover:bg-amber-50"
+                    }`}
+                  >
+                    {s} · {STATUS[s].label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -303,16 +305,16 @@ export default function AttendancePage() {
           ) : (
             <>
               {/* Stats strip */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-4 gap-2">
                 {[
                   { label: "Presentes",  value: counts.A, cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
                   { label: "Tardanzas",  value: counts.T, cls: "bg-amber-50 border-amber-200 text-amber-700" },
                   { label: "Faltas",     value: counts.F, cls: "bg-red-50 border-red-200 text-red-600" },
                   { label: "% Asistencia", value: `${pct}%`, cls: "bg-[#1E2A5E]/5 border-[#1E2A5E]/10 text-[#1E2A5E]" },
                 ].map((s) => (
-                  <div key={s.label} className={`rounded-xl border p-3 text-center ${s.cls}`}>
-                    <p className="text-xl font-bold">{s.value}</p>
-                    <p className="text-xs font-medium mt-0.5">{s.label}</p>
+                  <div key={s.label} className={`rounded-xl border p-2.5 text-center ${s.cls}`}>
+                    <p className="text-lg font-bold leading-tight">{s.value}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide mt-0.5 opacity-80">{s.label}</p>
                   </div>
                 ))}
               </div>
@@ -336,15 +338,12 @@ export default function AttendancePage() {
                       return (
                         <TableRow
                           key={student.id}
-                          className={`transition-colors ${
-                            status === "F" ? "bg-red-50/40" :
-                            status === "T" ? "bg-amber-50/40" : ""
-                          }`}
+                          className={`border-l-4 transition-colors ${cfg.rowBg} ${cfg.rowBorder}`}
                         >
-                          <TableCell className="text-xs text-muted-foreground font-medium">
+                          <TableCell className="text-xs text-muted-foreground font-medium py-2.5">
                             {String(student.order).padStart(2, "0")}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-2.5">
                             <div className="flex items-center gap-2.5">
                               <Avatar className="h-7 w-7 shrink-0">
                                 <AvatarFallback className="bg-[#2563EB] text-white text-[10px] font-bold">
@@ -354,14 +353,14 @@ export default function AttendancePage() {
                               <span className="text-sm font-medium text-[#0F172A]">{student.name}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${cfg.bg} ${cfg.text}`}>
-                              <Icon className="h-3.5 w-3.5" />
+                          <TableCell className="text-center py-2.5">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border ${cfg.bg} ${cfg.text}`}>
+                              <Icon className="h-3 w-3" />
                               {cfg.label}
                             </span>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex items-center justify-center gap-1">
+                          <TableCell className="text-center py-2.5">
+                            <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-0.5 gap-0.5">
                               {(["A", "T", "F"] as Status[]).map((s) => (
                                 <button
                                   key={s}
@@ -369,10 +368,11 @@ export default function AttendancePage() {
                                     setRecords((prev) => ({ ...prev, [student.id]: s }));
                                     setSaved(false);
                                   }}
-                                  className={`w-8 h-8 rounded-lg text-xs font-bold border transition-all ${
+                                  title={STATUS[s].label}
+                                  className={`w-7 h-7 rounded-md text-xs font-bold transition-all ${
                                     status === s
                                       ? STATUS[s].btn
-                                      : "border-gray-200 text-gray-400 hover:border-gray-300 bg-white"
+                                      : "text-gray-400 hover:bg-gray-100"
                                   }`}
                                 >
                                   {s}
