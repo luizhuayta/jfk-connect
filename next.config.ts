@@ -42,9 +42,10 @@ const nextConfig: NextConfig = {
   },
 
   // ID de deployment para coordinar multi-instancia.
-  // En Vercel se usa el SHA del commit (único por deploy); en local, NEXT_BUILD_ID.
+  // En Vercel se usa el SHA del commit truncado a 32 chars (único por deploy);
+  // en local, NEXT_BUILD_ID. Vercel exige máximo 32 caracteres.
   deploymentId:
-    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 32) ??
     process.env.NEXT_BUILD_ID ??
     "local",
 
