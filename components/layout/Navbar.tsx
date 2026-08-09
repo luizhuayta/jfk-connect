@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Bell } from "lucide-react";
+import { toast } from "sonner";
+import { Search, Bell, User, Settings, HelpCircle, LogOut, ChevronDown, Menu } from "lucide-react";
 import Image from "next/image";
 
 interface SessionUser {
@@ -31,10 +31,12 @@ function getRoleLabel(role: string): string {
   return role;
 }
 
-export default function Navbar() {
+export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Cargar usuario desde la cookie httpOnly via /api/auth/me
   useEffect(() => {
@@ -50,6 +52,32 @@ export default function Navbar() {
       .catch(() => router.push("/login"));
   }, [router]);
 
+  // Cerrar con click fuera y con Escape
+  useEffect(() => {
+    if (!open) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const handleLogout = async () => {
+    setOpen(false);
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    toast.success("Sesión cerrada");
+    router.push("/login");
+  };
+
   const isAdmin = pathname.startsWith("/admin");
   const isTeacher = pathname.startsWith("/teacher");
 
@@ -63,6 +91,15 @@ export default function Navbar() {
     <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6">
       {/* Left: Logo */}
       <div className="flex items-center gap-3 min-w-[240px]">
+        {onMenuClick && (
+          <button
+            onClick={onMenuClick}
+            className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
+            aria-label="Abrir menú"
+          >
+            <Menu className="h-5 w-5 text-[#1E2A5E]" />
+          </button>
+        )}
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-gray-200 overflow-hidden">
           <Image
             src="/Image/logo.jpg"
@@ -112,11 +149,101 @@ export default function Navbar() {
               {user ? getRoleLabel(user.role) : ""}
             </p>
           </div>
-          <Avatar className="h-9 w-9 border border-gray-200">
-            <AvatarFallback className="bg-[#1E2A5E] text-white text-xs font-semibold">
-              {user ? getInitials(user.full_name) : "?"}
-            </AvatarFallback>
-          </Avatar>
+
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={open}
+              className="flex items-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E2A5E]/30"
+            >
+              <Avatar className="h-9 w-9 border border-gray-200">
+                <AvatarFallback className="bg-[#1E2A5E] text-white text-xs font-semibold">
+                  {user ? getInitials(user.full_name) : "?"}
+                </AvatarFallback>
+              </Avatar>
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ease-out ${
+                  open ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {/* Dropdown */}
+            <div
+              className={`absolute right-0 top-full mt-2 w-72 max-w-xs rounded-xl bg-white p-1 shadow-lg ring-1 ring-black/5 transition-all duration-150 ease-out origin-top-right z-50 ${
+                open
+                  ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                  : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
+              }`}
+              role="menu"
+            >
+              {/* Header */}
+              <div className="px-3 py-2.5 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-9 w-9 border border-gray-200">
+                    <AvatarFallback className="bg-[#1E2A5E] text-white text-xs font-semibold">
+                      {user ? getInitials(user.full_name) : "A"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 leading-tight">
+                    <p className="truncate text-sm font-semibold text-[#0F172A]">
+                      {user?.full_name ?? "Administrador"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {user ? getRoleLabel(user.role) : "Administrador"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {user?.email ?? "admin@ijfk.edu.pe"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="p-1">
+                <button
+                  role="menuitem"
+                  onClick={() => setOpen(false)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#334155] hover:bg-gray-50 transition-colors"
+                >
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  Mi perfil
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => setOpen(false)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#334155] hover:bg-gray-50 transition-colors"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  Configuración
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => setOpen(false)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#334155] hover:bg-gray-50 transition-colors"
+                >
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  Ayuda
+                </button>
+              </div>
+
+              {/* Separator */}
+              <div className="border-t border-gray-100" />
+
+              {/* Logout */}
+              <div className="p-1">
+                <button
+                  role="menuitem"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Cerrar sesión
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </header>

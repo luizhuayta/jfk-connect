@@ -41,8 +41,12 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 14400,
   },
 
-  // ID de deployment para coordinar multi-instancia
-  deploymentId: process.env.NEXT_BUILD_ID ?? "local",
+  // ID de deployment para coordinar multi-instancia.
+  // En Vercel se usa el SHA del commit (único por deploy); en local, NEXT_BUILD_ID.
+  deploymentId:
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.NEXT_BUILD_ID ??
+    "local",
 
   // Permitir transpilar los paquetes que lo necesiten
   transpilePackages: [],
