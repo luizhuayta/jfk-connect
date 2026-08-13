@@ -12,7 +12,7 @@ export default function AdminLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] overflow-x-hidden">
       <Navbar onMenuClick={() => setMobileOpen(true)} />
       <SidebarAdmin mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)}>
         {children}

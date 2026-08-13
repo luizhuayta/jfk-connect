@@ -48,6 +48,7 @@ Sistema de gestión académica del Colegio John F. Kennedy (Chincha) con 3 panel
 - **Base de datos:** imagen `supabase/postgres:15` en Docker, accedida **directamente con `pg` (node-postgres)** vía `lib/db.ts` — NO se usa Supabase REST/PostgREST para la app (la imagen local no lo incluye). `@supabase/supabase-js` existe (`lib/supabase.ts`) pero el acceso server-side real es `lib/db.ts`.
 - **Email:** `lib/mail.ts` usa **nodemailer + SMTP** (por defecto Gmail con app password). Config vía `.env`: `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASSWORD` (app password de Gmail), `MAIL_FROM`, `MAIL_FROM_NAME`. No necesita dominio propio ni IP autorizada. `sendEmail`/`emailTemplates`/`verifyMailConnection`. La app solo envía códigos de verificación (registro y recuperación de contraseña).
 - **Sentry:** `@sentry/nextjs` configurado en `next.config.ts` (inactivo si `SENTRY_DSN` está vacío).
+- **MCPs:** `.mcp.json` configura el MCP de **Supabase** (HTTP, requiere OAuth). OJO: la app NO usa Supabase REST/PostgREST para su BD (usa `pg` directo vía `lib/db.ts`), así que no uses ese MCP para operar sobre las tablas de la app — está solo para consultar docs o el proyecto Supabase externo si existe.
 
 ### Estructura de rutas
 - `app/(auth)/*` — login, register, forgot/reset password, verify, change-password.

@@ -49,4 +49,6 @@ dev-server.log
 .sentry-backup/
 .sentry-skill-refs/
 .mcp.json
+.codex/
+.freebuff/
 

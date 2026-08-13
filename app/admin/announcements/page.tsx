@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ function fmtDate(iso: string) { return new Date(iso + "T12:00:00").toLocaleDateS
 type Draft = typeof EMPTY_DRAFT;
 
 export default function AdminAnnouncementsPage() {
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<Announcement[]>([]);
   const [filter, setFilter] = useState<AnnouncementCategory | "all">("all");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -59,6 +61,12 @@ export default function AdminAnnouncementsPage() {
   };
 
   useEffect(() => { loadItems(); }, []);
+  useEffect(() => {
+    if (searchParams.get("nuevo") === "1") {
+      openNew();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const counts = useMemo(() => ({
     urgente: items.filter((a) => a.category === "urgente").length,

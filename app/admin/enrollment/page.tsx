@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ type StudentHit = { id: string; name: string; dni: string; grade: string; sectio
 type EditDraft = { status: "regular" | "condicional" | "pendiente"; docsSubmitted: number; apafaPaid: boolean; actividadesPaid: boolean };
 
 export default function AdminEnrollmentPage() {
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<Enrollment[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
@@ -93,6 +95,12 @@ export default function AdminEnrollmentPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
+  useEffect(() => {
+    if (searchParams.get("nueva") === "1") {
+      openNew();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Buscar alumnos activos para el modal de nueva matrícula (debounce)
   useEffect(() => {

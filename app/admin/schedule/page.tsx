@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, Fragment } from "react";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ type AdminSection = {
   studentsTotal: number;
 };
 type ScheduleEntry = {
+  id: string;
   grade: string; section: string; day: string; period: number;
   time: string; subject: string; teacher: string | null; room: string | null;
 };
@@ -45,6 +47,27 @@ function subjectStyle(subject: string) {
   return SUBJECT_COLORS[subject] ?? { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200" };
 }
 
+function timeForPeriod(period: number) {
+  return PERIODS[period - 1] ?? "";
+}
+
+function findTeacherConflict(
+  entries: ScheduleEntry[],
+  teacher: string | null,
+  day: string,
+  period: number,
+  excludeIds: string[],
+): ScheduleEntry | null {
+  if (!teacher) return null;
+  return entries.find(
+    (e) =>
+      e.teacher === teacher &&
+      e.day === day &&
+      e.period === period &&
+      !excludeIds.includes(e.id),
+  ) ?? null;
+}
+
 export default function AdminSchedulePage() {
   const [sections, setSections] = useState<AdminSection[]>([]);
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
@@ -53,7 +76,11 @@ export default function AdminSchedulePage() {
   const [saved, setSaved] = useState(false);
   const [gradeFilter, setGradeFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draggedEntry, setDraggedEntry] = useState<ScheduleEntry | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<{ day: string; period: number } | null>(null);
+  const [changedIds, setChangedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -94,7 +121,133 @@ export default function AdminSchedulePage() {
 
   const visibleSections = gradeFilter === "all" ? sections : sections.filter((s) => s.grade === gradeFilter);
 
-  function handleSave() { setSaved(true); setEditMode(false); setTimeout(() => setSaved(false), 3000); }
+  async function handleSave() {
+    if (changedIds.size === 0) {
+      setEditMode(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const updates = entries.filter((e) => changedIds.has(e.id));
+      const r = await fetch("/api/admin/schedule", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error);
+      setChangedIds(new Set());
+      setSaved(true);
+      toast.success("Horario guardado correctamente");
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCancel() {
+    // Recargar datos originales y salir del modo edición
+    setEditMode(false);
+    setChangedIds(new Set());
+    setDraggedEntry(null);
+    setDragOverCell(null);
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch("/api/admin/schedule");
+        const data = await r.json();
+        if (data.ok) setEntries(data.entries);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }
+
+  function handleDrop(targetDay: string, targetPeriod: number) {
+    setDragOverCell(null);
+    if (!draggedEntry || !section) return;
+    if (draggedEntry.day === targetDay && draggedEntry.period === targetPeriod) {
+      setDraggedEntry(null);
+      return;
+    }
+
+    const source = draggedEntry;
+    const targetEntry = entries.find(
+      (e) =>
+        e.grade === section.grade &&
+        e.section === section.section &&
+        e.day === targetDay &&
+        e.period === targetPeriod,
+    );
+
+    const excludeIds = targetEntry ? [source.id, targetEntry.id] : [source.id];
+
+    const sourceConflict = findTeacherConflict(
+      entries,
+      source.teacher,
+      targetDay,
+      targetPeriod,
+      excludeIds,
+    );
+    if (sourceConflict) {
+      toast.error(
+        `No se puede mover: ${source.teacher} ya imparte ${sourceConflict.subject} el ${targetDay} a esta hora.`,
+      );
+      setDraggedEntry(null);
+      return;
+    }
+
+    if (targetEntry) {
+      const targetConflict = findTeacherConflict(
+        entries,
+        targetEntry.teacher,
+        source.day,
+        source.period,
+        excludeIds,
+      );
+      if (targetConflict) {
+        toast.error(
+          `No se puede intercambiar: ${targetEntry.teacher} ya imparte ${targetConflict.subject} el ${source.day} a esta hora.`,
+        );
+        setDraggedEntry(null);
+        return;
+      }
+    }
+
+    setEntries((prev) =>
+      prev.map((e) => {
+        if (e.id === source.id) {
+          return {
+            ...e,
+            day: targetDay,
+            period: targetPeriod,
+            time: timeForPeriod(targetPeriod),
+          };
+        }
+        if (targetEntry && e.id === targetEntry.id) {
+          return {
+            ...e,
+            day: source.day,
+            period: source.period,
+            time: timeForPeriod(source.period),
+          };
+        }
+        return e;
+      }),
+    );
+
+    setChangedIds((prev) => {
+      const next = new Set(prev);
+      next.add(source.id);
+      if (targetEntry) next.add(targetEntry.id);
+      return next;
+    });
+
+    setDraggedEntry(null);
+    toast.success(targetEntry ? "Cursos intercambiados" : "Curso movido");
+  }
 
   if (loading) { return <div className="py-16 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando horarios...</p></div>; }
   if (error) { return <div className="py-16 text-center text-red-600 text-sm">{error}</div>; }
@@ -110,8 +263,11 @@ export default function AdminSchedulePage() {
           {saved && <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium"><CheckCircle2 className="h-4 w-4" /> Guardado</span>}
           {editMode ? (
             <>
-              <Button onClick={handleSave} className="bg-[#F4C15C] text-[#1E2A5E] font-bold hover:bg-[#e0b04f] rounded-xl h-10 gap-2"><Save className="h-4 w-4" /> Guardar cambios</Button>
-              <Button variant="outline" onClick={() => setEditMode(false)} className="rounded-xl h-10 gap-2 border-gray-200"><X className="h-4 w-4" /> Cancelar</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-[#F4C15C] text-[#1E2A5E] font-bold hover:bg-[#e0b04f] rounded-xl h-10 gap-2">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Guardar cambios
+              </Button>
+              <Button variant="outline" onClick={handleCancel} className="rounded-xl h-10 gap-2 border-gray-200"><X className="h-4 w-4" /> Cancelar</Button>
             </>
           ) : (
             <Button onClick={() => setEditMode(true)} className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold"><Pencil className="h-4 w-4" /> Editar horario</Button>
@@ -145,7 +301,7 @@ export default function AdminSchedulePage() {
             <p className="text-sm font-bold text-[#1E2A5E]">{section.grade} &quot;{section.section}&quot; — {section.tutor}</p>
             <p className="text-xs text-muted-foreground">{section.room} · Turno {section.shift} · {section.studentsTotal} alumnos</p>
           </div>
-          {editMode && <Badge className="ml-auto bg-amber-100 text-amber-700 border-0 font-semibold text-xs hover:bg-amber-100">Modo edición activo — haz clic en una celda para modificar</Badge>}
+          {editMode && <Badge className="ml-auto bg-amber-100 text-amber-700 border-0 font-semibold text-xs hover:bg-amber-100">Modo edición activo — arrastra un curso a otra celda</Badge>}
         </div>
       )}
 
@@ -176,16 +332,38 @@ export default function AdminSchedulePage() {
               <div className="grid grid-cols-[100px_repeat(5,1fr)] border-b border-gray-100 hover:bg-gray-50/30 transition-colors">
                 <div className="p-2.5 flex items-center justify-center border-r border-gray-100"><span className="text-[11px] font-medium text-muted-foreground text-center leading-tight">{period}</span></div>
                 {DAYS.map((day) => {
-                  const slot = schedule[day]?.[pi] ?? null;
+                  const periodIndex = pi;
+                  const slot = schedule[day]?.[periodIndex] ?? null;
                   const style = slot ? subjectStyle(slot.subject) : null;
                   const isToday = day === TODAY_CAPITALIZED;
+                  const isDragOver =
+                    editMode &&
+                    dragOverCell?.day === day &&
+                    dragOverCell?.period === periodIndex + 1;
                   return (
-                    <div key={day} className={`relative p-1.5 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.04]" : ""} ${editMode ? "cursor-pointer hover:ring-2 hover:ring-[#2563EB]/30 hover:ring-inset" : ""}`}>
+                    <div
+                      key={day}
+                      onDragOver={(e) => {
+                        if (!editMode) return;
+                        e.preventDefault();
+                        setDragOverCell({ day, period: periodIndex + 1 });
+                      }}
+                      onDragLeave={() => setDragOverCell(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleDrop(day, periodIndex + 1);
+                      }}
+                      className={`relative p-1.5 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.04]" : ""} ${editMode ? "hover:ring-2 hover:ring-[#2563EB]/30 hover:ring-inset" : ""} ${isDragOver ? "bg-[#2563EB]/10 ring-2 ring-[#2563EB]/50 ring-inset" : ""}`}
+                    >
                       {isToday && (
                         <span className="absolute inset-y-0 left-0 w-0.5 bg-[#F4C15C]" />
                       )}
                       {slot && style ? (
-                        <div className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${style.bg} ${style.border} ${isToday ? "shadow-sm" : ""} ${editMode ? "ring-1 ring-inset ring-transparent hover:ring-[#2563EB]/40" : ""}`}>
+                        <div
+                          draggable={editMode}
+                          onDragStart={() => setDraggedEntry(slot)}
+                          className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${style.bg} ${style.border} ${isToday ? "shadow-sm" : ""} ${editMode ? "cursor-grab active:cursor-grabbing ring-1 ring-inset ring-transparent hover:ring-[#2563EB]/40" : ""}`}
+                        >
                           <p className={`text-[11px] font-bold leading-tight ${style.text}`}>{slot.subject}</p>
                           <p className={`text-[10px] leading-tight hidden sm:block ${style.text} opacity-70`}>{slot.teacher}</p>
                           <div className={`hidden md:flex items-center gap-0.5 text-[10px] leading-tight ${style.text} opacity-60`}><MapPin className="h-2.5 w-2.5 shrink-0" />{slot.room}</div>

@@ -8,7 +8,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,7 @@ const PERIODS = [
 ];
 
 interface EntryRow {
+  id: string;
   grade: string;
   section: string;
   day: string;
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const r = await query<EntryRow>(
-      `SELECT grade, section, day, period, time, subject, teacher, room
+      `SELECT id, grade, section, day, period, time, subject, teacher, room
        FROM schedule_entries
        ORDER BY grade, section, day, period`,
     );
@@ -54,6 +55,59 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     console.error("[admin/schedule GET] Error:", err);
+    return NextResponse.json(
+      { ok: false, error: "Error interno del servidor." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const [, denied] = await requireRole(request, ["admin"]);
+  if (denied) return denied;
+
+  try {
+    const body = (await request.json()) as { updates?: EntryRow[] };
+    const updates = body.updates ?? [];
+    if (updates.length === 0) {
+      return NextResponse.json({ ok: true });
+    }
+
+    // Validar campos requeridos
+    for (const u of updates) {
+      if (!u.id || !u.day || !u.time || !u.period) {
+        return NextResponse.json(
+          { ok: false, error: "Faltan datos en una de las actualizaciones." },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Actualizar en una transacción. Primero movemos cada fila a un slot
+    // temporal único para evitar violaciones transitorias del
+    // UNIQUE(grade, section, day, period) al intercambiar períodos.
+    await withTransaction(async (client) => {
+      for (let i = 0; i < updates.length; i++) {
+        await client.query(
+          `UPDATE schedule_entries
+           SET day = $2, period = 1, time = ''
+           WHERE id = $1`,
+          [updates[i].id, `__SWAP_${i}__`],
+        );
+      }
+      for (const u of updates) {
+        await client.query(
+          `UPDATE schedule_entries
+           SET day = $2, period = $3, time = $4
+           WHERE id = $1`,
+          [u.id, u.day, u.period, u.time],
+        );
+      }
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[admin/schedule PATCH] Error:", err);
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

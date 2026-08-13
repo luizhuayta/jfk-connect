@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, BookOpen, FileText, Calendar, Clock, FileBox, Bell,
-  ChevronLeft, ChevronRight, LogOut, GraduationCap, X, Menu, User,
+  LogOut, GraduationCap, X, Menu,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -41,12 +42,19 @@ function getRoleLabel(role: string): string {
   return role;
 }
 
-export default function TeacherSidebar({ children }: { children: React.ReactNode }) {
+export default function TeacherSidebar({
+  children,
+  mobileOpen,
+  onCloseMobile,
+}: {
+  children: React.ReactNode;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<TeacherUser | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
   const [pendingGrades, setPendingGrades] = useState(0);
 
@@ -87,8 +95,8 @@ export default function TeacherSidebar({ children }: { children: React.ReactNode
   }, [router]);
 
   useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+    onCloseMobile?.();
+  }, [pathname, onCloseMobile]);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -106,17 +114,17 @@ export default function TeacherSidebar({ children }: { children: React.ReactNode
       {mobileOpen && (
         <div
           className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setMobileOpen(false)}
+          onClick={onCloseMobile}
         />
       )}
 
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:sticky top-0 left-0 h-screen z-50
+          fixed left-0 top-16 bottom-0 z-50
           bg-gradient-to-b from-[#1E2A5E] to-[#2C3A7A] text-white
           transition-all duration-300 ease-in-out
-          ${sidebarWidth} flex flex-col
+          ${sidebarWidth} flex flex-col overflow-x-hidden
           ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
@@ -128,8 +136,7 @@ export default function TeacherSidebar({ children }: { children: React.ReactNode
                 <GraduationCap className="h-5 w-5 text-[#1E2A5E]" />
               </div>
               <div className="overflow-hidden">
-                <p className="text-xs text-white/70">IJFK</p>
-                <p className="text-sm font-bold truncate">Intranet</p>
+                <p className="text-sm font-bold truncate">JOHN F. KENNEDY</p>
               </div>
             </div>
           )}
@@ -141,7 +148,7 @@ export default function TeacherSidebar({ children }: { children: React.ReactNode
 
           {/* Botón cerrar (solo móvil) */}
           <button
-            onClick={() => setMobileOpen(false)}
+            onClick={onCloseMobile}
             className="lg:hidden p-1.5 rounded hover:bg-white/10 shrink-0"
             aria-label="Cerrar menú"
           >
@@ -169,7 +176,7 @@ export default function TeacherSidebar({ children }: { children: React.ReactNode
         )}
 
         {/* Menú */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-1">
           {MENU_GROUP_1.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href, item.exact);
@@ -252,7 +259,7 @@ export default function TeacherSidebar({ children }: { children: React.ReactNode
         </nav>
 
         {/* Botón colapsar/expandir (escritorio) */}
-        <div className="hidden lg:flex p-3 border-t border-white/10 shrink-0">
+        <div className="hidden lg:flex p-3 border-t border-white/10 shrink-0 overflow-x-hidden">
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={`
@@ -263,13 +270,13 @@ export default function TeacherSidebar({ children }: { children: React.ReactNode
             `}
             title={collapsed ? "Expandir menú" : "Colapsar menú"}
           >
-            {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+            <Menu className="h-5 w-5" />
             {!collapsed && <span>Colapsar menú</span>}
           </button>
         </div>
 
         {/* Botón logout */}
-        <div className="p-3 border-t border-white/10 shrink-0">
+        <div className="p-3 border-t border-white/10 shrink-0 overflow-x-hidden">
           <button
             onClick={handleLogout}
             title="Cerrar sesión"
@@ -287,34 +294,14 @@ export default function TeacherSidebar({ children }: { children: React.ReactNode
       </aside>
 
       {/* Contenido principal */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar móvil */}
-        <header className="lg:hidden sticky top-0 z-30 bg-[#1E2A5E] text-white shadow-md">
-          <div className="flex items-center justify-between px-4 py-3">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="p-2 rounded hover:bg-white/10"
-              aria-label="Abrir menú"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div className="flex items-center gap-2">
-              <GraduationCap className="h-5 w-5 text-[#F4C15C]" />
-              <span className="font-bold text-sm">IJFK</span>
-            </div>
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-[#F4C15C] text-[#1E2A5E] text-xs font-bold">
-                {user ? getInitials(user.full_name) : "?"}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </header>
-
-        {/* Contenido */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-      </div>
+      <main
+        className={cn(
+          "pt-16 min-h-screen transition-all duration-300 ease-in-out",
+          collapsed ? "lg:ml-20" : "lg:ml-60",
+        )}
+      >
+        <div className="p-6 lg:p-8">{children}</div>
+      </main>
     </div>
   );
 }

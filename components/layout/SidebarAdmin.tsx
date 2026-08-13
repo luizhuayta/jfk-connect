@@ -15,7 +15,7 @@ import {
   Clock,
   Bell,
   TrendingUp,
-  ChevronLeft,
+  Menu,
   Shield,
 } from "lucide-react";
 
@@ -63,11 +63,6 @@ const NavItem = memo(function NavItem({
     >
       <Icon className="h-5 w-5 shrink-0" strokeWidth={1.8} />
       {!collapsed && <span className="truncate">{item.label}</span>}
-      {collapsed && (
-        <span className="pointer-events-none absolute left-full ml-2 z-50 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-          {item.label}
-        </span>
-      )}
     </Link>
   );
 });
@@ -108,7 +103,7 @@ export default function SidebarAdmin({
   const sidebarWidth = collapsed ? "w-20" : "w-64";
 
   const nav = (
-    <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
+    <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto overflow-x-hidden">
       {adminItems.map((item) => (
         <NavItem
           key={item.href}
@@ -133,7 +128,7 @@ export default function SidebarAdmin({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed left-0 top-16 bottom-0 z-50 flex flex-col bg-white border-r border-gray-100 transition-[width] duration-300 ease-in-out",
+          "fixed left-0 top-16 bottom-0 z-50 flex flex-col bg-white border-r border-gray-100 transition-[width] duration-300 ease-in-out overflow-x-hidden",
           sidebarWidth,
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
@@ -149,19 +144,14 @@ export default function SidebarAdmin({
             )}
           >
             {!collapsed && <span>NAVEGACION</span>}
-            <ChevronLeft
-              className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform duration-300",
-                collapsed && "rotate-180",
-              )}
-            />
+            <Menu className="h-4 w-4 text-muted-foreground" />
           </button>
         </div>
 
         {nav}
 
         {/* Footer */}
-        <div className={cn("p-4 border-t border-gray-100 shrink-0", collapsed && "p-2 flex justify-center")}>
+        <div className={cn("p-4 border-t border-gray-100 shrink-0 overflow-x-hidden", collapsed && "p-2 flex justify-center")}>
           {collapsed ? (
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1E2A5E]/10">
               <Shield className="h-4 w-4 text-[#1E2A5E]" />

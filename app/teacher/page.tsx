@@ -137,7 +137,7 @@ export default function TeacherPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 space-y-8">
+    <div className="space-y-8">
       {/* Saludo */}
       <div>
         <h1 className="text-3xl font-bold text-[#0F172A]">

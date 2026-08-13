@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,13 +46,14 @@ const upcomingEvents = [
 ];
 
 const quickActions = [
-  { label: "Nueva Matricula", icon: Plus, iconBg: "bg-blue-50", iconColor: "text-blue-600" },
-  { label: "Registrar Usuario", icon: Plus, iconBg: "bg-purple-50", iconColor: "text-purple-600" },
-  { label: "Generar Reporte", icon: Plus, iconBg: "bg-emerald-50", iconColor: "text-emerald-600" },
-  { label: "Enviar Aviso", icon: Plus, iconBg: "bg-amber-50", iconColor: "text-amber-600" },
+  { label: "Nueva Matricula", href: "/admin/enrollment", open: "nueva=1", icon: Plus, iconBg: "bg-blue-50", iconColor: "text-blue-600" },
+  { label: "Registrar Usuario", href: "/admin/users", open: "nuevo=1", icon: Plus, iconBg: "bg-purple-50", iconColor: "text-purple-600" },
+  { label: "Generar Reporte", href: "/admin/reports", icon: Plus, iconBg: "bg-emerald-50", iconColor: "text-emerald-600" },
+  { label: "Enviar Aviso", href: "/admin/announcements", open: "nuevo=1", icon: Plus, iconBg: "bg-amber-50", iconColor: "text-amber-600" },
 ];
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("notas");
   const [data, setData] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -323,6 +325,7 @@ export default function AdminDashboard() {
           {quickActions.map((action) => (
             <Card
               key={action.label}
+              onClick={() => router.push(action.open ? `${action.href}?${action.open}` : action.href)}
               className="border-none shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer rounded-xl"
             >
               <CardContent className="p-4 flex flex-col items-center text-center space-y-2">

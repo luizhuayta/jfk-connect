@@ -75,31 +75,18 @@ export default function AdminAttendancePage() {
       setLoading(true);
       setError(null);
       try {
-        const r = await fetch("/api/admin/courses");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setCourses(data.courses);
-        // Cargar estadísticas por curso (faltas totales, sesiones, %)
-        const stats: Record<string, { pct: number; faltas: number; sesiones: number }> = {};
-        await Promise.all(data.courses.map(async (c: AdminCourse) => {
-          const sumRes = await fetch(`/api/teacher/courses/${c.id}/attendance`);
-          const sum = await sumRes.json();
-          if (sum.ok) {
-            const totA = sum.sessions.reduce((s: number, x: SessionSummary) => s + x.a, 0);
-            const totF = sum.sessions.reduce((s: number, x: SessionSummary) => s + x.f, 0);
-            const totAll = sum.sessions.reduce((s: number, x: SessionSummary) => s + x.total, 0);
-            stats[c.id] = {
-              pct: totAll ? Math.round((totA / totAll) * 100) : c.attendanceRate,
-              faltas: totF,
-              sesiones: sum.sessions.length,
-            };
-          } else {
-            stats[c.id] = { pct: c.attendanceRate, faltas: 0, sesiones: 0 };
-          }
-        }));
-        setCourseStats(stats);
-        if (data.courses.length > 0) {
-          const firstId = data.courses[0].id;
+        const [coursesRes, summaryRes] = await Promise.all([
+          fetch("/api/admin/courses"),
+          fetch("/api/admin/attendance/summary"),
+        ]);
+        const coursesData = await coursesRes.json();
+        const summaryData = await summaryRes.json();
+        if (!coursesData.ok) throw new Error(coursesData.error);
+        if (!summaryData.ok) throw new Error(summaryData.error);
+        setCourses(coursesData.courses);
+        setCourseStats(summaryData.stats ?? {});
+        if (coursesData.courses.length > 0) {
+          const firstId = coursesData.courses[0].id;
           setActiveCourseId(firstId);
           await loadContext(firstId, RECENT_DATES[0]);
         }
