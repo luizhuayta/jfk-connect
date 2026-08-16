@@ -2,7 +2,10 @@
 
 import { useState, useEffect, Fragment } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, Users, Clock, Loader2 } from "lucide-react";
+import { MapPin, Users, Clock } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
 
 type TeacherSlot = {
   time: string;
@@ -10,15 +13,6 @@ type TeacherSlot = {
   grade: string;
   section: string;
   room: string;
-};
-
-type TeacherCourse = {
-  id: string;
-  subject: string;
-  grade: string;
-  section: string;
-  room: string;
-  hoursPerWeek: number;
 };
 
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
@@ -32,10 +26,21 @@ const PERIODS = [
   "12:35 - 13:20",
 ];
 
+// Mismo catálogo de materias/colores que app/teacher/courses/page.tsx (SUBJECT_DOT),
+// expandido a bg/text/border para las celdas del horario.
 const SUBJECT_STYLES: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  "Matemáticas":      { bg: "bg-blue-50",   text: "text-blue-800",   border: "border-blue-200",   dot: "bg-blue-500" },
-  "Lengua Castellana": { bg: "bg-purple-50", text: "text-purple-800", border: "border-purple-200", dot: "bg-purple-500" },
-  "Historia":         { bg: "bg-amber-50",  text: "text-amber-800",  border: "border-amber-200",  dot: "bg-amber-500" },
+  "Matemáticas":          { bg: "bg-blue-50",    text: "text-blue-800",    border: "border-blue-200",    dot: "bg-blue-500" },
+  "Comunicación":         { bg: "bg-purple-50",  text: "text-purple-800",  border: "border-purple-200",  dot: "bg-purple-500" },
+  "Ciencia y Tecnología": { bg: "bg-cyan-50",    text: "text-cyan-800",    border: "border-cyan-200",    dot: "bg-cyan-500" },
+  "Cívica":               { bg: "bg-rose-50",    text: "text-rose-800",    border: "border-rose-200",    dot: "bg-rose-500" },
+  "Religión":             { bg: "bg-violet-50",  text: "text-violet-800",  border: "border-violet-200",  dot: "bg-violet-500" },
+  "Arte":                 { bg: "bg-pink-50",    text: "text-pink-800",    border: "border-pink-200",    dot: "bg-pink-500" },
+  "Educación Física":     { bg: "bg-lime-50",    text: "text-lime-800",    border: "border-lime-200",    dot: "bg-lime-500" },
+  "EPT":                  { bg: "bg-orange-50",  text: "text-orange-800",  border: "border-orange-200",  dot: "bg-orange-500" },
+  "Tutoría":              { bg: "bg-slate-50",   text: "text-slate-800",   border: "border-slate-200",   dot: "bg-slate-500" },
+  "Inglés":               { bg: "bg-emerald-50", text: "text-emerald-800", border: "border-emerald-200", dot: "bg-emerald-500" },
+  "HGE":                  { bg: "bg-amber-50",   text: "text-amber-800",   border: "border-amber-200",   dot: "bg-amber-500" },
+  "DPCC":                 { bg: "bg-teal-50",    text: "text-teal-800",    border: "border-teal-200",    dot: "bg-teal-500" },
 };
 
 const DAY_SHORT: Record<string, string> = {
@@ -47,30 +52,29 @@ const todayName = new Date().toLocaleDateString("es-PE", { weekday: "long" });
 const todayCapitalized = todayName.charAt(0).toUpperCase() + todayName.slice(1);
 
 export default function SchedulePage() {
+  const { courses, loading: coursesLoading, error: coursesError, reload } = useTeacherCourses();
   const [schedule, setSchedule] = useState<Record<string, (TeacherSlot | null)[]>>({});
-  const [courses, setCourses] = useState<TeacherCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const schRes = await fetch("/api/teacher/schedule");
+      const sch = await schRes.json();
+      if (!sch.ok) throw new Error(sch.error);
+      setSchedule(sch.schedule);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error cargando horario");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [schRes, cRes] = await Promise.all([
-          fetch("/api/teacher/schedule"),
-          fetch("/api/teacher/courses"),
-        ]);
-        const sch = await schRes.json();
-        const c = await cRes.json();
-        if (!sch.ok) throw new Error(sch.error);
-        if (c.ok) setCourses(c.courses);
-        setSchedule(sch.schedule);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando horario");
-      } finally {
-        setLoading(false);
-      }
+      await load();
     })();
   }, []);
 
@@ -84,17 +88,20 @@ export default function SchedulePage() {
 
   const totalHours = courses.reduce((s, c) => s + c.hoursPerWeek, 0);
 
-  if (loading) {
-    return (
-      <div className="py-16 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-        <p className="text-sm text-muted-foreground mt-2">Cargando horario...</p>
-      </div>
-    );
+  if (loading || coursesLoading) {
+    return <LoadingState label="Cargando horario..." />;
   }
 
-  if (error) {
-    return <div className="py-16 text-center text-red-600 text-sm">{error}</div>;
+  if (error || coursesError) {
+    return (
+      <ErrorState
+        message={error ?? coursesError ?? ""}
+        onRetry={async () => {
+          setError(null);
+          await Promise.all([load(), reload()]);
+        }}
+      />
+    );
   }
 
   return (

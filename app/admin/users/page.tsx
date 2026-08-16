@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Users, GraduationCap, UserCog, ShieldCheck, Search, Plus, CheckCircle2, XCircle, Edit, Trash2, Power, Loader2, X } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -17,6 +19,7 @@ interface UserRecord {
   id: string; email: string; full_name: string; role: Role;
   phone: string | null; is_active: boolean; created_at: string;
   last_login_at: string | null; avatar_url: string | null;
+  subject: string | null; shift_preference: string | null;
 }
 
 const ROLE_META: Record<Role, { label: string; badge: string; icon: typeof Users }> = {
@@ -34,7 +37,6 @@ function fmtDate(iso: string | null) {
 }
 
 export default function AdminUsersPage() {
-  const searchParams = useSearchParams();
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "activo" | "inactivo">("all");
   const [query, setQuery] = useState("");
@@ -77,11 +79,13 @@ export default function AdminUsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
   useEffect(() => {
-    if (searchParams.get("nuevo") === "1") {
+    // El query se lee en el cliente (window): usar useSearchParams rompería el
+    // prerender estático de la build (missing-suspense-with-csr-bailout).
+    if (new URLSearchParams(window.location.search).get("nuevo") === "1") {
       setShowCreate(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, []);
 
   const counts = useMemo(() => ({
     all: users.length, admin: users.filter((u) => u.role === "admin").length,
@@ -92,8 +96,8 @@ export default function AdminUsersPage() {
   }), [users]);
 
   const handleCreate = async () => {
-    if (!form.fullName || !form.email) { alert("Nombre y email son obligatorios"); return; }
-    if (form.role === "docente" && !form.subject) { alert("La asignatura es obligatoria para docentes"); return; }
+    if (!form.fullName || !form.email) { toast.error("Nombre y email son obligatorios"); return; }
+    if (form.role === "docente" && !form.subject) { toast.error("La asignatura es obligatoria para docentes"); return; }
     setActionLoading(true);
     try {
       const body: Record<string, unknown> = { fullName: form.fullName, email: form.email, role: form.role, phone: form.phone || undefined };
@@ -105,7 +109,7 @@ export default function AdminUsersPage() {
       setForm({ fullName: "", email: "", role: "docente", phone: "", subject: "", shiftPreference: "Ambos" });
       setTempPwd(data.tempPassword);
       await loadUsers();
-    } catch (err) { alert(err instanceof Error ? err.message : "Error"); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
 
@@ -125,7 +129,7 @@ export default function AdminUsersPage() {
       if (!data.ok) throw new Error(data.error);
       setShowEdit(null);
       await loadUsers();
-    } catch (err) { alert(err instanceof Error ? err.message : "Error"); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
 
@@ -135,7 +139,7 @@ export default function AdminUsersPage() {
       const data = await r.json();
       if (!data.ok) throw new Error(data.error);
       await loadUsers();
-    } catch (err) { alert(err instanceof Error ? err.message : "Error"); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
   };
 
   const handleDelete = async () => {
@@ -147,7 +151,7 @@ export default function AdminUsersPage() {
       if (!data.ok) throw new Error(data.error);
       setShowDelete(null);
       await loadUsers();
-    } catch (err) { alert(err instanceof Error ? err.message : "Error"); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
 
@@ -212,12 +216,9 @@ export default function AdminUsersPage() {
       <Card className="border-none shadow-sm rounded-xl overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
-            <div className="py-12 text-center">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-              <p className="text-sm text-muted-foreground mt-2">Cargando usuarios...</p>
-            </div>
+            <LoadingState label="Cargando usuarios..." className="py-12" />
           ) : error ? (
-            <div className="py-12 text-center text-red-600 text-sm">{error}</div>
+            <ErrorState message={error} onRetry={loadUsers} />
           ) : users.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground text-sm">No se encontraron usuarios</div>
           ) : (
@@ -226,6 +227,7 @@ export default function AdminUsersPage() {
                 <TableRow className="bg-gray-50 hover:bg-gray-50">
                   <TableHead className="text-[#0F172A] font-semibold text-sm pl-5">Usuario</TableHead>
                   <TableHead className="text-[#0F172A] font-semibold text-sm">Rol</TableHead>
+                  <TableHead className="text-[#0F172A] font-semibold text-sm hidden sm:table-cell">Asignatura</TableHead>
                   <TableHead className="text-[#0F172A] font-semibold text-sm hidden md:table-cell">Teléfono</TableHead>
                   <TableHead className="text-[#0F172A] font-semibold text-sm hidden lg:table-cell">Último acceso</TableHead>
                   <TableHead className="text-center text-[#0F172A] font-semibold text-sm">Estado</TableHead>
@@ -253,6 +255,18 @@ export default function AdminUsersPage() {
                         <Badge className={`text-[11px] font-bold border-0 gap-1 ${meta.badge} hover:opacity-90`}>
                           <RoleIcon className="h-3 w-3" />{meta.label}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        {u.role === "docente" && u.subject ? (
+                          <div>
+                            <p className="text-xs font-medium text-[#0F172A]">{u.subject}</p>
+                            {u.shift_preference && (
+                              <p className="text-[11px] text-muted-foreground">{u.shift_preference}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground hidden md:table-cell">{u.phone ?? "—"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">{fmtDate(u.last_login_at)}</TableCell>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/table";
 import { Save, AlertTriangle, CheckCircle2, TrendingUp, Loader2 } from "lucide-react";
 import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
 
 type GradeEntry = {
   studentId: string;
@@ -30,20 +33,6 @@ type CourseStudent = {
   name: string;
   initials: string;
   order: number;
-};
-
-type BimesterStat = { hasData: boolean; inProgress: boolean };
-
-type TeacherCourse = {
-  id: string;
-  subject: string;
-  grade: string;
-  section: string;
-  shift: string;
-  room: string;
-  studentsTotal: number;
-  currentBimester: number;
-  bimesters: Record<string, BimesterStat>;
 };
 
 const BIMESTERS = ["1", "2", "3", "4"];
@@ -84,16 +73,16 @@ function avgTextColor(avg: number): string {
 }
 
 export default function GradesPage() {
-  const [courses, setCourses] = useState<TeacherCourse[]>([]);
+  const { courses, loading, error: coursesError, reload } = useTeacherCourses();
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   const [activeBimester, setActiveBimester] = useState("2");
   const [students, setStudents] = useState<CourseStudent[]>([]);
   const [rows, setRows] = useState<Record<string, GradeEntry>>({});
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [loadingGrid, setLoadingGrid] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initializedRef = useRef(false);
 
   const loadGrid = useCallback(async (courseId: string, bimester: string) => {
     setLoadingGrid(true);
@@ -117,27 +106,20 @@ export default function GradesPage() {
     }
   }, []);
 
+  // Selecciona el primer curso una sola vez, apenas la lista compartida esté lista.
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/teacher/courses");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setCourses(data.courses);
-        if (data.courses.length > 0) {
-          const firstId = data.courses[0].id;
-          setActiveCourseId(firstId);
-          await loadGrid(firstId, "2");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando cursos");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [loadGrid]);
+    if (initializedRef.current || courses.length === 0) return;
+    initializedRef.current = true;
+    const firstId = courses[0].id;
+    setActiveCourseId(firstId);
+    loadGrid(firstId, "2");
+  }, [courses, loadGrid]);
+
+  const retry = useCallback(async () => {
+    setError(null);
+    await reload();
+    if (activeCourseId) await loadGrid(activeCourseId, activeBimester);
+  }, [reload, activeCourseId, activeBimester, loadGrid]);
 
   function handleCourseChange(id: string) {
     setActiveCourseId(id);
@@ -174,9 +156,7 @@ export default function GradesPage() {
       const data = await r.json();
       if (!data.ok) throw new Error(data.error);
       setSaved(true);
-      const cr = await fetch("/api/teacher/courses");
-      const cd = await cr.json();
-      if (cd.ok) setCourses(cd.courses);
+      await reload();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error al guardar");
     } finally {
@@ -215,16 +195,11 @@ export default function GradesPage() {
   const isLocked = activeBimester === "3" || activeBimester === "4";
 
   if (loading) {
-    return (
-      <div className="py-16 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-        <p className="text-sm text-muted-foreground mt-2">Cargando cursos...</p>
-      </div>
-    );
+    return <LoadingState label="Cargando cursos..." />;
   }
 
-  if (error) {
-    return <div className="py-16 text-center text-red-600 text-sm">{error}</div>;
+  if (error || coursesError) {
+    return <ErrorState message={error ?? coursesError ?? ""} onRetry={retry} />;
   }
 
   return (

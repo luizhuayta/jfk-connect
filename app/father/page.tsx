@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,72 +14,132 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, FileCheck, AlertCircle, CalendarDays, Loader2, Plus, GraduationCap, CheckCircle2, XCircle, TrendingUp } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  Plus,
+  AlertTriangle,
+  Info,
+  Megaphone,
+  Bell,
+  ChevronRight,
+} from "lucide-react";
 import ClaimChildModal from "@/components/father/ClaimChildModal";
-import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
+import NoChildrenState from "@/components/father/NoChildrenState";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import { letterGrade, letterGradeColor, desempeñoLabel } from "@/lib/letter-grade";
+import { useFatherStudents } from "@/components/father/useFatherStudents";
+import {
+  useAnnouncements,
+  type AnnouncementCategory,
+} from "@/components/father/AnnouncementsProvider";
+import { useSessionUser } from "@/lib/useSessionUser";
+import { cn } from "@/lib/utils";
+import { getInitials, toLocalISODate } from "@/lib/format";
+import { useIsClient } from "@/lib/useIsClient";
 
-const quickAccess = [
-  {
-    label: "Ver Horario",
-    sublabel: "Horario de clases",
-    icon: Clock,
-    iconBg: "bg-blue-50",
-    iconColor: "text-blue-600",
-    href: "/father/schedule",
-  },
-  {
-    label: "Estado de Matrícula",
-    sublabel: "Al día",
-    icon: FileCheck,
-    iconBg: "bg-emerald-50",
-    iconColor: "text-emerald-600",
-    href: "/father/enrollment",
-  },
-  {
-    label: "Asistencia del Mes",
-    sublabel: "95% asistencia",
-    icon: CalendarDays,
-    iconBg: "bg-purple-50",
-    iconColor: "text-purple-600",
-    href: "/father/attendance",
-  },
-  {
-    label: "Avisos Importantes",
-    sublabel: "3 avisos nuevos",
-    icon: AlertCircle,
-    iconBg: "bg-amber-50",
-    iconColor: "text-amber-600",
-    href: "/father/announcements",
-  },
-];
-
-type Student = {
-  id: string;
-  name: string;
-  grade: string;
-  section: string;
-};
-
+/* ─── Tipos ──────────────────────────────────────────────────────── */
 type GradeRow = {
   bimester: number;
   course: string;
   note: number;
   level: "AD" | "A" | "B" | "C" | null;
+  letter_grade: string | null;
   observation: string;
+};
+
+type AttendanceRecord = {
+  id: string;
+  date: string;
+  status: "A" | "F" | "T" | "J";
 };
 
 const BIMESTERS = ["1", "2", "3", "4"];
 
+/** Máximo de hijos que un padre puede vincular (límite del claim). */
+const MAX_CHILDREN = 5;
+
+const DAY_LABEL = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+const cardShadow =
+  "shadow-[0_1px_2px_rgba(17,28,44,0.04),0_8px_24px_-16px_rgba(17,28,44,0.12)]";
+
+const CATEGORY_ICON: Record<AnnouncementCategory, React.ElementType> = {
+  urgente: AlertTriangle,
+  importante: Bell,
+  general: Megaphone,
+  informativo: Info,
+};
+
+const CATEGORY_TINT: Record<
+  AnnouncementCategory,
+  { bg: string; text: string; ring: string }
+> = {
+  urgente:     { bg: "bg-red-100",   text: "text-red-700",    ring: "ring-red-200" },
+  importante:  { bg: "bg-amber-100", text: "text-amber-700",  ring: "ring-amber-200" },
+  general:     { bg: "bg-blue-100",  text: "text-blue-700",   ring: "ring-blue-200" },
+  informativo: { bg: "bg-slate-100", text: "text-slate-600",  ring: "ring-slate-200" },
+};
+
+const STATUS_LABEL: Record<AttendanceRecord["status"], string> = {
+  A: "Asistió",
+  F: "Falta",
+  T: "Tardanza",
+  J: "Justificado",
+};
+
+/**
+ * Calcula los 5 días laborables de la semana actual (Lun–Vie) y devuelve la
+ * información de asistencia en un mapa fecha→registro. Usa fechas **locales**:
+ * con `toISOString()` (UTC) el "hoy" se desplazaba un día en Perú por la noche.
+ */
+function buildWeekAttendance(records: AttendanceRecord[]) {
+  const today = new Date();
+  const day = today.getDay(); // 0=Dom, 1=Lun, ..., 6=Sáb
+  const diffToMonday = (day + 6) % 7; // días a restar para llegar al lunes
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMonday);
+
+  const byDate = new Map<string, AttendanceRecord>();
+  for (const r of records) byDate.set(r.date, r);
+
+  const days: { label: string; isoDate: string; record: AttendanceRecord | null }[] = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const iso = toLocalISODate(d);
+    days.push({
+      label: DAY_LABEL[d.getDay()],
+      isoDate: iso,
+      record: byDate.get(iso) ?? null,
+    });
+  }
+  return days;
+}
+
 export default function FatherDashboard() {
-  const [userName, setUserName] = useState("");
-  const [students, setStudents] = useState<Student[]>([]);
-  const [activeChild, setActiveChild] = useState<string | null>(null);
+  const { user } = useSessionUser();
+  const {
+    students,
+    loading,
+    error: studentsError,
+    reload,
+    activeStudentId,
+    activeStudent: selectedStudent,
+    selectStudent,
+  } = useFatherStudents();
+  const { announcements, requestOpen } = useAnnouncements();
+
+  const [dataError, setDataError] = useState<string | null>(null);
   const [activeBimester, setActiveBimester] = useState("1");
   const [gradesCache, setGradesCache] = useState<Record<string, Record<string, GradeRow[]>>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const loadedIds = useRef(new Set<string>());
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [dismissedClaim, setDismissedClaim] = useState(false);
+
+  /* Asistencia semanal del hijo activo. */
+  const [weeklyAttendance, setWeeklyAttendance] = useState<AttendanceRecord[]>([]);
+  const loadedAttendanceFor = useRef<string | null>(null);
 
   const loadGrades = useCallback(async (studentId: string) => {
     try {
@@ -87,66 +147,64 @@ export default function FatherDashboard() {
       const data = await r.json();
       if (!data.ok) throw new Error(data.error);
       setGradesCache((prev) => ({ ...prev, [studentId]: data.grades }));
+      setDataError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error cargando notas");
+      setDataError(err instanceof Error ? err.message : "Error cargando notas");
+    }
+  }, []);
+
+  const loadAttendance = useCallback(async (studentId: string) => {
+    try {
+      const r = await fetch(`/api/father/attendance?studentId=${studentId}`);
+      const data = await r.json();
+      if (data.ok && Array.isArray(data.records)) {
+        setWeeklyAttendance(data.records as AttendanceRecord[]);
+      }
+    } catch {
+      /* sin toast: la falla de la consulta no debe romper el panel */
     }
   }, []);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [meRes, stRes] = await Promise.all([
-          fetch("/api/auth/me"),
-          fetch("/api/father/students"),
-        ]);
-        const me = await meRes.json();
-        const st = await stRes.json();
-        if (!st.ok) throw new Error(st.error);
-        if (me.ok) setUserName(me.user.full_name);
-        setStudents(st.students);
-        if (st.students.length > 0) {
-          const firstId = st.students[0].id;
-          setActiveChild(firstId);
-          await loadGrades(firstId);
-        } else if (!dismissedClaim) {
-          // Sin hijos: abrir modal de reclamo automáticamente
-          setShowClaimModal(true);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando datos");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [loadGrades]);
-
-  const handleSelectChild = (studentId: string) => {
-    setActiveChild(studentId);
-    if (!gradesCache[studentId]) loadGrades(studentId);
-  };
-
-  // Recargar lista de hijos tras un reclamo exitoso
-  const reloadStudents = async () => {
-    try {
-      const r = await fetch("/api/father/students");
-      const data = await r.json();
-      if (data.ok) {
-        setStudents(data.students);
-        if (data.students.length > 0 && !activeChild) {
-          const firstId = data.students[0].id;
-          setActiveChild(firstId);
-          loadGrades(firstId);
-        }
-      }
-    } catch {
-      // silencioso
+    if (activeStudentId && !loadedIds.current.has(activeStudentId)) {
+      loadedIds.current.add(activeStudentId);
+      loadGrades(activeStudentId);
     }
-  };
+  }, [activeStudentId, loadGrades]);
 
-  const handleClaimed = (student: { id: string; name: string; grade: string; section: string }) => {
-    reloadStudents();
+  /* Cargar asistencia semanal solo del hijo activo (para no duplicar
+     fetches cuando cambia la selección del usuario). */
+  useEffect(() => {
+    if (activeStudentId && loadedAttendanceFor.current !== activeStudentId) {
+      loadedAttendanceFor.current = activeStudentId;
+      loadAttendance(activeStudentId);
+    }
+  }, [activeStudentId, loadAttendance]);
+
+  /* La fecha solo se pinta tras hidratar para que el HTML del servidor y el del
+     cliente coincidan (antes se tapaba con `suppressHydrationWarning`). */
+  const isClient = useIsClient();
+  const todayFormatted = isClient
+    ? (() => {
+        const label = new Date().toLocaleDateString("es-PE", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+      })()
+    : "";
+
+  const handleRetry = () => {
+    setDataError(null);
+    loadedIds.current.clear();
+    if (studentsError) {
+      reload();
+    } else if (activeStudentId) {
+      loadedIds.current.add(activeStudentId);
+      loadGrades(activeStudentId);
+    }
   };
 
   const handleCloseClaimModal = () => {
@@ -154,302 +212,425 @@ export default function FatherDashboard() {
     setDismissedClaim(true);
   };
 
-  const canAddMore = students.length < 5;
-
-  const selectedStudent = students.find((s) => s.id === activeChild);
-  const currentNotes = (activeChild && gradesCache[activeChild]?.[activeBimester]) || [];
+  const canAddMore = students.length < MAX_CHILDREN;
+  const claimModalOpen = showClaimModal || (!dismissedClaim && students.length === 0);
+  const error = dataError ?? studentsError;
+  const currentNotes = (activeStudentId && gradesCache[activeStudentId]?.[activeBimester]) || [];
   const average =
     currentNotes.reduce((sum, n) => sum + n.note, 0) / (currentNotes.length || 1);
-  const levelLabel =
-    average >= 17.5 ? "Excelente" : average >= 14 ? "Bueno" : "Regular";
+  const levelLabel = desempeñoLabel(average);
+  const recentAnnouncements = announcements.slice(0, 3);
 
-  const today = new Date().toLocaleDateString("es-PE", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  const todayFormatted = today.charAt(0).toUpperCase() + today.slice(1);
+  const firstName = (user?.full_name ?? "").split(" ")[0] || "Padre";
 
-  if (loading) {
-    return (
-      <div className="py-16 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-        <p className="text-sm text-muted-foreground mt-2">Cargando datos...</p>
-      </div>
-    );
-  }
+  const weekDays = buildWeekAttendance(weeklyAttendance);
+  const todayISO = toLocalISODate();
 
-  if (error) {
-    return (
-      <div className="py-16 text-center text-red-600 text-sm">{error}</div>
-    );
-  }
+  if (loading) return <LoadingState label="Cargando tus hijos..." className="py-24" />;
+
+  if (error) return <ErrorState message={error} onRetry={handleRetry} />;
 
   return (
-    <div className="space-y-8">
-      {/* Welcome Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-[#1E2A5E]">
-          Bienvenido, Sr. {userName}
-        </h1>
-        <p className="text-muted-foreground mt-1" suppressHydrationWarning>
-          {todayFormatted}
-        </p>
+    <div className="space-y-6">
+      {/* ── Encabezado ─────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-on-surface-variant min-h-5">
+            {todayFormatted}
+          </p>
+          <h1 className="mt-1 text-2xl lg:text-3xl font-bold tracking-tight text-on-surface">
+            Hola, {firstName}
+          </h1>
+          <p className="mt-1.5 text-sm text-on-surface-variant">
+            Así va el avance de tus hijos hoy.
+          </p>
+        </div>
+        {students.length > 0 && canAddMore && (
+          <Button
+            onClick={() => setShowClaimModal(true)}
+            className="h-10 rounded-lg bg-[#1E2A5E] text-white font-semibold gap-1.5 hover:bg-[#162043] shadow-sm"
+          >
+            <Plus className="h-4 w-4" aria-hidden /> Agregar hijo
+          </Button>
+        )}
       </div>
 
-      {/* Mis Hijos */}
+      {/* ── Mis hijos ───────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-[#0F172A]">Mis Hijos</h2>
-          {canAddMore && (
-            <Button
-              onClick={() => setShowClaimModal(true)}
-              variant="outline"
-              className="rounded-lg border-[#1E2A5E]/20 text-[#1E2A5E] hover:bg-[#1E2A5E] hover:text-white h-9 gap-2 text-sm"
-            >
-              <Plus className="h-4 w-4" /> Agregar hijo
-            </Button>
-          )}
+        <div className="mb-3">
+          <h2 className="text-lg font-bold tracking-tight text-on-surface">Mis hijos</h2>
+          <p className="mt-0.5 text-xs text-on-surface-variant">
+            Toca una tarjeta para ver sus notas: la selección se mantiene en el
+            resto del panel.
+          </p>
         </div>
+
         {students.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
-            <GraduationCap className="h-12 w-12 text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground mb-4">
-              No tienes hijos vinculados. Usa tu código de matrícula para vincularlos.
-            </p>
-            <Button
-              onClick={() => setShowClaimModal(true)}
-              className="bg-[#1E2A5E] text-white hover:bg-[#162043] gap-2"
-            >
-              <Plus className="h-4 w-4" /> Vincular a mi hijo
-            </Button>
-          </div>
+          <NoChildrenState onAddChild={() => setShowClaimModal(true)} />
         ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {students.map((child) => {
-            const initials = child.name
-              .split(" ")
-              .map((w) => w[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase();
-            return (
-              <Card
-                key={child.id}
-                className="border-none shadow-sm hover:shadow-md transition-shadow rounded-xl"
-              >
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-14 w-14 border-2 border-[#F4C15C]/30">
-                      <AvatarFallback className="bg-[#1E2A5E]/10 text-[#1E2A5E] font-semibold text-sm">
-                        {initials}
+          <div className="grid gap-4 md:grid-cols-2">
+            {students.map((child) => {
+              const active = child.id === activeStudentId;
+              const avg = child.avg_grade != null ? child.avg_grade.toFixed(1) : "—";
+              const ltr = child.avg_grade != null ? letterGrade(child.avg_grade) : null;
+              const attendanceRate = child.attendance_rate;
+              const attendance = attendanceRate != null ? `${attendanceRate}%` : "—";
+              const attendanceTint =
+                attendanceRate == null
+                  ? "bg-surface-container-high text-on-surface-variant"
+                  : attendanceRate >= 90
+                  ? "bg-success-container text-on-success-container"
+                  : "bg-warning-container text-on-warning-container";
+              return (
+                <button
+                  key={child.id}
+                  onClick={() => selectStudent(child.id)}
+                  aria-pressed={active}
+                  className={cn(
+                    "group relative text-left rounded-2xl p-4 border transition-all duration-200",
+                    "bg-surface-container-lowest",
+                    active
+                      ? "border-[#1E2A5E] ring-1 ring-[#1E2A5E]/30 shadow-sm"
+                      : "border-outline-variant hover:-translate-y-0.5 hover:shadow-[0_12px_32px_-14px_rgba(17,28,44,0.2)]",
+                    cardShadow,
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-12 w-12 shrink-0 rounded-full ring-1 ring-outline-variant">
+                      <AvatarFallback className="bg-surface-container-low text-primary text-sm font-bold rounded-full">
+                        {getInitials(child.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="text-sm font-semibold text-[#0F172A]">
-                        {child.name}
-                      </p>
-                      <Badge
-                        variant="secondary"
-                        className="mt-1 bg-gray-100 text-[#64748B] font-medium text-xs"
-                      >
+                    <div className="min-w-0 flex-1 pr-16">
+                      <p className="truncate text-sm font-bold text-on-surface">{child.name}</p>
+                      <p className="mt-0.5 text-xs text-on-surface-variant">
                         {child.grade} &quot;{child.section}&quot;
-                      </Badge>
+                        {child.shift ? ` · ${child.shift}` : ""}
+                      </p>
                     </div>
                   </div>
-                  <Link href="/father/students">
-                    <Button className="w-full bg-[#F4C15C] text-[#1E2A5E] font-semibold hover:bg-[#e0b04f] rounded-lg h-10">
-                      Ver detalle
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+
+                  {/* Badge "En vista" superpuesto en la esquina superior derecha. */}
+                  {active && (
+                    <span className="absolute right-4 top-4 inline-flex items-center rounded-full bg-[#1E2A5E] px-2.5 py-1 text-[10px] font-semibold text-white">
+                      En vista
+                    </span>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div className="rounded-xl bg-success-container/60 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
+                        Promedio
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <span className="text-base font-bold text-on-surface">{avg}</span>
+                        {ltr && (
+                          <Badge className={cn("text-[10px] font-bold", letterGradeColor(ltr))}>
+                            {ltr}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className={cn("rounded-xl px-3 py-2", attendanceTint)}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
+                        Asistencia
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-1">
+                        <span className="text-base font-bold">{attendance}</span>
+                        <CalendarIcon className="h-3.5 w-3.5 opacity-80" aria-hidden />
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         )}
       </section>
 
-      {/* Notas Recientes */}
-      <Card className="border-none shadow-sm rounded-xl overflow-hidden">
-        <CardContent className="p-5 space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <h2 className="text-lg font-bold text-[#0F172A]">Notas Recientes</h2>
-            <div className="flex gap-2">
-              {students.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => handleSelectChild(s.id)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                    activeChild === s.id
-                      ? "bg-[#1E2A5E] text-white shadow-sm"
-                      : "bg-gray-100 text-[#64748B] hover:bg-gray-200"
-                  }`}
-                >
-                  {s.name.split(" ")[0]}
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* ── Fila inferior: Notas | Asistencia + Avisos ─────────────── */}
+      {students.length > 0 && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* ── Notas recientes (2/3 ancho) ───────────────────────────── */}
+          <Card
+            className={cn(
+              "lg:col-span-2 overflow-hidden rounded-2xl border-outline-variant bg-surface-container-lowest",
+              cardShadow,
+            )}
+          >
+            <CardContent className="space-y-5 p-5 lg:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold tracking-tight text-on-surface">
+                    Notas recientes
+                  </h2>
+                  {selectedStudent && (
+                    <p className="mt-0.5 text-xs text-on-surface-variant">
+                      {selectedStudent.name} · {selectedStudent.grade} &quot;
+                      {selectedStudent.section}&quot;
+                    </p>
+                  )}
+                </div>
 
-          {selectedStudent && (
-            <p className="text-sm text-muted-foreground -mt-4">
-              {selectedStudent.name} — {selectedStudent.grade} &quot;{selectedStudent.section}&quot;
-            </p>
-          )}
+                {/* Selector de bimestre (segmentado) */}
+                <div className="flex items-center gap-1 rounded-xl bg-surface-container-low p-1">
+                  {BIMESTERS.map((b) => (
+                    <button
+                      key={b}
+                      onClick={() => setActiveBimester(b)}
+                      aria-pressed={activeBimester === b}
+                      aria-label={`Bimestre ${b}`}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
+                        activeBimester === b
+                          ? "bg-surface-container-lowest text-primary shadow-sm"
+                          : "text-on-surface-variant hover:text-on-surface",
+                      )}
+                    >
+                      B{b}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* Bimester Tabs */}
-          <div className="bg-gray-50 rounded-lg p-1">
-            <div className="grid grid-cols-4 gap-1">
-              {BIMESTERS.map((b) => (
-                <button
-                  key={b}
-                  onClick={() => setActiveBimester(b)}
-                  className={`py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                    activeBimester === b
-                      ? "bg-[#1E2A5E] text-white shadow-sm"
-                      : "text-[#64748B] hover:text-[#0F172A]"
-                  }`}
-                >
-                  Bimestre {b}
-                </button>
-              ))}
-            </div>
-          </div>
+              {/* Tabla */}
+              <div className="overflow-hidden rounded-xl border border-outline-variant">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-surface-container-low hover:bg-surface-container-low">
+                      <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
+                        Curso
+                      </TableHead>
+                      <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
+                        Nota
+                      </TableHead>
+                      <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
+                        Nivel
+                      </TableHead>
+                      <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
+                        Observación
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {currentNotes.length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="py-10 text-center text-sm text-on-surface-variant"
+                        >
+                          Aún no hay notas registradas para este bimestre.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {currentNotes.map((row, idx) => {
+                      const ltr = letterGrade(row.note);
+                      const finalLetter = row.letter_grade ?? ltr;
+                      return (
+                        <TableRow
+                          key={idx}
+                          className="border-outline-variant hover:bg-surface-container-low/70 even:bg-surface-container-low/60"
+                        >
+                          <TableCell className="py-3 text-sm font-medium text-on-surface">
+                            {row.course}
+                          </TableCell>
+                          <TableCell className="py-3 text-sm font-bold text-primary">
+                            {row.note.toFixed(1)}
+                          </TableCell>
+                          <TableCell className="py-3">
+                            {finalLetter ? (
+                              <Badge className={cn("text-[11px] font-bold", letterGradeColor(finalLetter))}>
+                                {finalLetter}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-on-surface-variant">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-3 text-sm font-medium text-on-surface">
+                            {row.observation}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
 
-          {/* Table */}
-          <div className="border rounded-xl overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 hover:bg-gray-50">
-                  <TableHead className="text-[#0F172A] font-semibold text-sm">Curso</TableHead>
-                  <TableHead className="text-[#0F172A] font-semibold text-sm">Nota</TableHead>
-                  <TableHead className="text-[#0F172A] font-semibold text-sm">Nivel</TableHead>
-                  <TableHead className="text-right text-[#0F172A] font-semibold text-sm">
-                    Observación
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {currentNotes.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-8">
-                      Aún no hay notas registradas para este bimestre.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {currentNotes.map((row, idx) => {
-                  const ltr = letterGrade(row.note);
-                  const rowBg =
-                    row.note >= 17
-                      ? "border-l-emerald-400"
-                      : row.note >= 14
-                      ? "border-l-blue-400"
-                      : "border-l-amber-400";
-                  return (
-                    <TableRow key={idx} className={`border-l-4 hover:bg-gray-50/50 ${rowBg}`}>
-                      <TableCell className="text-sm font-medium text-[#0F172A] py-2.5">
-                        {row.course}
-                      </TableCell>
-                      <TableCell className="text-sm font-semibold text-[#1E2A5E] py-2.5">
-                        {row.note.toFixed(1)}
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <Badge
-                            className={`text-[11px] font-bold ${
-                              row.level === "AD"
-                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                                : "bg-blue-100 text-blue-700 hover:bg-blue-100"
-                            }`}
+              {/* Acción: el boletín PDF vive en la página de Notas para no
+                  duplicar la misma descarga en dos sitios. */}
+              <div className="flex flex-wrap gap-3 pt-1">
+                <Link href="/father/grades">
+                  <Button className="h-10 gap-1.5 rounded-lg bg-[#1E2A5E] text-white text-sm font-semibold hover:bg-[#162043]">
+                    Ver todas las notas y descargar boletín
+                    <ChevronRight className="h-4 w-4" aria-hidden />
+                  </Button>
+                </Link>
+              </div>
+
+              {/* Promedio del bimestre (compacto al pie). */}
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
+                    Promedio del Bimestre
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <p className="text-xl font-bold tracking-tight text-on-surface">
+                      {average.toFixed(1)}
+                    </p>
+                    {letterGrade(average) && (
+                      <Badge className={cn("text-xs font-bold", letterGradeColor(letterGrade(average)))}>
+                        {letterGrade(average)}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <Badge className="rounded-lg bg-[#1E2A5E] px-3 py-1.5 text-xs font-semibold text-white">
+                  {levelLabel}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Columna derecha: Asistencia + Avisos (1/3 ancho) ────── */}
+          <div className="space-y-6">
+            {/* Asistencia de la semana */}
+            <Card
+              className={cn(
+                "overflow-hidden rounded-2xl border-outline-variant bg-surface-container-lowest",
+                cardShadow,
+              )}
+            >
+              <CardContent className="p-5 lg:p-6">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-base font-bold tracking-tight text-on-surface">
+                    Asistencia de la semana
+                  </h2>
+                  <Link
+                    href="/father/attendance"
+                    className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-0.5"
+                  >
+                    Ver detalle <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                  </Link>
+                </div>
+
+                <div className="mt-5 flex items-end justify-between gap-2">
+                  {weekDays.map((d) => {
+                    const status = d.record?.status ?? null;
+                    let bg = "bg-slate-100";
+                    let text = "text-slate-500";
+                    if (status === "A" || status === "J") {
+                      bg = "bg-success-container";
+                      text = "text-on-success-container";
+                    } else if (status === "T") {
+                      bg = "bg-warning-container";
+                      text = "text-on-warning-container";
+                    } else if (status === "F") {
+                      bg = "bg-error-container";
+                      text = "text-on-error-container";
+                    }
+                    const isToday = d.isoDate === todayISO;
+                    return (
+                      <div key={d.isoDate} className="flex flex-1 flex-col items-center gap-1.5">
+                        <div
+                          title={status ? STATUS_LABEL[status] : "Sin registro"}
+                          className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold transition-colors",
+                            bg,
+                            text,
+                            isToday &&
+                              "ring-2 ring-[#F4C15C] ring-offset-2 ring-offset-surface-container-lowest",
+                          )}
+                        >
+                          {status ?? "—"}
+                        </div>
+                        <span
+                          className={cn(
+                            "text-[11px] font-semibold",
+                            isToday ? "text-primary" : "text-on-surface-variant",
+                          )}
+                        >
+                          {d.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Avisos */}
+            <Card
+              className={cn(
+                "overflow-hidden rounded-2xl border-outline-variant bg-surface-container-lowest",
+                cardShadow,
+              )}
+            >
+              <CardContent className="p-5 lg:p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-bold tracking-tight text-on-surface">Avisos</h2>
+                  <Link
+                    href="/father/announcements"
+                    className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-0.5"
+                  >
+                    Ver todos <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                  </Link>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {recentAnnouncements.length === 0 && (
+                    <p className="text-xs text-on-surface-variant">No hay avisos recientes.</p>
+                  )}
+                  {recentAnnouncements.map((a) => {
+                    const Icon = CATEGORY_ICON[a.category];
+                    const tint = CATEGORY_TINT[a.category];
+                    return (
+                      <Link
+                        key={a.id}
+                        href="/father/announcements"
+                        /* El aviso llega abierto y marcado como leído en la lista. */
+                        onClick={() => requestOpen(a.id)}
+                        className="flex items-start gap-3 rounded-xl border border-outline-variant/60 bg-surface-container-low/40 p-3 transition-colors hover:bg-surface-container-low"
+                      >
+                        <div
+                          className={cn(
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1",
+                            tint.bg,
+                            tint.text,
+                            tint.ring,
+                          )}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={cn(
+                              "truncate text-sm font-semibold",
+                              !a.read ? "text-on-surface" : "text-on-surface-variant",
+                            )}
                           >
-                            {row.level ?? "—"}
-                          </Badge>
-                          {ltr && (
-                            <Badge className={`text-[11px] font-bold ${letterGradeColor(ltr)}`}>
-                              {ltr}
-                            </Badge>
+                            {a.title}
+                          </p>
+                          {a.body && (
+                            <p className="mt-0.5 line-clamp-1 text-xs text-on-surface-variant">
+                              {a.body}
+                            </p>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground py-2.5">
-                        {row.observation}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Promedio */}
-          <div className="flex items-center justify-between bg-[#1E2A5E] rounded-xl px-6 py-5">
-            <div className="flex items-center gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-white/60">Promedio del Bimestre</p>
-                <p className="text-3xl font-bold text-[#F4C15C] mt-1">{average.toFixed(1)}</p>
-              </div>
-              {letterGrade(average) && (
-                <div className={`h-14 w-14 rounded-xl border-2 flex items-center justify-center font-bold text-xl ${letterGradeColor(letterGrade(average))}`}>
-                  {letterGrade(average)}
+                      </Link>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
-            <Badge className="bg-[#F4C15C] text-[#1E2A5E] font-bold text-sm px-3 py-1 hover:bg-[#F4C15C]">
-              {levelLabel}
-            </Badge>
+              </CardContent>
+            </Card>
           </div>
-
-          {/* Actions */}
-          <div className="flex flex-wrap gap-3">
-            <Link href="/father/grades">
-              <Button
-                variant="outline"
-                className="rounded-lg border-[#1E2A5E]/20 text-[#1E2A5E] hover:bg-[#1E2A5E] hover:text-white transition-colors"
-              >
-                Ver Todas las Notas
-              </Button>
-            </Link>
-            <Button
-              variant="outline"
-              className="rounded-lg border-[#1E2A5E]/20 text-[#1E2A5E] hover:bg-[#1E2A5E] hover:text-white transition-colors"
-            >
-              Descargar Boletín PDF
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Accesos Rápidos */}
-      <section>
-        <h2 className="text-lg font-bold text-[#0F172A] mb-4">Accesos Rápidos</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {quickAccess.map((item) => (
-            <Link key={item.label} href={item.href}>
-              <Card className="border-none shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer rounded-xl">
-                <CardContent className="p-6 flex flex-col items-center text-center space-y-3">
-                  <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-full ${item.iconBg}`}
-                  >
-                    <item.icon className={`h-5 w-5 ${item.iconColor}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[#0F172A]">{item.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{item.sublabel}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
         </div>
-      </section>
+      )}
 
       {/* Modal de reclamo de hijo */}
       <ClaimChildModal
-        open={showClaimModal}
+        open={claimModalOpen}
         onClose={handleCloseClaimModal}
-        onClaimed={handleClaimed}
+        onClaimed={() => reload()}
         canAddMore={canAddMore}
       />
     </div>

@@ -101,16 +101,22 @@ export function resetRateLimit(key: string): void {
 
 /**
  * Obtiene la IP del cliente desde headers estándar de proxy.
- * En el Node Runtime también es preferible usar `request.ip` si está disponible.
+ *
+ * SOLO se confía en X-Forwarded-For / X-Real-IP cuando TRUST_PROXY=1 está
+ * explícitamente configurado (p. ej. detrás de Nginx/Traefik/Vercel). Sin un
+ * proxy de confianza, un atacante puede enviar ese header y rotar IPs para
+ * evadir los rate limits, así que caemos a `request.ip`.
  */
 export function getClientIp(request: NextRequest): string {
-  const xff = request.headers.get("x-forwarded-for");
-  if (xff) {
-    const ip = xff.split(",")[0]?.trim();
-    if (ip) return ip;
+  if (process.env.TRUST_PROXY === "1") {
+    const xff = request.headers.get("x-forwarded-for");
+    if (xff) {
+      const ip = xff.split(",")[0]?.trim();
+      if (ip) return ip;
+    }
+    const xri = request.headers.get("x-real-ip");
+    if (xri) return xri.trim();
   }
-  const xri = request.headers.get("x-real-ip");
-  if (xri) return xri.trim();
 
   // request.ip está disponible en Node Runtime (no en Edge). Lo accedemos de
   // forma segura para el type system.

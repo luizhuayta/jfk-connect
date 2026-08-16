@@ -18,6 +18,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
+import { assertSameOrigin } from "@/lib/csrf";
 import { createSectionSchema } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
 
@@ -29,8 +30,8 @@ interface SectionRow {
   section: string;
   shift: string;
   students_total: number;
-  avg_grade: number;
-  attendance_rate: number;
+  avg_grade: number | null;
+  attendance_rate: number | null;
   tutor: string | null;
   room: string | null;
 }
@@ -60,18 +61,18 @@ export async function GET(request: NextRequest) {
            SELECT COUNT(*) FROM students s
            WHERE s.grade = k.grade AND s.section = k.section AND s.status = 'activo'
          ), 0)::int AS students_total,
-         COALESCE((
+         (
            SELECT ROUND(AVG(g.average)::numeric, 2)
            FROM grades g
            JOIN students s2 ON s2.id = g.student_id
            WHERE s2.grade = k.grade AND s2.section = k.section AND g.n3 IS NOT NULL
-         ), 0)::float AS avg_grade,
-         COALESCE((
+         )::float AS avg_grade,
+         (
            SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
            FROM attendance a
            JOIN students s3 ON s3.id = a.student_id
            WHERE s3.grade = k.grade AND s3.section = k.section
-         ), 100)::int AS attendance_rate,
+         )::int AS attendance_rate,
          (
            SELECT u.full_name FROM courses c
            JOIN users u ON u.id = c.teacher_id
@@ -130,6 +131,9 @@ const SUBJECTS: { name: string; hours: number }[] = [
 ];
 
 export async function POST(request: NextRequest) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 

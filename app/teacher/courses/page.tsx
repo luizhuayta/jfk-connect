@@ -1,39 +1,18 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Users, BookOpen, Clock, MapPin, ChevronRight, ChevronDown, ChevronUp,
-  BarChart3, CheckCircle2, Loader2, AlertCircle,
+  Users, BookOpen, MapPin, ChevronRight, ChevronDown, ChevronUp,
+  BarChart3, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
-
-type BimesterStat = {
-  avg: number;
-  approved: number;
-  failed: number;
-  total: number;
-  hasData: boolean;
-  inProgress: boolean;
-};
-
-type TeacherCourse = {
-  id: string;
-  subject: string;
-  grade: string;
-  section: string;
-  shift: string;
-  room: string;
-  studentsTotal: number;
-  hoursPerWeek: number;
-  currentBimester: number;
-  avgGrade: number;
-  attendanceRate: number;
-  bimesters: Record<string, BimesterStat>;
-};
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
 
 type CourseStudent = {
   id: string;
@@ -54,28 +33,31 @@ const ICON_COLORS = {
 // ─── Color condicional unificado (mismo criterio que Dashboard) ───────────────
 // Bug fix: antes usaba ≥16/≥13 que era inconsistente con el Dashboard (≥15/≥11).
 // Ahora usa el mismo umbral que letterGrade: ≥15 verde, ≥11 ámbar, <11 rojo.
-function avgColor(avg: number): string {
+function avgColor(avg: number | null): string {
+  if (avg === null) return "text-gray-400";
   if (avg >= 15) return "text-emerald-600";
   if (avg >= 11) return "text-amber-600";
   return "text-red-500";
 }
 
-function rateColor(rate: number): string {
+function rateColor(rate: number | null): string {
+  if (rate === null) return "text-gray-400";
   if (rate >= 90) return "text-emerald-600";
   if (rate >= 75) return "text-amber-600";
   return "text-red-500";
 }
 
-function avgBorderColor(avg: number): string {
+function avgBorderColor(avg: number | null): string {
+  if (avg === null) return "border-l-gray-300";
   if (avg >= 15) return "border-l-emerald-500";
   if (avg >= 11) return "border-l-amber-500";
   return "border-l-red-500";
 }
 
-function rateBorderColor(rate: number): string {
-  if (rate >= 90) return "border-l-emerald-500";
-  if (rate >= 75) return "border-l-amber-500";
-  return "border-l-red-500";
+// Promedio de valores no nulos; null si ninguno tiene dato.
+function avgOf(nums: (number | null)[]): number | null {
+  const vals = nums.filter((n): n is number => n !== null);
+  return vals.length ? vals.reduce((s, n) => s + n, 0) / vals.length : null;
 }
 
 const SUBJECT_DOT: Record<string, string> = {
@@ -94,28 +76,9 @@ const SUBJECT_DOT: Record<string, string> = {
 };
 
 export default function CoursesPage() {
-  const [courses, setCourses] = useState<TeacherCourse[]>([]);
+  const { courses, loading, error, reload } = useTeacherCourses();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [studentsMap, setStudentsMap] = useState<Record<string, CourseStudent[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/teacher/courses");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setCourses(data.courses);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando cursos");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
 
   const toggleExpand = async (courseId: string) => {
     if (expandedId === courseId) {
@@ -154,13 +117,9 @@ export default function CoursesPage() {
   }
 
   const totalStudents = courses.reduce((s, c) => s + c.studentsTotal, 0);
-  const totalHours = courses.reduce((s, c) => s + c.hoursPerWeek, 0);
-  const globalAvg = courses.length
-    ? courses.reduce((s, c) => s + c.avgGrade, 0) / courses.length
-    : 0;
-  const globalAttendance = courses.length
-    ? Math.round(courses.reduce((s, c) => s + c.attendanceRate, 0) / courses.length)
-    : 0;
+  const globalAvg = avgOf(courses.map((c) => c.avgGrade));
+  const globalAttendanceRaw = avgOf(courses.map((c) => c.attendanceRate));
+  const globalAttendance = globalAttendanceRaw === null ? null : Math.round(globalAttendanceRaw);
 
   // ─── KPI: notas pendientes del bimestre actual (punto 5) ───────────────────
   // Derivado de los datos ya cargados: cursos con inProgress = true y !hasData
@@ -170,16 +129,11 @@ export default function CoursesPage() {
   }).length;
 
   if (loading) {
-    return (
-      <div className="py-16 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-        <p className="text-sm text-muted-foreground mt-2">Cargando cursos...</p>
-      </div>
-    );
+    return <LoadingState label="Cargando cursos..." />;
   }
 
   if (error) {
-    return <div className="py-16 text-center text-red-600 text-sm">{error}</div>;
+    return <ErrorState message={error} onRetry={reload} />;
   }
 
   return (
@@ -240,14 +194,14 @@ export default function CoursesPage() {
             </div>
             <div>
               <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold text-[#0F172A]">{globalAvg.toFixed(1)}</p>
+                <p className="text-2xl font-bold text-[#0F172A]">{globalAvg !== null ? globalAvg.toFixed(1) : "—"}</p>
                 {letterGrade(globalAvg) && (
                   <Badge className={`text-xs font-bold ${letterGradeColor(letterGrade(globalAvg))}`}>
                     {letterGrade(globalAvg)}
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">Promedio global · {globalAttendance}% asistencia</p>
+              <p className="text-xs text-muted-foreground">Promedio global · {globalAttendance !== null ? `${globalAttendance}%` : "—"} asistencia</p>
             </div>
           </CardContent>
         </Card>
@@ -258,8 +212,9 @@ export default function CoursesPage() {
         {groupedCourses.map(([subject, subjectCourses]) => {
           const dot = SUBJECT_DOT[subject] ?? "bg-gray-400";
           const isCollapsed = collapsedGroups.has(subject);
-          const subjectAvg = subjectCourses.reduce((s, c) => s + c.avgGrade, 0) / subjectCourses.length;
-          const subjectAttendance = Math.round(subjectCourses.reduce((s, c) => s + c.attendanceRate, 0) / subjectCourses.length);
+          const subjectAvg = avgOf(subjectCourses.map((c) => c.avgGrade));
+          const subjectAttendanceRaw = avgOf(subjectCourses.map((c) => c.attendanceRate));
+          const subjectAttendance = subjectAttendanceRaw === null ? null : Math.round(subjectAttendanceRaw);
 
           return (
             <Card key={subject} className="border-none shadow-sm rounded-xl overflow-hidden">
@@ -278,11 +233,11 @@ export default function CoursesPage() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <span className={`text-sm font-bold ${avgColor(subjectAvg)}`}>{subjectAvg.toFixed(1)}</span>
+                      <span className={`text-sm font-bold ${avgColor(subjectAvg)}`}>{subjectAvg !== null ? subjectAvg.toFixed(1) : "—"}</span>
                       <span className="text-xs text-muted-foreground ml-1">prom</span>
                     </div>
                     <div className="text-right">
-                      <span className={`text-sm font-bold ${rateColor(subjectAttendance)}`}>{subjectAttendance}%</span>
+                      <span className={`text-sm font-bold ${rateColor(subjectAttendance)}`}>{subjectAttendance !== null ? `${subjectAttendance}%` : "—"}</span>
                       <span className="text-xs text-muted-foreground ml-1">asist</span>
                     </div>
                     {isCollapsed
@@ -334,12 +289,12 @@ export default function CoursesPage() {
                           <div className="flex items-center gap-5 flex-wrap">
                             <div className="text-center">
                               <p className={`text-xl font-bold ${avgColor(course.avgGrade)}`}>
-                                {course.avgGrade.toFixed(1)}
+                                {course.avgGrade !== null ? course.avgGrade.toFixed(1) : "—"}
                               </p>
                               <p className="text-[10px] text-muted-foreground">Promedio</p>
                             </div>
                             <div className="text-center">
-                              <p className={`text-xl font-bold ${rateColor(course.attendanceRate)}`}>{course.attendanceRate}%</p>
+                              <p className={`text-xl font-bold ${rateColor(course.attendanceRate)}`}>{course.attendanceRate !== null ? `${course.attendanceRate}%` : "—"}</p>
                               <p className="text-[10px] text-muted-foreground">Asistencia</p>
                             </div>
                             <div className="flex gap-2">

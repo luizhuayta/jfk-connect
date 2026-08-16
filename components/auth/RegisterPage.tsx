@@ -3,9 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  User,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  UserPlus,
+  AlertCircle,
+  Calendar,
+  Hash,
+  Clock,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import Image from "next/image";
+import { cn } from "@/lib/utils";
+import AuthShell from "@/components/auth/AuthShell";
 
 const YEARS = [
   { value: "1", label: "1.°" },
@@ -24,6 +34,70 @@ const YEARS = [
 ];
 
 const SECTIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M"];
+
+/** Input institucional: icono izquierda, botón mostrar/ocultar opcional derecha. */
+function FieldInput({
+  id,
+  label,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  icon: Icon,
+  trailing,
+  autoComplete,
+  required,
+  minLength,
+}: {
+  id: string;
+  label: string;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  trailing?: React.ReactNode;
+  autoComplete?: string;
+  required?: boolean;
+  minLength?: number;
+}) {
+  return (
+    <div className="flex flex-col gap-base">
+      <label
+        htmlFor={id}
+        className="text-[14px] leading-[20px] font-medium text-on-surface"
+      >
+        {label}
+      </label>
+      <div className="relative">
+        <Icon
+          aria-hidden
+          className="pointer-events-none absolute left-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center text-outline"
+        />
+        <input
+          id={id}
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          required={required}
+          minLength={minLength}
+          className={cn(
+            "w-full rounded-lg border border-outline-variant bg-surface-bright",
+            trailing ? "pl-10 pr-10" : "pl-10 pr-4",
+            "py-3 text-[16px] leading-[24px] font-normal text-on-surface placeholder:text-outline",
+            "outline-none transition-all",
+            "focus:border-primary focus:ring-1 focus:ring-primary",
+          )}
+        />
+        {trailing && (
+          <div className="absolute right-1 top-1/2 -translate-y-1/2">{trailing}</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -36,12 +110,12 @@ export default function RegisterPage() {
   const [shift, setShift] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPwd, setShowPwd] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // Validación local de contraseñas
     if (password !== confirmPassword) {
       setError("Las contraseñas no coinciden.");
       return;
@@ -73,243 +147,235 @@ export default function RegisterPage() {
     }
   };
 
+  const pwdToggle = (
+    <button
+      type="button"
+      onClick={() => setShowPwd((v) => !v)}
+      tabIndex={-1}
+      aria-label={showPwd ? "Ocultar contraseña" : "Mostrar contraseña"}
+      className="flex h-9 w-9 items-center justify-center rounded-md text-outline hover:text-primary transition-colors"
+    >
+      {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+    </button>
+  );
+
   return (
-    <div className="flex min-h-screen w-full">
-      {/* LEFT SIDE */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center text-white p-12 relative overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/Image/fondo_login.webp')" }}
-        />
-        <div className="absolute inset-0 bg-[#1E2A5E]/80 backdrop-blur-sm" />
-
-        <div className="relative z-10 flex flex-col items-center text-center space-y-8 max-w-md">
-          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white/10 border-2 border-white/20 backdrop-blur-sm p-1.5">
-            <Image
-              src="/Image/logo.jpg"
-              alt="Logo CIJK"
-              width={104}
-              height={104}
-              className="rounded-full object-cover"
-              priority
-            />
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight leading-tight drop-shadow-md">
-              COLEGIO INDUSTRIAL
-              <br />
-              JOHN F. KENNEDY
-            </h1>
-            <p className="text-xl font-semibold tracking-widest text-[#F4C15C] drop-shadow-md">
-              CHINCHA
-            </p>
-          </div>
-
-          <div className="h-px w-24 bg-white/30" />
-
-          <p className="text-lg font-light tracking-wide text-white/90 drop-shadow-sm">
-            Crea tu cuenta de acceso
-          </p>
-        </div>
+    <AuthShell subtitle="Crea tu cuenta de acceso">
+      {/* Header */}
+      <div className="mb-stack-md text-center">
+        <h2 className="text-[24px] leading-[32px] font-semibold tracking-tight text-primary mb-2">
+          Crear cuenta
+        </h2>
+        <p className="text-[16px] leading-[24px] font-normal text-on-surface-variant">
+          Regístrate para acceder a la Intranet Institucional
+        </p>
       </div>
 
-      {/* RIGHT SIDE */}
-      <div
-        className="relative flex w-full lg:w-1/2 items-center justify-center p-6"
-        style={{
-          backgroundImage:
-            "url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=2070&auto=format&fit=crop')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-stack-sm"
+        noValidate
       >
-        <div className="absolute inset-0 bg-black/60" />
+        <FieldInput
+          id="fullName"
+          label="Nombre completo"
+          value={fullName}
+          onChange={setFullName}
+          placeholder="Ej: Carlos Pérez Huamán"
+          icon={User}
+          autoComplete="name"
+          required
+        />
 
-        <div className="relative z-10 w-full max-w-md">
-          <div className="lg:hidden flex flex-col items-center mb-8 text-white">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 border border-white/20 mb-4 p-1">
-              <Image
-                src="/Image/logo.jpg"
-                alt="Logo CIJK"
-                width={56}
-                height={56}
-                className="rounded-full object-cover"
-                priority
+        <FieldInput
+          id="email"
+          label="Correo electrónico"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          placeholder="nombre@ijfk.edu.pe"
+          icon={Mail}
+          autoComplete="email"
+          required
+        />
+
+        <FieldInput
+          id="password"
+          label="Contraseña"
+          type={showPwd ? "text" : "password"}
+          value={password}
+          onChange={setPassword}
+          placeholder="••••••••"
+          icon={Lock}
+          trailing={pwdToggle}
+          autoComplete="new-password"
+          required
+          minLength={6}
+        />
+
+        <FieldInput
+          id="confirmPassword"
+          label="Confirmar contraseña"
+          type={showPwd ? "text" : "password"}
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          placeholder="••••••••"
+          icon={Lock}
+          trailing={pwdToggle}
+          autoComplete="new-password"
+          required
+          minLength={6}
+        />
+
+        {/* Año / Sección / Turno */}
+        <div className="grid grid-cols-3 gap-gutter">
+          <div className="flex flex-col gap-base">
+            <label
+              htmlFor="year"
+              className="text-[14px] leading-[20px] font-medium text-on-surface"
+            >
+              Año
+            </label>
+            <div className="relative">
+              <Calendar
+                aria-hidden
+                className="pointer-events-none absolute left-3 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center text-outline"
               />
+              <Select value={year} onValueChange={(v) => setYear(v ?? "")} required>
+                <SelectTrigger
+                  id="year"
+                  className="h-[46px] rounded-lg border-outline-variant bg-surface-bright pl-9 pr-3 focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  {YEARS.map((y) => (
+                    <SelectItem key={y.value} value={y.value}>
+                      {y.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <h2 className="text-lg font-bold text-center">
-              COLEGIO INDUSTRIAL JOHN F. KENNEDY
-            </h2>
-            <p className="text-sm font-semibold tracking-widest text-[#F4C15C]">
-              CHINCHA
-            </p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="text-center space-y-1">
-              <h3 className="text-2xl font-bold text-[#1E2A5E]">Crear cuenta</h3>
-              <p className="text-sm text-muted-foreground">
-                Regístrate para acceder a la Intranet Institucional
-              </p>
+          <div className="flex flex-col gap-base">
+            <label
+              htmlFor="section"
+              className="text-[14px] leading-[20px] font-medium text-on-surface"
+            >
+              Sección
+            </label>
+            <div className="relative">
+              <Hash
+                aria-hidden
+                className="pointer-events-none absolute left-3 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center text-outline"
+              />
+              <Select value={section} onValueChange={(v) => setSection(v ?? "")} required>
+                <SelectTrigger
+                  id="section"
+                  className="h-[46px] rounded-lg border-outline-variant bg-surface-bright pl-9 pr-3 focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <SelectValue placeholder="A - M" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SECTIONS.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="fullName" className="text-[#1E2A5E]">
-                  Nombre completo
-                </Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="Ej: Carlos Pérez Huamán"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                  className="rounded-lg border-muted-foreground/20 focus-visible:ring-[#F4C15C]"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-[#1E2A5E]">
-                  Correo electrónico
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="nombre@ijfk.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="rounded-lg border-muted-foreground/20 focus-visible:ring-[#F4C15C]"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-[#1E2A5E]">
-                  Contraseña
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  className="rounded-lg border-muted-foreground/20 focus-visible:ring-[#F4C15C]"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="confirmPassword" className="text-[#1E2A5E]">
-                  Confirmar contraseña
-                </Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  className="rounded-lg border-muted-foreground/20 focus-visible:ring-[#F4C15C]"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <div className="space-y-1.5">
-                  <Label htmlFor="year" className="text-[#1E2A5E]">
-                    Año
-                  </Label>
-                  <Select value={year} onValueChange={(v) => v && setYear(v)} required>
-                    <SelectTrigger id="year" className="rounded-lg border-muted-foreground/20 focus:ring-[#F4C15C]">
-                      <SelectValue placeholder="Seleccione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {YEARS.map((y) => (
-                        <SelectItem key={y.value} value={y.value}>
-                          {y.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="section" className="text-[#1E2A5E]">
-                    Sección
-                  </Label>
-                  <Select value={section} onValueChange={(v) => v && setSection(v)} required>
-                    <SelectTrigger id="section" className="rounded-lg border-muted-foreground/20 focus:ring-[#F4C15C]">
-                      <SelectValue placeholder="A - M" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SECTIONS.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="shift" className="text-[#1E2A5E]">
-                    Turno
-                  </Label>
-                  <Select value={shift} onValueChange={(v) => v && setShift(v)} required>
-                    <SelectTrigger id="shift" className="rounded-lg border-muted-foreground/20 focus:ring-[#F4C15C]">
-                      <SelectValue placeholder="Mañana / Tarde" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="mañana">Mañana</SelectItem>
-                      <SelectItem value="tarde">Tarde</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {error && (
-                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-                  {error}
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 bg-[#F4C15C] text-[#1E2A5E] font-bold hover:bg-[#e0b04f] rounded-lg h-11 transition-colors disabled:opacity-50"
-              >
-                {loading ? "Enviando código..." : "Crear cuenta"}
-              </Button>
-            </form>
-
-            <div className="rounded-lg bg-[#1E2A5E]/5 border border-[#1E2A5E]/15 p-3 text-xs leading-relaxed text-[#1E2A5E]/80">
-              <p>
-                <span className="font-semibold text-[#1E2A5E]">Aviso:</span>{" "}
-                si tiene más de un hijo(a) matriculado en la institución, la
-                configuración de las cuentas adicionales se realizará más
-                adelante desde el panel del padre de familia.
-              </p>
+          <div className="flex flex-col gap-base">
+            <label
+              htmlFor="shift"
+              className="text-[14px] leading-[20px] font-medium text-on-surface"
+            >
+              Turno
+            </label>
+            <div className="relative">
+              <Clock
+                aria-hidden
+                className="pointer-events-none absolute left-3 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center text-outline"
+              />
+              <Select value={shift} onValueChange={(v) => setShift(v ?? "")} required>
+                <SelectTrigger
+                  id="shift"
+                  className="h-[46px] rounded-lg border-outline-variant bg-surface-bright pl-9 pr-3 focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <SelectValue placeholder="Mañana / Tarde" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mañana">Mañana</SelectItem>
+                  <SelectItem value="tarde">Tarde</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-
-            <div className="text-center text-sm text-muted-foreground pt-1">
-              ¿Ya tienes una cuenta?{" "}
-              <Link
-                href="/login"
-                className="font-semibold text-[#2C3A7A] hover:text-[#1E2A5E] hover:underline"
-              >
-                Inicia sesión
-              </Link>
-            </div>
-
-            <p className="text-center text-xs text-muted-foreground pt-1">
-              Sistema Institucional IJFK © 2026
-            </p>
           </div>
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-[14px] leading-[20px] text-red-700"
+          >
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div className="pt-stack-sm">
+          <button
+            type="submit"
+            disabled={loading}
+            className={cn(
+              "w-full rounded-lg bg-secondary-container py-3 px-4 shadow-sm",
+              "text-[14px] leading-[20px] font-bold text-on-secondary-container",
+              "transition-all flex items-center justify-center gap-2",
+              "hover:bg-secondary-fixed",
+              "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+              "disabled:cursor-not-allowed disabled:opacity-60",
+            )}
+          >
+            {loading ? (
+              "Enviando código..."
+            ) : (
+              <>
+                Crear cuenta
+                <UserPlus className="h-4 w-4" aria-hidden />
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="rounded-lg border border-outline-variant bg-surface-container-low p-3 text-[12px] leading-[18px] text-on-surface-variant">
+          <span className="font-semibold text-on-surface">Aviso:</span> si tiene
+          más de un hijo(a) matriculado en la institución, la configuración de
+          las cuentas adicionales se realizará más adelante desde el panel del
+          padre de familia.
+        </div>
+      </form>
+
+      <div className="mt-stack-md border-t border-outline-variant pt-stack-sm text-center">
+        <p className="text-[14px] leading-[20px] font-medium text-on-surface-variant">
+          ¿Ya tienes una cuenta?{" "}
+          <Link
+            href="/login"
+            className="font-bold text-primary hover:text-primary-container hover:underline transition-colors"
+          >
+            Inicia sesión
+          </Link>
+        </p>
       </div>
-    </div>
+
+      <div className="mt-stack-lg text-center">
+        <p className="text-[12px] leading-[16px] font-semibold tracking-[0.05em] uppercase text-outline">
+          Sistema Institucional IJFK © {new Date().getFullYear()}
+        </p>
+      </div>
+    </AuthShell>
   );
 }

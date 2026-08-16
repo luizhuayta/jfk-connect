@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bell, AlertTriangle, Info, Megaphone, Plus, Pencil, Trash2, ChevronDown, CalendarDays, Users, X, Send, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 
 type AnnouncementCategory = "urgente" | "importante" | "general" | "informativo";
 type Announcement = {
@@ -28,12 +30,13 @@ const CATEGORIES = ["urgente", "importante", "general", "informativo"] as Announ
 const AUDIENCES = ["todos", "padres", "docentes", "5to", "3ro", "4to", "2do", "1ro"];
 const EMPTY_DRAFT = { title: "", body: "", category: "general" as AnnouncementCategory, audience: "todos" };
 
-function fmtDate(iso: string) { return new Date(iso + "T12:00:00").toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" }); }
+// El API devuelve "YYYY-MM-DDT12:00:00" (mediodía local). Si por compatibilidad
+// llegara una fecha pelada, se normaliza a mediodía.
+function fmtDate(iso: string) { return new Date(iso.includes("T") ? iso : iso + "T12:00:00").toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" }); }
 
 type Draft = typeof EMPTY_DRAFT;
 
 export default function AdminAnnouncementsPage() {
-  const searchParams = useSearchParams();
   const [items, setItems] = useState<Announcement[]>([]);
   const [filter, setFilter] = useState<AnnouncementCategory | "all">("all");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -62,11 +65,13 @@ export default function AdminAnnouncementsPage() {
 
   useEffect(() => { loadItems(); }, []);
   useEffect(() => {
-    if (searchParams.get("nuevo") === "1") {
+    // El query se lee en el cliente (window): usar useSearchParams rompería el
+    // prerender estático de la build (missing-suspense-with-csr-bailout).
+    if (new URLSearchParams(window.location.search).get("nuevo") === "1") {
       openNew();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, []);
 
   const counts = useMemo(() => ({
     urgente: items.filter((a) => a.category === "urgente").length,
@@ -90,7 +95,7 @@ export default function AdminAnnouncementsPage() {
       if (!data.ok) throw new Error(data.error);
       setItems((prev) => prev.filter((a) => a.id !== id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al eliminar");
+      toast.error(err instanceof Error ? err.message : "Error al eliminar");
     }
   }
 
@@ -125,8 +130,8 @@ export default function AdminAnnouncementsPage() {
     }
   }
 
-  if (loading) { return <div className="py-16 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando avisos...</p></div>; }
-  if (error) { return <div className="py-16 text-center text-red-600 text-sm">{error}</div>; }
+  if (loading) { return <LoadingState label="Cargando avisos..." />; }
+  if (error) { return <ErrorState message={error} onRetry={loadItems} />; }
 
   return (
     <div className="space-y-8">

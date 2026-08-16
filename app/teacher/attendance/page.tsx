@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,18 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CheckCircle2, XCircle, Clock, Save, CalendarDays, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Save, CalendarDays, Loader2, FileQuestion } from "lucide-react";
+import { recentWeekdays, toLocalISODate } from "@/lib/format";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
 
-type Status = "A" | "F" | "T";
-
-type TeacherCourse = {
-  id: string;
-  subject: string;
-  grade: string;
-  section: string;
-  room: string;
-  studentsTotal: number;
-};
+type Status = "A" | "F" | "T" | "J";
 
 type CourseStudent = {
   id: string;
@@ -35,16 +30,24 @@ type CourseStudent = {
 
 type SessionSummary = { date: string; a: number; f: number; t: number; j: number; total: number };
 
-const STATUS = {
-  A: { label: "Presente",  short: "A", btn: "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm", text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", rowBg: "bg-emerald-50/30", rowBorder: "border-l-emerald-400", icon: CheckCircle2 },
-  F: { label: "Falta",     short: "F", btn: "bg-red-500 text-white hover:bg-red-600 shadow-sm",         text: "text-red-600",    bg: "bg-red-50 border-red-200",         rowBg: "bg-red-50/40",    rowBorder: "border-l-red-500",    icon: XCircle },
-  T: { label: "Tardanza",  short: "T", btn: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",     text: "text-amber-700",  bg: "bg-amber-50 border-amber-200",     rowBg: "bg-amber-50/40",  rowBorder: "border-l-amber-500",  icon: Clock },
+type JustificationItem = {
+  id: string;
+  attendanceId: string;
+  studentId: string;
+  studentName: string;
+  parentName: string;
+  date: string;
+  reason: string;
+  status: "pendiente" | "aprobada" | "rechazada";
+  adminResponse: string | null;
 };
 
-const RECENT_DATES = [
-  "2026-05-08", "2026-05-07", "2026-05-06", "2026-05-05", "2026-05-04",
-  "2026-04-30", "2026-04-29", "2026-04-28", "2026-04-27",
-];
+const STATUS = {
+  A: { label: "Presente",   short: "A", btn: "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm", text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", rowBg: "bg-emerald-50/30", rowBorder: "border-l-emerald-400", icon: CheckCircle2 },
+  F: { label: "Falta",      short: "F", btn: "bg-red-500 text-white hover:bg-red-600 shadow-sm",         text: "text-red-600",    bg: "bg-red-50 border-red-200",         rowBg: "bg-red-50/40",    rowBorder: "border-l-red-500",    icon: XCircle },
+  T: { label: "Tardanza",   short: "T", btn: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",     text: "text-amber-700",  bg: "bg-amber-50 border-amber-200",     rowBg: "bg-amber-50/40",  rowBorder: "border-l-amber-500",  icon: Clock },
+  J: { label: "Justificada", short: "J", btn: "bg-blue-500 text-white hover:bg-blue-600 shadow-sm",      text: "text-blue-700",   bg: "bg-blue-50 border-blue-200",       rowBg: "bg-blue-50/40",   rowBorder: "border-l-blue-400",   icon: FileQuestion },
+};
 
 function fmtDate(iso: string) {
   return new Date(iso + "T12:00:00").toLocaleDateString("es-PE", {
@@ -59,33 +62,42 @@ function fmtDateLong(iso: string) {
 }
 
 export default function AttendancePage() {
-  const [courses, setCourses] = useState<TeacherCourse[]>([]);
+  const recentDates = useMemo(() => recentWeekdays(9), []);
+  const { courses, loading, error: coursesError, reload } = useTeacherCourses();
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
-  const [activeDate, setActiveDate] = useState(RECENT_DATES[0]);
+  const [activeDate, setActiveDate] = useState(recentDates[0]);
   const [students, setStudents] = useState<CourseStudent[]>([]);
   const [records, setRecords] = useState<Record<string, Status>>({});
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [loadingGrid, setLoadingGrid] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initializedRef = useRef(false);
+
+  // Justificaciones enviadas por los padres para este curso.
+  const [justifications, setJustifications] = useState<JustificationItem[]>([]);
+  const [justResponse, setJustResponse] = useState<Record<string, string>>({});
+  const [justBusy, setJustBusy] = useState<string | null>(null);
 
   const loadContext = useCallback(async (courseId: string, date: string) => {
     setLoadingGrid(true);
     try {
-      const [stRes, atRes, sumRes] = await Promise.all([
+      const [stRes, atRes, sumRes, justRes] = await Promise.all([
         fetch(`/api/teacher/courses/${courseId}/students`),
         fetch(`/api/teacher/courses/${courseId}/attendance?date=${date}`),
         fetch(`/api/teacher/courses/${courseId}/attendance`),
+        fetch(`/api/teacher/courses/${courseId}/justifications`),
       ]);
       const st = await stRes.json();
       const at = await atRes.json();
       const sum = await sumRes.json();
+      const just = await justRes.json();
       if (!st.ok) throw new Error(st.error);
       if (!at.ok) throw new Error(at.error);
       setStudents(st.students);
       if (sum.ok) setSessions(sum.sessions);
+      if (just.ok) setJustifications(just.justifications);
       const byStudent: Record<string, Status> = {};
       for (const s of st.students) byStudent[s.id] = "A";
       for (const rec of at.records) byStudent[rec.studentId] = rec.status;
@@ -98,27 +110,20 @@ export default function AttendancePage() {
     }
   }, []);
 
+  // Selecciona el primer curso una sola vez, apenas la lista compartida esté lista.
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/teacher/courses");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setCourses(data.courses);
-        if (data.courses.length > 0) {
-          const firstId = data.courses[0].id;
-          setActiveCourseId(firstId);
-          await loadContext(firstId, RECENT_DATES[0]);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando cursos");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [loadContext]);
+    if (initializedRef.current || courses.length === 0) return;
+    initializedRef.current = true;
+    const firstId = courses[0].id;
+    setActiveCourseId(firstId);
+    loadContext(firstId, recentDates[0]);
+  }, [courses, loadContext, recentDates]);
+
+  const retry = useCallback(async () => {
+    setError(null);
+    await reload();
+    if (activeCourseId) await loadContext(activeCourseId, activeDate);
+  }, [reload, activeCourseId, activeDate, loadContext]);
 
   function handleCourse(id: string) {
     setActiveCourseId(id);
@@ -131,7 +136,13 @@ export default function AttendancePage() {
   }
 
   function setAll(status: Status) {
-    setRecords(Object.fromEntries(students.map((s) => [s.id, status])));
+    // No sobreescribe alumnos con falta ya justificada (J) — eso solo cambia
+    // al aprobar/rechazar una justificación o con un clic individual explícito.
+    setRecords((prev) =>
+      Object.fromEntries(
+        students.map((s) => [s.id, prev[s.id] === "J" ? "J" : status]),
+      ),
+    );
     setSaved(false);
   }
 
@@ -161,6 +172,27 @@ export default function AttendancePage() {
     }
   }
 
+  async function handleReview(j: JustificationItem, decision: "aprobar" | "rechazar") {
+    if (!activeCourseId) return;
+    setJustBusy(j.id);
+    try {
+      const r = await fetch(`/api/teacher/courses/${activeCourseId}/justifications/${j.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, response: justResponse[j.id] || null }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error);
+      setJustResponse((prev) => { const next = { ...prev }; delete next[j.id]; return next; });
+      // Refrescar grid/sesiones/justificaciones (al aprobar, la falta pasa a J).
+      await loadContext(activeCourseId, activeDate);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error al revisar la justificación");
+    } finally {
+      setJustBusy(null);
+    }
+  }
+
   const course = courses.find((c) => c.id === activeCourseId);
 
   const counts = useMemo(() => {
@@ -169,11 +201,13 @@ export default function AttendancePage() {
       A: vals.filter((v) => v === "A").length,
       F: vals.filter((v) => v === "F").length,
       T: vals.filter((v) => v === "T").length,
+      J: vals.filter((v) => v === "J").length,
       total: vals.length,
     };
   }, [records]);
 
-  const pct = counts.total ? Math.round(((counts.A + counts.T) / counts.total) * 100) : 0;
+  // Presentes + tardanzas + faltas justificadas cuentan como asistencia.
+  const pct = counts.total ? Math.round(((counts.A + counts.T + counts.J) / counts.total) * 100) : 0;
 
   const datesWithRecords = useMemo(() => new Set(sessions.map((s) => s.date)), [sessions]);
 
@@ -185,21 +219,17 @@ export default function AttendancePage() {
       A: s.a,
       F: s.f,
       T: s.t,
-      pct: s.total ? Math.round(((s.a + s.t) / s.total) * 100) : 0,
+      J: s.j,
+      pct: s.total ? Math.round(((s.a + s.t + s.j) / s.total) * 100) : 0,
     }))
     .slice(0, 5);
 
   if (loading) {
-    return (
-      <div className="py-16 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-        <p className="text-sm text-muted-foreground mt-2">Cargando cursos...</p>
-      </div>
-    );
+    return <LoadingState label="Cargando cursos..." />;
   }
 
-  if (error) {
-    return <div className="py-16 text-center text-red-600 text-sm">{error}</div>;
+  if (error || coursesError) {
+    return <ErrorState message={error ?? coursesError ?? ""} onRetry={retry} />;
   }
 
   return (
@@ -239,11 +269,20 @@ export default function AttendancePage() {
 
       {/* Date selector */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide flex items-center gap-2">
-          <CalendarDays className="h-3.5 w-3.5" /> Sesiones recientes
-        </p>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide flex items-center gap-2">
+            <CalendarDays className="h-3.5 w-3.5" /> Sesiones recientes
+          </p>
+          <input
+            type="date"
+            value={activeDate}
+            max={toLocalISODate()}
+            onChange={(e) => e.target.value && handleDate(e.target.value)}
+            className="h-8 px-2.5 rounded-md border border-gray-200 text-xs text-[#0F172A]"
+          />
+        </div>
         <div className="flex gap-1.5 flex-wrap">
-          {RECENT_DATES.map((d) => {
+          {recentDates.map((d) => {
             const hasRecord = datesWithRecords.has(d);
             return (
               <button
@@ -305,11 +344,12 @@ export default function AttendancePage() {
           ) : (
             <>
               {/* Stats strip */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 {[
                   { label: "Presentes",  value: counts.A, cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
                   { label: "Tardanzas",  value: counts.T, cls: "bg-amber-50 border-amber-200 text-amber-700" },
                   { label: "Faltas",     value: counts.F, cls: "bg-red-50 border-red-200 text-red-600" },
+                  { label: "Justificadas", value: counts.J, cls: "bg-blue-50 border-blue-200 text-blue-700" },
                   { label: "% Asistencia", value: `${pct}%`, cls: "bg-[#1E2A5E]/5 border-[#1E2A5E]/10 text-[#1E2A5E]" },
                 ].map((s) => (
                   <div key={s.label} className={`rounded-xl border p-2.5 text-center ${s.cls}`}>
@@ -406,6 +446,65 @@ export default function AttendancePage() {
         </CardContent>
       </Card>
 
+      {/* Justificaciones pendientes */}
+      {justifications.filter((j) => j.status === "pendiente").length > 0 && (
+        <Card className="border-none shadow-sm rounded-xl overflow-hidden">
+          <CardContent className="p-6 space-y-3">
+            <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
+              <FileQuestion className="h-4 w-4 text-amber-600" />
+              Justificaciones pendientes — {course?.subject} {course?.grade} &quot;{course?.section}&quot;
+            </h2>
+            <div className="space-y-3">
+              {justifications
+                .filter((j) => j.status === "pendiente")
+                .map((j) => (
+                  <div key={j.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <p className="text-sm font-semibold text-[#0F172A]">{j.studentName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+                          {fmtDateLong(j.date)} · solicitado por {j.parentName}
+                        </p>
+                      </div>
+                      <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[11px] font-bold">
+                        En revisión
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-[#334155] bg-white rounded-lg border border-amber-100 px-3 py-2">
+                      <span className="font-semibold">Motivo: </span>{j.reason}
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input
+                        value={justResponse[j.id] ?? ""}
+                        onChange={(e) => setJustResponse((prev) => ({ ...prev, [j.id]: e.target.value }))}
+                        placeholder="Respuesta (opcional)..."
+                        className="flex-1 min-w-[160px] h-9 px-3 rounded-lg border border-input bg-white text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        disabled={justBusy === j.id}
+                        onClick={() => handleReview(j, "aprobar")}
+                        className="bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg h-9 px-4 text-xs font-bold"
+                      >
+                        {justBusy === j.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "✓ Aprobar"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={justBusy === j.id}
+                        onClick={() => handleReview(j, "rechazar")}
+                        className="rounded-lg h-9 px-4 text-xs font-bold border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        ✕ Rechazar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* History table */}
       {history.length > 0 && (
         <Card className="border-none shadow-sm rounded-xl overflow-hidden">
@@ -422,6 +521,7 @@ export default function AttendancePage() {
                     <TableHead className="text-center text-[#0F172A] font-semibold text-sm">Presentes</TableHead>
                     <TableHead className="text-center text-[#0F172A] font-semibold text-sm">Tardanzas</TableHead>
                     <TableHead className="text-center text-[#0F172A] font-semibold text-sm">Faltas</TableHead>
+                    <TableHead className="text-center text-[#0F172A] font-semibold text-sm">Justificadas</TableHead>
                     <TableHead className="text-center text-[#0F172A] font-semibold text-sm">Asistencia</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -438,6 +538,7 @@ export default function AttendancePage() {
                       <TableCell className="text-center text-sm font-semibold text-emerald-600">{h.A}</TableCell>
                       <TableCell className="text-center text-sm font-semibold text-amber-600">{h.T}</TableCell>
                       <TableCell className="text-center text-sm font-semibold text-red-500">{h.F}</TableCell>
+                      <TableCell className="text-center text-sm font-semibold text-blue-600">{h.J}</TableCell>
                       <TableCell className="text-center">
                         <Badge className={`text-xs font-bold border-0 hover:bg-opacity-100 ${
                           h.pct >= 90 ? "bg-emerald-100 text-emerald-700" :

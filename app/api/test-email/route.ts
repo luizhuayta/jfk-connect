@@ -7,23 +7,22 @@
  * Útil para validar que la integración de email está OK.
  *
  * Seguridad:
- *  - Requiere sesión autenticada (cualquier usuario logueado).
- *  - En producción, restringir a admin (requireRole ["admin"]).
+ *  - Solo admin (antes, en desarrollo cualquier usuario autenticado podía
+ *    enviar emails arbitrarios con la identidad del colegio → spam/phishing).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { sendEmail, emailTemplates } from "@/lib/mail";
-import { requireUser, requireRole } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  // En producción, solo admin; en desarrollo, cualquier autenticado
-  const roles =
-    process.env.NODE_ENV === "production"
-      ? (["admin"] as const)
-      : (["admin", "docente", "padre"] as const);
-  const [, denied] = await requireRole(request, [...roles]);
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
+  const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 
   try {

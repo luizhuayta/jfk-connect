@@ -12,6 +12,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
+import { assertSameOrigin } from "@/lib/csrf";
 import { updateEnrollmentSchema } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
 
@@ -22,6 +23,9 @@ interface Params {
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 

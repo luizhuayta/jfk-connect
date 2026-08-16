@@ -16,7 +16,6 @@ const DATABASE_URL =
   "postgresql://supabase_admin:ijfk_dev_password@db:5432/ijfk";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __ijfkPool: Pool | undefined;
 }
 
@@ -89,4 +88,29 @@ export async function closeDb(): Promise<void> {
     await global.__ijfkPool.end();
     global.__ijfkPool = undefined;
   }
+}
+
+/**
+ * Devuelve true si el error es una violación de UNIQUE (SQLSTATE 23505).
+ * Útil para responder 409 en lugar de 500 cuando dos peticiones compiten
+ * (p. ej. dos justificaciones simultáneas para la misma falta).
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: string }).code === "23505"
+  );
+}
+
+/**
+ * Devuelve true si el error es una violación de FOREIGN KEY (SQLSTATE 23503).
+ * Útil para responder 404 cuando se referencia un recurso inexistente.
+ */
+export function isForeignKeyViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: string }).code === "23503"
+  );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Navbar from "@/components/layout/Navbar";
-import SidebarAdmin from "@/components/layout/SidebarAdmin";
+import AdminSidebar from "@/components/AdminSidebar";
 
 export default function AdminLayout({
   children,
@@ -14,9 +14,9 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-[#F8FAFC] overflow-x-hidden">
       <Navbar onMenuClick={() => setMobileOpen(true)} />
-      <SidebarAdmin mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)}>
+      <AdminSidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)}>
         {children}
-      </SidebarAdmin>
+      </AdminSidebar>
     </div>
   );
 }

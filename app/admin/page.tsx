@@ -31,7 +31,7 @@ type StatsData = {
     totalStudents: number;
     totalTeachers: number;
     totalParents: number;
-    attendanceRate: number;
+    attendanceRate: number | null;
   };
   attendanceByDay: { name: string; value: number }[];
   gradeDistribution: { name: string; value: number }[];
@@ -111,13 +111,13 @@ export default function AdminDashboard() {
         },
         {
           label: "Tasa de Asistencia",
-          value: `${data.stats.attendanceRate}%`,
+          value: data.stats.attendanceRate !== null ? `${data.stats.attendanceRate}%` : "—",
           icon: TrendingUp,
           iconBg: "bg-emerald-50",
           iconColor: "text-emerald-500",
           borderColor: "border-l-emerald-500",
           showProgress: true,
-          progressValue: data.stats.attendanceRate,
+          progressValue: data.stats.attendanceRate ?? 0,
         },
       ]
     : [];

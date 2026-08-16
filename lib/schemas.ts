@@ -59,7 +59,7 @@ export const resetPasswordSchema = z.object({
     .string()
     .trim()
     .regex(/^\d{6}$/, "El código debe tener 6 dígitos."),
-  newPassword: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
+  newPassword: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
 });
 
 /** /api/auth/change-password — { currentPassword, newPassword } */
@@ -67,7 +67,7 @@ export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "La contraseña actual es obligatoria."),
   newPassword: z
     .string()
-    .min(6, "La nueva contraseña debe tener al menos 6 caracteres."),
+    .min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
 });
 
 /** /api/admin/users (POST) */
@@ -119,11 +119,18 @@ export const updateAnnouncementSchema = z.object({
 });
 
 /** /api/teacher/courses/[courseId]/grades (PUT) */
+const noteField = z
+  .number({ message: "La nota debe ser un número." })
+  .min(0, "La nota no puede ser negativa.")
+  .max(20, "La nota no puede superar 20.")
+  .nullable()
+  .optional();
+
 export const gradeEntrySchema = z.object({
   studentId: z.string().min(1),
-  n1: z.number().min(0).max(20).nullable().optional(),
-  n2: z.number().min(0).max(20).nullable().optional(),
-  n3: z.number().min(0).max(20).nullable().optional(),
+  n1: noteField,
+  n2: noteField,
+  n3: noteField,
   observation: z.string().optional(),
 });
 
@@ -143,6 +150,23 @@ export const attendanceRecordSchema = z.object({
 export const saveAttendanceSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida (YYYY-MM-DD)."),
   records: z.array(attendanceRecordSchema),
+});
+
+/** /api/father/attendance/justify (POST) — el padre justifica una falta */
+export const justifyAttendanceSchema = z.object({
+  attendanceId: z.string().min(1, "Registro de asistencia obligatorio."),
+  reason: nonEmpty("El motivo").max(500, "El motivo no puede superar 500 caracteres."),
+});
+
+/** /api/teacher/courses/[courseId]/justifications/[id] (PATCH) */
+export const reviewJustificationSchema = z.object({
+  decision: z.enum(["aprobar", "rechazar"], { message: "Decisión no válida." }),
+  response: z
+    .string()
+    .trim()
+    .max(500, "La respuesta no puede superar 500 caracteres.")
+    .optional()
+    .nullable(),
 });
 
 /** /api/teacher/courses/[courseId]/materials (POST) */
@@ -208,6 +232,27 @@ export const createSectionSchema = z.object({
 /** /api/admin/enrollments (POST) — matricula a un alumno existente */
 export const createEnrollmentSchema = z.object({
   studentId: z.string().min(1, "El alumno es obligatorio."),
+});
+
+/** /api/admin/schedule (PATCH) — mover entradas de horario (drag-and-drop) */
+const scheduleDayEnum = z.enum(
+  ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"],
+  { message: "Día no válido." },
+);
+
+export const scheduleUpdateEntrySchema = z.object({
+  id: nonEmpty("El id de la entrada"),
+  day: scheduleDayEnum,
+  period: z
+    .number({ message: "El período es obligatorio." })
+    .int("El período debe ser un número entero.")
+    .min(1, "Período no válido.")
+    .max(7, "Período no válido."),
+  time: nonEmpty("El horario"),
+});
+
+export const updateScheduleSchema = z.object({
+  updates: z.array(scheduleUpdateEntrySchema),
 });
 
 /** /api/admin/enrollments/[id] (PATCH) — pagos, documentos y estado */

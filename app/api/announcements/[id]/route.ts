@@ -7,6 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { queryOne } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
+import { assertSameOrigin } from "@/lib/csrf";
 import { updateAnnouncementSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 
@@ -67,6 +71,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 

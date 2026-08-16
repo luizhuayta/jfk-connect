@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect, Fragment } from "react";
+import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Pencil, Save, X, CheckCircle2, Sun, Moon, Loader2 } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 
 type AdminSection = {
   id: string; grade: string; section: string;
@@ -15,7 +17,7 @@ type AdminSection = {
 type ScheduleEntry = {
   id: string;
   grade: string; section: string; day: string; period: number;
-  time: string; subject: string; teacher: string | null; room: string | null;
+  time: string; subject: string; teacher: string | null; teacher_id: string | null; room: string | null;
 };
 
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
@@ -53,15 +55,15 @@ function timeForPeriod(period: number) {
 
 function findTeacherConflict(
   entries: ScheduleEntry[],
-  teacher: string | null,
+  teacherId: string | null,
   day: string,
   period: number,
   excludeIds: string[],
 ): ScheduleEntry | null {
-  if (!teacher) return null;
+  if (!teacherId) return null;
   return entries.find(
     (e) =>
-      e.teacher === teacher &&
+      e.teacher_id === teacherId &&
       e.day === day &&
       e.period === period &&
       !excludeIds.includes(e.id),
@@ -82,28 +84,33 @@ export default function AdminSchedulePage() {
   const [dragOverCell, setDragOverCell] = useState<{ day: string; period: number } | null>(null);
   const [changedIds, setChangedIds] = useState<Set<string>>(new Set());
 
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [secRes, schRes] = await Promise.all([
+        fetch("/api/admin/sections"),
+        fetch("/api/admin/schedule"),
+      ]);
+      const sec = await secRes.json();
+      const sch = await schRes.json();
+      if (!sec.ok) throw new Error(sec.error);
+      if (!sch.ok) throw new Error(sch.error);
+      setSections(sec.sections);
+      setEntries(sch.entries);
+      if (sec.sections.length > 0) setActiveSectionId(sec.sections[0].id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [secRes, schRes] = await Promise.all([
-          fetch("/api/admin/sections"),
-          fetch("/api/admin/schedule"),
-        ]);
-        const sec = await secRes.json();
-        const sch = await schRes.json();
-        if (!sec.ok) throw new Error(sec.error);
-        if (!sch.ok) throw new Error(sch.error);
-        setSections(sec.sections);
-        setEntries(sch.entries);
-        if (sec.sections.length > 0) setActiveSectionId(sec.sections[0].id);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error");
-      } finally {
-        setLoading(false);
-      }
+      await load();
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const section = sections.find((s) => s.id === activeSectionId);
@@ -186,7 +193,7 @@ export default function AdminSchedulePage() {
 
     const sourceConflict = findTeacherConflict(
       entries,
-      source.teacher,
+      source.teacher_id,
       targetDay,
       targetPeriod,
       excludeIds,
@@ -202,7 +209,7 @@ export default function AdminSchedulePage() {
     if (targetEntry) {
       const targetConflict = findTeacherConflict(
         entries,
-        targetEntry.teacher,
+        targetEntry.teacher_id,
         source.day,
         source.period,
         excludeIds,
@@ -249,8 +256,8 @@ export default function AdminSchedulePage() {
     toast.success(targetEntry ? "Cursos intercambiados" : "Curso movido");
   }
 
-  if (loading) { return <div className="py-16 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando horarios...</p></div>; }
-  if (error) { return <div className="py-16 text-center text-red-600 text-sm">{error}</div>; }
+  if (loading) { return <LoadingState label="Cargando horarios..." />; }
+  if (error) { return <ErrorState message={error} onRetry={load} />; }
 
   return (
     <div className="space-y-8">

@@ -11,6 +11,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,9 @@ interface StudentRow {
   section: string;
   shift: string;
   status: string;
-  avg_grade: number;
-  attendance_rate: number;
+  courses_count: number;
+  avg_grade: number | null;
+  attendance_rate: number | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -41,13 +43,18 @@ export async function GET(request: NextRequest) {
          s.shift::text AS shift,
          s.status,
          COALESCE((
+           SELECT COUNT(*) FROM courses c
+           WHERE c.grade = s.grade AND c.section = s.section
+             AND c.year = EXTRACT(YEAR FROM now())
+         ), 0)::int AS courses_count,
+         (
            SELECT ROUND(AVG(g.average)::numeric, 2)
            FROM grades g WHERE g.student_id = s.id
-         ), 0)::float AS avg_grade,
-         COALESCE((
+         )::float AS avg_grade,
+         (
            SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
            FROM attendance a WHERE a.student_id = s.id
-         ), 100)::int AS attendance_rate
+         )::int AS attendance_rate
        FROM students s
        WHERE s.parent_id = $1
        ORDER BY s.full_name`,
@@ -56,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ ok: true, students: r.rows });
   } catch (err) {
-    console.error("[father/students GET] Error:", err);
+    logger.error({ err, route: "father/students" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

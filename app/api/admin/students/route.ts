@@ -18,6 +18,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
+import { assertSameOrigin } from "@/lib/csrf";
 import { createStudentSchema } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
 
@@ -34,8 +35,8 @@ interface StudentRow {
   shift: string;
   parent_name: string | null;
   parent_phone: string | null;
-  avg_grade: number;
-  attendance_rate: number;
+  avg_grade: number | null;
+  attendance_rate: number | null;
   status: string;
   enrolled_at: string;
 }
@@ -118,14 +119,14 @@ export async function GET(request: NextRequest) {
          s.shift::text AS shift,
          p.full_name AS parent_name,
          p.phone AS parent_phone,
-         COALESCE((
+         (
            SELECT ROUND(AVG(g.average)::numeric, 2)
            FROM grades g WHERE g.student_id = s.id AND g.n3 IS NOT NULL
-         ), 0)::float AS avg_grade,
-         COALESCE((
+         )::float AS avg_grade,
+         (
            SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
            FROM attendance a WHERE a.student_id = s.id
-         ), 100)::int AS attendance_rate,
+         )::int AS attendance_rate,
          s.status,
          to_char(s.enrolled_at, 'YYYY-MM-DD') AS enrolled_at
        FROM students s
@@ -174,6 +175,9 @@ function initialsOf(fullName: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 

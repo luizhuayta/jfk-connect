@@ -9,8 +9,8 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { studentBelongsToParent } from "@/lib/guards";
+import { requireOwnedStudent } from "@/lib/guards";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -24,24 +24,8 @@ interface GradeRow {
 }
 
 export async function GET(request: NextRequest) {
-  const [user, denied] = await requireRole(request, ["padre"]);
+  const [studentId, denied] = await requireOwnedStudent(request);
   if (denied) return denied;
-
-  const { searchParams } = new URL(request.url);
-  const studentId = searchParams.get("studentId");
-  if (!studentId) {
-    return NextResponse.json(
-      { ok: false, error: "Falta el parámetro studentId." },
-      { status: 400 },
-    );
-  }
-
-  if (!(await studentBelongsToParent(studentId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este estudiante no está vinculado a tu cuenta." },
-      { status: 403 },
-    );
-  }
 
   try {
     const r = await query<GradeRow>(
@@ -72,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ ok: true, grades });
   } catch (err) {
-    console.error("[father/grades GET] Error:", err);
+    logger.error({ err, route: "father/grades" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

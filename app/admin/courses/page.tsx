@@ -8,11 +8,13 @@ import {
   BookOpen, Users, Sun, Moon, ChevronDown, ChevronUp, Plus,
   UserRound, Loader2, CheckCircle2, AlertCircle, X,
 } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 
 type AdminSection = {
   id: string; grade: string; gradeNum: number; section: string;
   shift: "Mañana" | "Tarde"; room: string; tutor: string;
-  studentsTotal: number; avgGrade: number; attendanceRate: number;
+  studentsTotal: number; avgGrade: number | null; attendanceRate: number | null;
 };
 
 type Course = {
@@ -190,8 +192,8 @@ export default function AdminCoursesPage() {
   const morning = sections.filter((s) => s.shift === "Mañana").length;
   const afternoon = sections.filter((s) => s.shift === "Tarde").length;
 
-  if (loading) { return <div className="py-16 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando secciones...</p></div>; }
-  if (error) { return <div className="py-16 text-center text-red-600 text-sm">{error}</div>; }
+  if (loading) { return <LoadingState label="Cargando secciones..." />; }
+  if (error) { return <ErrorState message={error} onRetry={loadSections} />; }
 
   return (
     <div className="space-y-8">
@@ -285,9 +287,8 @@ export default function AdminCoursesPage() {
             </Card>
           ) : loadingCourses ? (
             <Card className="border-none shadow-sm rounded-xl">
-              <CardContent className="p-12 text-center">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-                <p className="text-sm text-muted-foreground mt-2">Cargando cursos...</p>
+              <CardContent className="p-12">
+                <LoadingState label="Cargando cursos..." className="py-0" />
               </CardContent>
             </Card>
           ) : (

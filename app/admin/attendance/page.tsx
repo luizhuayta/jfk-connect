@@ -6,15 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle2, XCircle, Clock, Users, CalendarDays, TrendingUp, Loader2 } from "lucide-react";
+import { recentWeekdays } from "@/lib/format";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 
 type AdminCourse = {
   id: string; subject: string; grade: string; section: string;
-  studentsTotal: number; attendanceRate: number;
+  studentsTotal: number; attendanceRate: number | null;
 };
 type Student = { id: string; name: string; initials: string; order: number };
 type SessionSummary = { date: string; a: number; f: number; t: number; j: number; total: number };
-
-const RECENT_DATES = ["2026-05-08", "2026-05-07", "2026-05-06", "2026-05-05", "2026-05-04", "2026-04-30", "2026-04-29", "2026-04-28", "2026-04-27"];
 
 const STATUS_META = {
   A: { label: "Presente", icon: CheckCircle2, badge: "bg-emerald-50 border-emerald-200 text-emerald-700" },
@@ -34,13 +35,14 @@ function fmtDate(iso: string) { return new Date(iso + "T12:00:00").toLocaleDateS
 function fmtDateLong(iso: string) { return new Date(iso + "T12:00:00").toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); }
 
 export default function AdminAttendancePage() {
+  const recentDates = useMemo(() => recentWeekdays(9), []);
   const [courses, setCourses] = useState<AdminCourse[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
-  const [activeDate, setActiveDate] = useState(RECENT_DATES[0]);
+  const [activeDate, setActiveDate] = useState(recentDates[0]);
   const [students, setStudents] = useState<Student[]>([]);
   const [records, setRecords] = useState<Record<string, string>>({});
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [courseStats, setCourseStats] = useState<Record<string, { pct: number; faltas: number; sesiones: number }>>({});
+  const [courseStats, setCourseStats] = useState<Record<string, { pct: number | null; faltas: number; sesiones: number }>>({});
   const [loading, setLoading] = useState(true);
   const [loadingGrid, setLoadingGrid] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,33 +72,38 @@ export default function AdminAttendancePage() {
     }
   }, []);
 
+  const loadCourses = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [coursesRes, summaryRes] = await Promise.all([
+        fetch("/api/admin/courses"),
+        fetch("/api/admin/attendance/summary"),
+      ]);
+      const coursesData = await coursesRes.json();
+      const summaryData = await summaryRes.json();
+      if (!coursesData.ok) throw new Error(coursesData.error);
+      if (!summaryData.ok) throw new Error(summaryData.error);
+      setCourses(coursesData.courses);
+      setCourseStats(summaryData.stats ?? {});
+      if (coursesData.courses.length > 0) {
+        const firstId = coursesData.courses[0].id;
+        setActiveCourseId(firstId);
+        await loadContext(firstId, recentDates[0]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }, [loadContext, recentDates]);
+
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [coursesRes, summaryRes] = await Promise.all([
-          fetch("/api/admin/courses"),
-          fetch("/api/admin/attendance/summary"),
-        ]);
-        const coursesData = await coursesRes.json();
-        const summaryData = await summaryRes.json();
-        if (!coursesData.ok) throw new Error(coursesData.error);
-        if (!summaryData.ok) throw new Error(summaryData.error);
-        setCourses(coursesData.courses);
-        setCourseStats(summaryData.stats ?? {});
-        if (coursesData.courses.length > 0) {
-          const firstId = coursesData.courses[0].id;
-          setActiveCourseId(firstId);
-          await loadContext(firstId, RECENT_DATES[0]);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error");
-      } finally {
-        setLoading(false);
-      }
+      await loadCourses();
     })();
-  }, [loadContext]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleCourse(id: string) { setActiveCourseId(id); loadContext(id, activeDate); }
   function handleDate(d: string) { setActiveDate(d); if (activeCourseId) loadContext(activeCourseId, d); }
@@ -110,8 +117,8 @@ export default function AdminAttendancePage() {
   const datesWithRecords = useMemo(() => new Set(sessions.map((s) => s.date)), [sessions]);
   const history = sessions.filter((s) => s.date !== activeDate).map((s) => ({ date: s.date, A: s.a, F: s.f, T: s.t, pct: s.total ? Math.round(((s.a + s.t) / s.total) * 100) : 0 })).slice(0, 5);
 
-  if (loading) { return <div className="py-16 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando...</p></div>; }
-  if (error) { return <div className="py-16 text-center text-red-600 text-sm">{error}</div>; }
+  if (loading) { return <LoadingState label="Cargando..." />; }
+  if (error) { return <ErrorState message={error} onRetry={loadCourses} />; }
 
   return (
     <div className="space-y-8">
@@ -125,7 +132,7 @@ export default function AdminAttendancePage() {
           const stat = courseStats[c.id] ?? { pct: c.attendanceRate, faltas: 0, sesiones: 0 };
           const color = SUBJECT_COLORS[c.subject] ?? { bg: "bg-gray-50", text: "text-gray-700" };
           const isActive = activeCourseId === c.id;
-          const borderColor = stat.pct >= 90 ? "border-l-emerald-500" : stat.pct >= 75 ? "border-l-amber-500" : "border-l-red-500";
+          const borderColor = stat.pct === null ? "border-l-gray-300" : stat.pct >= 90 ? "border-l-emerald-500" : stat.pct >= 75 ? "border-l-amber-500" : "border-l-red-500";
           return (
             <button key={c.id} onClick={() => handleCourse(c.id)} className={`text-left rounded-xl transition-all ${isActive ? "ring-2 ring-[#2563EB] ring-offset-1" : ""}`}>
               <Card className={`border-none shadow-sm rounded-xl border-l-4 ${borderColor}`}>
@@ -135,7 +142,7 @@ export default function AdminAttendancePage() {
                     <div className="min-w-0"><p className="text-sm font-bold text-[#0F172A] truncate">{c.subject}</p><p className="text-xs text-muted-foreground">{c.grade} &quot;{c.section}&quot;</p></div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="text-center"><p className={`text-lg font-bold ${stat.pct >= 90 ? "text-emerald-600" : stat.pct >= 75 ? "text-amber-600" : "text-red-500"}`}>{stat.pct}%</p><p className="text-[10px] text-muted-foreground">Asist.</p></div>
+                    <div className="text-center"><p className={`text-lg font-bold ${stat.pct === null ? "text-gray-400" : stat.pct >= 90 ? "text-emerald-600" : stat.pct >= 75 ? "text-amber-600" : "text-red-500"}`}>{stat.pct === null ? "—" : `${stat.pct}%`}</p><p className="text-[10px] text-muted-foreground">Asist.</p></div>
                     <div className="text-center"><p className="text-lg font-bold text-red-500">{stat.faltas}</p><p className="text-[10px] text-muted-foreground">Faltas</p></div>
                     <div className="text-center"><p className="text-lg font-bold text-[#0F172A]">{stat.sesiones}</p><p className="text-[10px] text-muted-foreground">Sesiones</p></div>
                   </div>
@@ -149,7 +156,7 @@ export default function AdminAttendancePage() {
       <div className="space-y-2">
         <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5" /> Sesiones recientes — {course?.subject} {course?.grade} &quot;{course?.section}&quot;</p>
         <div className="flex gap-1.5 flex-wrap">
-          {RECENT_DATES.map((d) => {
+          {recentDates.map((d) => {
             const hasRecord = datesWithRecords.has(d);
             return (
               <button key={d} onClick={() => handleDate(d)} className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold border transition-all ${activeDate === d ? "bg-[#1E2A5E] text-white border-[#1E2A5E]" : hasRecord ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : "bg-white text-[#64748B] border-gray-200"}`}>{fmtDate(d)}</button>

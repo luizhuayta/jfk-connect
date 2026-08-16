@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { queryOne } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { courseBelongsToTeacher } from "@/lib/guards";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string; materialId: string }> },
 ) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [user, denied] = await requireRole(request, ["docente"]);
   if (denied) return denied;
 

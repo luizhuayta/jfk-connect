@@ -26,8 +26,8 @@ interface CourseRow {
   hours_per_week: number;
   bimester: number;
   students_total: number;
-  avg_grade: number;
-  attendance_rate: number;
+  avg_grade: number | null;
+  attendance_rate: number | null;
 }
 
 interface BimesterRow {
@@ -72,17 +72,17 @@ export async function GET(request: NextRequest) {
            SELECT COUNT(*) FROM students s
            WHERE s.grade = c.grade AND s.section = c.section AND s.status = 'activo'
          ), 0)::int AS students_total,
-         COALESCE((
+         (
            SELECT ROUND(AVG(g.average)::numeric, 2)
            FROM grades g
            WHERE g.course_id = c.id AND g.n3 IS NOT NULL
-         ), 0)::float AS avg_grade,
-         COALESCE((
+         )::float AS avg_grade,
+         (
            SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
            FROM attendance a
            JOIN students s3 ON s3.id = a.student_id
            WHERE s3.grade = c.grade AND s3.section = c.section
-         ), 100)::int AS attendance_rate
+         )::int AS attendance_rate
        FROM courses c
        LEFT JOIN users u ON u.id = c.teacher_id
        ${whereClause}

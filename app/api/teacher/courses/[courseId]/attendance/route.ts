@@ -14,6 +14,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne, withTransaction } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { courseBelongsToTeacher } from "@/lib/guards";
+import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { saveAttendanceSchema } from "@/lib/schemas";
 
@@ -117,6 +118,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [user, denied] = await requireRole(request, ["docente"]);
   if (denied) return denied;
 

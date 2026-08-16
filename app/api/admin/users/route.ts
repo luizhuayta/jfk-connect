@@ -13,6 +13,7 @@ import { query, queryOne } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
 import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
+import { assertSameOrigin } from "@/lib/csrf";
 import { createUserSchema } from "@/lib/schemas";
 import crypto from "node:crypto";
 
@@ -28,6 +29,8 @@ interface UserRow {
   created_at: string;
   last_login_at: string | null;
   avatar_url: string | null;
+  subject: string | null;
+  shift_preference: string | null;
 }
 
 /**
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
     }
 
     const sql = `
-      SELECT id, email, full_name, role, phone, is_active, created_at, last_login_at, avatar_url
+      SELECT id, email, full_name, role, phone, is_active, created_at, last_login_at, avatar_url, subject, shift_preference
       FROM users
       ${where.length ? "WHERE " + where.join(" AND ") : ""}
       ORDER BY created_at DESC
@@ -92,6 +95,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   // Proteger: solo admin
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 

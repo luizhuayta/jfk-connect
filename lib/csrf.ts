@@ -31,7 +31,23 @@ export function assertSameOrigin(request: NextRequest): NextResponse | null {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!appUrl) {
-    // Si no está configurado, no bloqueamos (mejor loguear que denegar a ciegas).
+    if (process.env.NODE_ENV === "production") {
+      // Fail-closed: sin NEXT_PUBLIC_APP_URL en producción no podemos validar
+      // el origen, así que rechazamos peticiones de navegador (que SIEMPRE
+      // envían Origin o Referer). Peticiones sin ambos headers (clientes
+      // no-navegador) siguen pasando: SameSite=Strict protege la cookie.
+      if (origin || referer) {
+        console.error(
+          "[csrf] NEXT_PUBLIC_APP_URL no está configurado en producción; " +
+            "bloqueando petición con Origin/Referer.",
+        );
+        return NextResponse.json(
+          { ok: false, error: "Petición no permitida." },
+          { status: 403 },
+        );
+      }
+    }
+    // En desarrollo sin config no bloqueamos (mejor loguear que denegar a ciegas).
     return null;
   }
 

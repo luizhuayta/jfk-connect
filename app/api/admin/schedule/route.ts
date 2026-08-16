@@ -10,6 +10,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query, withTransaction } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
+import { assertSameOrigin } from "@/lib/csrf";
+import { parseBody } from "@/lib/validate";
+import { updateScheduleSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +36,7 @@ interface EntryRow {
   time: string;
   subject: string;
   teacher: string | null;
+  teacher_id: string | null;
   room: string | null;
 }
 
@@ -42,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const r = await query<EntryRow>(
-      `SELECT id, grade, section, day, period, time, subject, teacher, room
+      `SELECT id, grade, section, day, period, time, subject, teacher, teacher_id, room
        FROM schedule_entries
        ORDER BY grade, section, day, period`,
     );
@@ -63,24 +67,18 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 
   try {
-    const body = (await request.json()) as { updates?: EntryRow[] };
-    const updates = body.updates ?? [];
+    const [parsed, validationError] = await parseBody(request, updateScheduleSchema);
+    if (validationError) return validationError;
+    const updates = parsed.updates;
     if (updates.length === 0) {
       return NextResponse.json({ ok: true });
-    }
-
-    // Validar campos requeridos
-    for (const u of updates) {
-      if (!u.id || !u.day || !u.time || !u.period) {
-        return NextResponse.json(
-          { ok: false, error: "Faltan datos en una de las actualizaciones." },
-          { status: 400 },
-        );
-      }
     }
 
     // Actualizar en una transacción. Primero movemos cada fila a un slot

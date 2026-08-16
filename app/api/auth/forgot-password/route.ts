@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     logger.error({ err, route: "forgot-password" }, "error inesperado");
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : "Error interno" },
+      { ok: false, error: "Error interno del servidor." },
       { status: 500 },
     );
   }

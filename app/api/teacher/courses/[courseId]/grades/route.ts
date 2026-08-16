@@ -15,6 +15,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne, withTransaction } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { courseBelongsToTeacher } from "@/lib/guards";
+import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { saveGradesSchema } from "@/lib/schemas";
 
@@ -114,6 +115,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [user, denied] = await requireRole(request, ["docente"]);
   if (denied) return denied;
 
@@ -127,15 +131,17 @@ export async function PUT(
   }
 
   try {
-    const body = await request.json();
-    const bimester = Number(body.bimester);
-    if (!Number.isInteger(bimester) || bimester < 1 || bimester > 4) {
+    const [parsed, validationError] = await parseBody(request, saveGradesSchema);
+    if (validationError) return validationError;
+    const { bimester, entries } = parsed;
+    // Igual que la UI (app/teacher/grades/page.tsx): bimestres 3 y 4 aún no
+    // están habilitados para registro.
+    if (bimester === 3 || bimester === 4) {
       return NextResponse.json(
-        { ok: false, error: "Bimestre no válido." },
-        { status: 400 },
+        { ok: false, error: "Este bimestre aún no está disponible para registro." },
+        { status: 403 },
       );
     }
-    const entries: unknown[] = Array.isArray(body.entries) ? body.entries : [];
     if (!entries.length) {
       return NextResponse.json(
         { ok: false, error: "No hay notas para guardar." },
@@ -152,15 +158,7 @@ export async function PUT(
     }
 
     await withTransaction(async (client) => {
-      for (const e of entries) {
-        const entry = e as {
-          studentId?: string;
-          n1?: unknown;
-          n2?: unknown;
-          n3?: unknown;
-          observation?: unknown;
-        };
-        if (!entry.studentId) continue;
+      for (const entry of entries) {
         // Verificar que el alumno pertenece a la sección del curso
         const owns = await client.query(
           `SELECT 1 FROM students WHERE id = $1 AND grade = $2 AND section = $3`,

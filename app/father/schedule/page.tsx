@@ -1,16 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { Fragment } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2 } from "lucide-react";
-
-type Student = {
-  id: string;
-  name: string;
-  grade: string;
-  section: string;
-};
+import { useFatherStudents } from "@/components/father/useFatherStudents";
+import { useCachedFatherResource } from "@/components/father/useCachedFatherResource";
+import ChildSelector from "@/components/father/ChildSelector";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
+import { useIsClient } from "@/lib/useIsClient";
 
 type ScheduleSlot = {
   time: string;
@@ -53,56 +51,44 @@ const DAY_SHORT: Record<string, string> = {
   "Jueves": "Jue", "Viernes": "Vie",
 };
 
-const TODAY_DAY = new Date().toLocaleDateString("es-PE", { weekday: "long" });
-const capitalized = TODAY_DAY.charAt(0).toUpperCase() + TODAY_DAY.slice(1);
+/** Rango horario real de la jornada, derivado de los períodos definidos. */
+const DAY_RANGE = `${PERIODS[0].split(" - ")[0]} – ${PERIODS[PERIODS.length - 1].split(" - ")[1]}`;
+
+const EMPTY_SCHEDULE: Record<string, (ScheduleSlot | null)[]> = {};
 
 export default function SchedulePage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
-  const [scheduleCache, setScheduleCache] = useState<Record<string, Record<string, (ScheduleSlot | null)[]>>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    students,
+    loading,
+    error: studentsError,
+    reload,
+    activeStudentId,
+    activeStudent: student,
+  } = useFatherStudents();
+  // El día actual solo se resalta tras hidratar: calcularlo en el render del
+  // servidor genera un HTML distinto al del cliente (antes se tapaba con
+  // `suppressHydrationWarning`).
+  const isClient = useIsClient();
+  const todayName = isClient
+    ? (() => {
+        const label = new Date().toLocaleDateString("es-PE", { weekday: "long" });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+      })()
+    : null;
 
-  const loadSchedule = useCallback(async (studentId: string) => {
-    try {
-      const r = await fetch(`/api/father/schedule?studentId=${studentId}`);
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setScheduleCache((prev) => ({ ...prev, [studentId]: data.schedule }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error cargando horario");
-    }
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/father/students");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setStudents(data.students);
-        if (data.students.length > 0) {
-          const firstId = data.students[0].id;
-          setActiveStudentId(firstId);
-          await loadSchedule(firstId);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando datos");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [loadSchedule]);
-
-  const handleSelectStudent = (studentId: string) => {
-    setActiveStudentId(studentId);
-    if (!scheduleCache[studentId]) loadSchedule(studentId);
-  };
-
-  const student = students.find((s) => s.id === activeStudentId);
-  const schedule = (activeStudentId && scheduleCache[activeStudentId]) || {};
+  const {
+    data: schedule,
+    error,
+    handleRetry,
+  } = useCachedFatherResource<Record<string, (ScheduleSlot | null)[]>>({
+    activeStudentId,
+    studentsError,
+    reload,
+    endpoint: "/api/father/schedule",
+    field: "schedule",
+    fallback: EMPTY_SCHEDULE,
+    errorMessage: "Error cargando horario",
+  });
 
   // Build unique subjects for the legend
   const subjects = Array.from(
@@ -114,160 +100,134 @@ export default function SchedulePage() {
     ),
   ).sort();
 
-  if (loading) {
-    return (
-      <div className="py-16 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-        <p className="text-sm text-muted-foreground mt-2">Cargando horario...</p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingState label="Cargando horario..." />;
 
-  if (error) {
-    return <div className="py-16 text-center text-red-600 text-sm">{error}</div>;
-  }
+  if (error) return <ErrorState message={error} onRetry={handleRetry} />;
 
   return (
     <div className="space-y-8">
-      {/* Header */}
+      {/* Header — el turno sale del alumno, no está escrito a mano */}
       <div>
-        <h1 className="text-3xl font-bold text-[#1E2A5E]">Horario</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-[#1E2A5E]">Horario</h1>
         <p className="text-muted-foreground mt-1">
-          Turno mañana · 7:45 – 13:20 · Año Lectivo 2026
+          {student?.shift ? `Turno ${student.shift.toLowerCase()} · ` : ""}
+          {DAY_RANGE} · {SCHOOL_YEAR_LABEL}
         </p>
       </div>
 
-      {/* Student Selector */}
-      <div className="flex gap-3 flex-wrap">
-        {students.map((s) => {
-          const initials = s.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-          const isActive = activeStudentId === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => handleSelectStudent(s.id)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all ${
-                isActive
-                  ? "border-[#1E2A5E] bg-[#1E2A5E]/5"
-                  : "border-gray-200 bg-white hover:border-[#1E2A5E]/30"
-              }`}
-            >
-              <Avatar className="h-9 w-9 border border-[#F4C15C]/40">
-                <AvatarFallback className={`text-xs font-semibold ${isActive ? "bg-[#1E2A5E] text-white" : "bg-[#1E2A5E]/10 text-[#1E2A5E]"}`}>
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="text-left">
-                <p className={`text-sm font-semibold ${isActive ? "text-[#1E2A5E]" : "text-[#0F172A]"}`}>
-                  {s.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {s.grade} &quot;{s.section}&quot; · Turno mañana
-                </p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {/* Selector de hijo (selección compartida con el resto del panel) */}
+      <ChildSelector />
 
-      {/* Schedule grid */}
-      <Card className="border-none shadow-sm rounded-xl overflow-hidden">
-        <CardContent className="p-0">
-          {/* Header row */}
-          <div className="grid grid-cols-[120px_repeat(5,1fr)] bg-[#1E2A5E]">
-            <div className="p-3 text-xs font-semibold text-white/60 flex items-center justify-center">
-              Período
-            </div>
-            {DAYS.map((day) => {
-              const isToday = day === capitalized;
-              return (
-                <div
-                  key={day}
-                  className={`relative p-3 text-center text-xs font-bold text-white border-l border-white/10 ${
-                    isToday ? "bg-[#F4C15C]/25 ring-2 ring-[#F4C15C] ring-inset" : ""
-                  }`}
-                >
-                  <span className="hidden sm:block">{day}</span>
-                  <span className="sm:hidden">{DAY_SHORT[day]}</span>
-                  {isToday && (
-                    <span className="block text-[10px] text-[#F4C15C] mt-0.5 font-bold tracking-wide">● HOY</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Recreo divider position — after 3rd period */}
-          {PERIODS.map((period, pi) => (
-            <Fragment key={period}>
-              {pi === 3 && (
-                <div className="grid grid-cols-[120px_repeat(5,1fr)] bg-amber-50 border-y border-amber-200">
-                  <div className="p-2 text-xs font-semibold text-amber-700 flex items-center justify-center">
-                    10:00 – 10:20
+      {students.length > 0 && (
+        <>
+          {/* Schedule grid */}
+          <Card className="border-none shadow-sm rounded-xl overflow-hidden">
+            <CardContent className="p-0 overflow-x-auto">
+              <div className="min-w-[640px]">
+                {/* Header row */}
+                <div className="grid grid-cols-[110px_repeat(5,1fr)] bg-[#1E2A5E]">
+                  <div className="p-3 text-xs font-semibold text-white/80 flex items-center justify-center">
+                    Período
                   </div>
-                  <div className="col-span-5 p-2 flex items-center">
-                    <span className="text-xs font-bold text-amber-700">🔔 Recreo</span>
-                  </div>
-                </div>
-              )}
-              <div className="grid grid-cols-[120px_repeat(5,1fr)] border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                {/* Time */}
-                <div className="p-3 flex items-center justify-center border-r border-gray-100">
-                  <span className="text-xs font-medium text-muted-foreground text-center leading-tight">
-                    {period}
-                  </span>
+                  {DAYS.map((day) => {
+                    const isToday = day === todayName;
+                    return (
+                      <div
+                        key={day}
+                        className={`relative p-3 text-center text-xs font-bold text-white border-l border-white/10 ${
+                          isToday ? "bg-[#F4C15C]/25 ring-2 ring-[#F4C15C] ring-inset" : ""
+                        }`}
+                      >
+                        <span className="hidden sm:block">{day}</span>
+                        <span className="sm:hidden">{DAY_SHORT[day]}</span>
+                        {isToday && (
+                          <span className="block text-[10px] text-[#F4C15C] mt-0.5 font-bold tracking-wide">
+                            ● HOY
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* Cells per day */}
-                {DAYS.map((day) => {
-                  const slot = schedule[day]?.[pi];
-                  const isToday = day === capitalized;
-                  return (
-                    <div
-                      key={day}
-                      className={`relative p-1.5 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.04]" : ""}`}
-                    >
-                      {isToday && (
-                        <span className="absolute inset-y-0 left-0 w-0.5 bg-[#F4C15C]" />
-                      )}
-                      {slot ? (
-                        <div
-                          className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${subjectStyle(slot.subject)} ${isToday ? "shadow-sm" : ""}`}
-                        >
-                          <p className="text-xs font-bold leading-tight">{slot.subject}</p>
-                          <p className="text-[10px] opacity-70 leading-tight hidden sm:block">{slot.teacher}</p>
-                          <p className="text-[10px] opacity-60 leading-tight hidden md:block">{slot.room}</p>
+                {/* Recreo divider position — after 3rd period */}
+                {PERIODS.map((period, pi) => (
+                  <Fragment key={period}>
+                    {pi === 3 && (
+                      <div className="grid grid-cols-[110px_repeat(5,1fr)] bg-amber-50 border-y border-amber-200">
+                        <div className="p-2 text-xs font-semibold text-amber-700 flex items-center justify-center">
+                          10:00 – 10:20
                         </div>
-                      ) : (
-                        <div className="rounded-lg border border-dashed border-gray-200 p-2 h-full flex items-center justify-center min-h-[52px]">
-                          <span className="text-[10px] text-muted-foreground">—</span>
+                        <div className="col-span-5 p-2 flex items-center">
+                          <span className="text-xs font-bold text-amber-700">Recreo</span>
                         </div>
-                      )}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-[110px_repeat(5,1fr)] border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                      {/* Time */}
+                      <div className="p-3 flex items-center justify-center border-r border-gray-100">
+                        <span className="text-xs font-medium text-muted-foreground text-center leading-tight">
+                          {period}
+                        </span>
+                      </div>
+
+                      {/* Cells per day */}
+                      {DAYS.map((day) => {
+                        const slot = schedule[day]?.[pi];
+                        const isToday = day === todayName;
+                        return (
+                          <div
+                            key={day}
+                            className={`relative p-1.5 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.04]" : ""}`}
+                          >
+                            {isToday && (
+                              <span className="absolute inset-y-0 left-0 w-0.5 bg-[#F4C15C]" />
+                            )}
+                            {slot ? (
+                              <div
+                                className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${subjectStyle(slot.subject)} ${isToday ? "shadow-sm" : ""}`}
+                              >
+                                <p className="text-xs font-bold leading-tight">{slot.subject}</p>
+                                <p className="text-[10px] opacity-80 leading-tight">{slot.teacher}</p>
+                                <p className="text-[10px] opacity-70 leading-tight hidden md:block">
+                                  {slot.room}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-dashed border-gray-200 p-2 h-full flex items-center justify-center min-h-[52px]">
+                                <span className="text-[10px] text-muted-foreground">—</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </Fragment>
+                ))}
               </div>
-            </Fragment>
-          ))}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {/* Legend */}
-      <div className="space-y-3">
-        <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">
-          Cursos de {student?.name}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {subjects.map((sub) => (
-            <span
-              key={sub}
-              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${subjectStyle(sub)}`}
-            >
-              {sub}
-            </span>
-          ))}
-        </div>
-      </div>
+          {/* Legend */}
+          {subjects.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">
+                {student ? `Cursos de ${student.name}` : "Cursos"}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {subjects.map((sub) => (
+                  <span
+                    key={sub}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${subjectStyle(sub)}`}
+                  >
+                    {sub}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

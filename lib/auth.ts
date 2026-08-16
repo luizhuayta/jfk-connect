@@ -4,8 +4,8 @@
  * Ahora lee la sesión de una cookie httpOnly con JWT firmado (lib/session.ts),
  * en lugar del header `X-User-Id` que era spoofeable.
  *
- * Mantiene compatibilidad con el header `X-User-Id` legacy solo en desarrollo
- * para no romper tests existentes, pero la fuente principal es la cookie.
+ * El header legacy `X-User-Id` solo se acepta con `ALLOW_LEGACY_AUTH=1`
+ * (tests/desarrollo); por defecto la única fuente de identidad es la cookie.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -45,8 +45,11 @@ export async function getAuthUser(
     if (payload) userId = payload.sub;
   }
 
-  // 2. Fallback legacy (solo desarrollo): header X-User-Id o query userId
-  if (!userId && process.env.NODE_ENV !== "production") {
+  // 2. Fallback legacy (SOLO con ALLOW_LEGACY_AUTH=1): header X-User-Id o
+  //    query userId. Antes bastaba con NODE_ENV !== "production", lo que dejaba
+  //    el backdoor abierto en cualquier deploy mal configurado. Ahora requiere
+  //    un opt-in explícito pensado para tests/desarrollo.
+  if (!userId && process.env.ALLOW_LEGACY_AUTH === "1") {
     const { searchParams } = new URL(request.url);
     userId =
       request.headers.get("x-user-id") ?? searchParams.get("userId") ?? null;

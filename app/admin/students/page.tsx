@@ -12,6 +12,8 @@ import {
   GraduationCap, Users, TrendingUp, Search, Plus, MoreHorizontal, Phone, AlertTriangle, Loader2,
   Eye, UserX, X, CheckCircle2, RefreshCw,
 } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
@@ -21,24 +23,27 @@ type Student = {
   id: string; name: string; initials: string; dni: string;
   grade: string; section: string; shift: string;
   parent_name: string | null; parent_phone: string | null;
-  avg_grade: number; attendance_rate: number; status: string;
+  avg_grade: number | null; attendance_rate: number | null; status: string;
 };
-type Section = { id: string; grade: string; section: string; studentsTotal: number; avgGrade: number; attendanceRate: number };
+type Section = { id: string; grade: string; section: string; studentsTotal: number; avgGrade: number | null; attendanceRate: number | null };
 
 const GRADES = ["1ro", "2do", "3ro", "4to", "5to"];
 
-function levelBadge(avg: number) {
+function levelBadge(avg: number | null) {
+  if (avg === null) return { label: "—", cls: "bg-gray-100 text-gray-500" };
   if (avg >= 18) return { label: "AD", cls: "bg-emerald-100 text-emerald-700" };
   if (avg >= 14) return { label: "A",  cls: "bg-blue-100 text-blue-700" };
   if (avg >= 11) return { label: "B",  cls: "bg-amber-100 text-amber-700" };
   return              { label: "C",  cls: "bg-red-100 text-red-600" };
 }
-function avgColor(avg: number) {
+function avgColor(avg: number | null) {
+  if (avg === null) return "text-gray-400";
   if (avg >= 14) return "text-emerald-600 font-bold";
   if (avg >= 11) return "text-[#0F172A] font-semibold";
   return "text-red-500 font-bold";
 }
-function attendanceColor(pct: number) {
+function attendanceColor(pct: number | null) {
+  if (pct === null) return "text-gray-400";
   if (pct >= 90) return "text-emerald-600";
   if (pct >= 75) return "text-amber-600";
   return "text-red-500";
@@ -107,14 +112,15 @@ export default function AdminStudentsPage() {
   }, [query]);
 
   const totalStudents = pagination.total;
-  const sectionsWithAvg = sections.filter((s) => s.avgGrade > 0);
+  const sectionsWithAvg = sections.filter((s): s is Section & { avgGrade: number } => s.avgGrade !== null);
   const globalAvg = sectionsWithAvg.length
     ? sectionsWithAvg.reduce((s, sec) => s + sec.avgGrade, 0) / sectionsWithAvg.length
     : 0;
-  const globalAttendance = sections.length
-    ? Math.round(sections.reduce((s, sec) => s + sec.attendanceRate, 0) / sections.length)
+  const sectionsWithAttendance = sections.filter((s): s is Section & { attendanceRate: number } => s.attendanceRate !== null);
+  const globalAttendance = sectionsWithAttendance.length
+    ? Math.round(sectionsWithAttendance.reduce((s, sec) => s + sec.attendanceRate, 0) / sectionsWithAttendance.length)
     : 0;
-  const atRisk = students.filter((s) => s.avg_grade < 11 || s.attendance_rate < 80).length;
+  const atRisk = students.filter((s) => (s.avg_grade !== null && s.avg_grade < 11) || (s.attendance_rate !== null && s.attendance_rate < 80)).length;
 
   const availableSections = useMemo(() => {
     return sections
@@ -182,9 +188,9 @@ export default function AdminStudentsPage() {
   }
 
   if (loading) {
-    return <div className="py-16 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando alumnos...</p></div>;
+    return <LoadingState label="Cargando alumnos..." />;
   }
-  if (error) { return <div className="py-16 text-center text-red-600 text-sm">{error}</div>; }
+  if (error) { return <ErrorState message={error} onRetry={() => loadStudents(page)} />; }
 
   return (
     <div className="space-y-8">
@@ -263,7 +269,7 @@ export default function AdminStudentsPage() {
             <TableBody>
               {students.map((st, idx) => {
                 const level = levelBadge(st.avg_grade);
-                const isAtRisk = st.avg_grade < 11 || st.attendance_rate < 80;
+                const isAtRisk = (st.avg_grade !== null && st.avg_grade < 11) || (st.attendance_rate !== null && st.attendance_rate < 80);
                 const rowNum = (page - 1) * 50 + idx + 1;
                 return (
                   <TableRow key={st.id} className={`hover:bg-gray-50/50 transition-colors ${isAtRisk ? "bg-red-50/20" : ""}`}>
@@ -286,9 +292,9 @@ export default function AdminStudentsPage() {
                         {st.parent_phone && <span className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5"><Phone className="h-2.5 w-2.5" />{st.parent_phone}</span>}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center"><span className={`text-sm ${avgColor(st.avg_grade)}`}>{st.avg_grade.toFixed(1)}</span></TableCell>
+                    <TableCell className="text-center"><span className={`text-sm ${avgColor(st.avg_grade)}`}>{st.avg_grade !== null ? st.avg_grade.toFixed(1) : "—"}</span></TableCell>
                     <TableCell className="text-center hidden sm:table-cell"><Badge className={`text-[11px] font-bold border-0 ${level.cls} hover:opacity-90`}>{level.label}</Badge></TableCell>
-                    <TableCell className="text-center hidden lg:table-cell"><span className={`text-sm font-semibold ${attendanceColor(st.attendance_rate)}`}>{st.attendance_rate}%</span></TableCell>
+                    <TableCell className="text-center hidden lg:table-cell"><span className={`text-sm font-semibold ${attendanceColor(st.attendance_rate)}`}>{st.attendance_rate !== null ? `${st.attendance_rate}%` : "—"}</span></TableCell>
                     <TableCell className="text-center">
                       {st.status === "activo" ? <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Activo</span>
                         : st.status === "retirado" ? <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">Retirado</span>
@@ -472,8 +478,8 @@ export default function AdminStudentsPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Grado / Sección</p><p className="font-semibold text-[#0F172A] mt-0.5">{detail.grade} &quot;{detail.section}&quot; · {detail.shift}</p></div>
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Estado</p><p className="font-semibold text-[#0F172A] mt-0.5 capitalize">{detail.status}</p></div>
-              <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Promedio</p><p className={`mt-0.5 ${avgColor(detail.avg_grade)}`}>{detail.avg_grade.toFixed(1)}</p></div>
-              <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Asistencia</p><p className={`mt-0.5 font-semibold ${attendanceColor(detail.attendance_rate)}`}>{detail.attendance_rate}%</p></div>
+              <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Promedio</p><p className={`mt-0.5 ${avgColor(detail.avg_grade)}`}>{detail.avg_grade !== null ? detail.avg_grade.toFixed(1) : "—"}</p></div>
+              <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Asistencia</p><p className={`mt-0.5 font-semibold ${attendanceColor(detail.attendance_rate)}`}>{detail.attendance_rate !== null ? `${detail.attendance_rate}%` : "—"}</p></div>
               <div className="rounded-xl bg-gray-50 p-3 col-span-2"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Apoderado</p><p className="font-semibold text-[#0F172A] mt-0.5">{detail.parent_name ?? "Sin apoderado vinculado"}{detail.parent_phone ? ` · ${detail.parent_phone}` : ""}</p></div>
             </div>
             <Button variant="outline" onClick={() => setDetail(null)} className="w-full">Cerrar</Button>

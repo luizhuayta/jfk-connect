@@ -9,18 +9,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
-
-type TeacherCourse = {
-  id: string;
-  subject: string;
-  grade: string;
-  section: string;
-  studentsTotal: number;
-  avgGrade: number;
-  attendanceRate: number;
-  currentBimester: number;
-  bimesters: Record<string, { hasData: boolean; inProgress: boolean }>;
-};
+import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
 
 type ScheduleSlot = {
   time: string;
@@ -51,12 +40,14 @@ const ICON_COLORS = {
 };
 
 // ─── Indicador de color condicional para bordes ──────────────────────────────
-function rateBorderColor(rate: number): string {
+function rateBorderColor(rate: number | null): string {
+  if (rate === null) return "border-l-gray-300";
   if (rate >= 90) return "border-l-emerald-500";
   if (rate >= 75) return "border-l-amber-500";
   return "border-l-red-500";
 }
-function gradeBorderColor(grade: number): string {
+function gradeBorderColor(grade: number | null): string {
+  if (grade === null) return "border-l-gray-300";
   if (grade >= 15) return "border-l-emerald-500";
   if (grade >= 11) return "border-l-amber-500";
   return "border-l-red-500";
@@ -71,22 +62,10 @@ function getGreeting(): string {
 
 export default function TeacherPage() {
   const router = useRouter();
-  const [courses, setCourses] = useState<TeacherCourse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { courses, loading, error: coursesError } = useTeacherCourses();
   const [todaySlots, setTodaySlots] = useState<(ScheduleSlot | null)[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch("/api/teacher/courses");
-        const data = await r.json();
-        if (data.ok) setCourses(data.courses);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const [error, setError] = useState<string | null>(null);
 
   // Horario real del docente: extraer solo las clases de hoy
   useEffect(() => {
@@ -98,7 +77,11 @@ export default function TeacherPage() {
           const dayName = new Date().toLocaleDateString("es-PE", { weekday: "long" });
           const cap = dayName.charAt(0).toUpperCase() + dayName.slice(1);
           setTodaySlots(data.schedule?.[cap] ?? []);
+        } else {
+          setError((prev) => prev ?? data.error ?? "Error cargando horario");
         }
+      } catch (err) {
+        setError((prev) => prev ?? (err instanceof Error ? err.message : "Error cargando horario"));
       } finally {
         setScheduleLoading(false);
       }
@@ -106,12 +89,14 @@ export default function TeacherPage() {
   }, []);
 
   const totalStudents = courses.reduce((s, c) => s + c.studentsTotal, 0);
-  const avgGrade = courses.length
-    ? courses.reduce((s, c) => s + c.avgGrade, 0) / courses.length
-    : 0;
-  const attendance = courses.length
-    ? Math.round(courses.reduce((s, c) => s + c.attendanceRate, 0) / courses.length)
-    : 0;
+  const coursesWithAvg = courses.filter((c): c is TeacherCourse & { avgGrade: number } => c.avgGrade !== null);
+  const avgGrade = coursesWithAvg.length
+    ? coursesWithAvg.reduce((s, c) => s + c.avgGrade, 0) / coursesWithAvg.length
+    : null;
+  const coursesWithAttendance = courses.filter((c): c is TeacherCourse & { attendanceRate: number } => c.attendanceRate !== null);
+  const attendance = coursesWithAttendance.length
+    ? Math.round(coursesWithAttendance.reduce((s, c) => s + c.attendanceRate, 0) / coursesWithAttendance.length)
+    : null;
   const avgLetter = letterGrade(avgGrade);
 
   // ─── Pendientes de hoy (derivados de los datos ya cargados) ────────────────
@@ -147,6 +132,13 @@ export default function TeacherPage() {
           Aquí tienes el resumen de tu actividad docente.
         </p>
       </div>
+
+      {(error || coursesError) && (
+        <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5">
+          <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+          <p className="text-xs text-red-700">{error || coursesError}</p>
+        </div>
+      )}
 
       {/* Stats — 4 tarjetas con indicador de color en borde izquierdo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -199,7 +191,7 @@ export default function TeacherPage() {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             ) : (
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-[#0F172A]">{avgGrade.toFixed(1)}</p>
+                <p className="text-3xl font-bold text-[#0F172A]">{avgGrade !== null ? avgGrade.toFixed(1) : "—"}</p>
                 {avgLetter && (
                   <Badge className={`text-xs font-bold ${letterGradeColor(avgLetter)}`}>
                     {avgLetter}
@@ -224,10 +216,12 @@ export default function TeacherPage() {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             ) : (
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-[#0F172A]">{attendance}%</p>
-                <span className={`text-xs font-bold ${attendance >= 90 ? "text-emerald-600" : attendance >= 75 ? "text-amber-600" : "text-red-500"}`}>
-                  {attendance >= 90 ? "Óptima" : attendance >= 75 ? "Regular" : "Crítica"}
-                </span>
+                <p className="text-3xl font-bold text-[#0F172A]">{attendance !== null ? `${attendance}%` : "—"}</p>
+                {attendance !== null && (
+                  <span className={`text-xs font-bold ${attendance >= 90 ? "text-emerald-600" : attendance >= 75 ? "text-amber-600" : "text-red-500"}`}>
+                    {attendance >= 90 ? "Óptima" : attendance >= 75 ? "Regular" : "Crítica"}
+                  </span>
+                )}
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">Promedio de mis cursos</p>

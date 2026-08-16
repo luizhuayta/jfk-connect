@@ -7,50 +7,30 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { Search, Bell, User, Settings, HelpCircle, LogOut, ChevronDown, Menu } from "lucide-react";
 import Image from "next/image";
-
-interface SessionUser {
-  id: string;
-  email: string;
-  full_name: string;
-  role: string;
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
-function getRoleLabel(role: string): string {
-  if (role === "docente") return "Docente";
-  if (role === "admin") return "Administrador";
-  if (role === "padre") return "Padre/Apoderado";
-  return role;
-}
+import { useSessionUser } from "@/lib/useSessionUser";
+import { getInitials, getRoleLabel } from "@/lib/format";
 
 export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<SessionUser | null>(null);
+  const { user } = useSessionUser();
   const [open, setOpen] = useState(false);
+  const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Cargar usuario desde la cookie httpOnly via /api/auth/me
+  // Contador de avisos no leídos para el badge de la campana
   useEffect(() => {
-    fetch("/api/auth/me")
+    fetch("/api/announcements")
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok) {
-          setUser(data.user);
-        } else {
-          router.push("/login");
+        if (data.ok && Array.isArray(data.announcements)) {
+          setUnreadAnnouncements(
+            data.announcements.filter((a: { read: boolean }) => !a.read).length,
+          );
         }
       })
-      .catch(() => router.push("/login"));
-  }, [router]);
+      .catch(() => {});
+  }, [pathname]);
 
   // Cerrar con click fuera y con Escape
   useEffect(() => {
@@ -85,7 +65,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
     ? "Buscar usuarios, cursos, notas..."
     : isTeacher
     ? "Buscar alumno, curso..."
-    : "Buscar...";
+    : "Buscar alumno, curso, aviso...";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6">
@@ -115,7 +95,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
             CIJK
           </span>
           <span className="text-[10px] text-muted-foreground">
-            {isAdmin ? "Panel Admin" : "Kennedy"}
+            {isAdmin ? "Panel Admin" : isTeacher ? "Panel Docente" : "Panel de Padres"}
           </span>
         </div>
       </div>
@@ -133,11 +113,16 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
 
       {/* Right: Notifications + User */}
       <div className="flex items-center gap-4">
-        <button className="relative p-2 rounded-full hover:bg-gray-50 transition-colors">
+        <button
+          className="relative p-2 rounded-full hover:bg-gray-50 transition-colors"
+          aria-label={unreadAnnouncements > 0 ? `${unreadAnnouncements} avisos sin leer` : "Avisos"}
+        >
           <Bell className="h-5 w-5 text-[#1E2A5E]" />
-          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-            3
-          </span>
+          {unreadAnnouncements > 0 && (
+            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+              {unreadAnnouncements > 9 ? "9+" : unreadAnnouncements}
+            </span>
+          )}
         </button>
 
         <div className="hidden sm:flex items-center gap-3 pl-4 border-l border-gray-100">
@@ -188,13 +173,13 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                   </Avatar>
                   <div className="min-w-0 leading-tight">
                     <p className="truncate text-sm font-semibold text-[#0F172A]">
-                      {user?.full_name ?? "Administrador"}
+                      {user?.full_name ?? "Usuario"}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {user ? getRoleLabel(user.role) : "Administrador"}
+                      {user ? getRoleLabel(user.role) : ""}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {user?.email ?? "admin@ijfk.edu.pe"}
+                      {user?.email ?? ""}
                     </p>
                   </div>
                 </div>

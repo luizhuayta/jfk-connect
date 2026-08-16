@@ -35,6 +35,14 @@ ENV NEXT_BUILD_ID=$NEXT_BUILD_ID
 ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
+# lib/session.ts lee JWT_SECRET a nivel de módulo (falla rápido si falta en
+# producción). Con NODE_ENV=production ya seteado arriba, "next build" importa
+# las rutas API durante "Collecting page data" y necesita este valor para no
+# reventar el build. El valor real de runtime lo pone docker-compose vía
+# environment:, este solo evita que el build falle.
+ARG JWT_SECRET
+ENV JWT_SECRET=$JWT_SECRET
+
 # Build de Next.js (en v16 usa Turbopack por defecto)
 RUN npm run build
 

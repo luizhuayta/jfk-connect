@@ -228,20 +228,25 @@ ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 
--- Política permisiva para usuarios autenticados (ajustar según necesidad)
+-- Política permisiva para usuarios autenticados (ajustar según necesidad).
+-- OJO: el rol 'authenticated' solo existe en Supabase Cloud; en el Postgres
+-- local (Docker) no existe, así que solo se crean las políticas si el rol está.
+-- Sin este guard, `initdb.d` aborta aquí y no aplica las migraciones 001-006.
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOR t IN SELECT unnest(ARRAY['users','students','courses','grades','attendance','enrollments','announcements']) LOOP
-    EXECUTE format('
-      DROP POLICY IF EXISTS "Allow authenticated full access" ON %I;
-      CREATE POLICY "Allow authenticated full access" ON %I
-        FOR ALL
-        TO authenticated
-        USING (true)
-        WITH CHECK (true);
-    ', t, t);
-  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    FOR t IN SELECT unnest(ARRAY['users','students','courses','grades','attendance','enrollments','announcements']) LOOP
+      EXECUTE format('
+        DROP POLICY IF EXISTS "Allow authenticated full access" ON %I;
+        CREATE POLICY "Allow authenticated full access" ON %I
+          FOR ALL
+          TO authenticated
+          USING (true)
+          WITH CHECK (true);
+      ', t, t);
+    END LOOP;
+  END IF;
 END $$;
 
 -- =============================================================================

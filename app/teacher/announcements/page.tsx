@@ -3,7 +3,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bell, AlertTriangle, Info, Megaphone, BookOpen, ChevronDown, CalendarDays, Loader2 } from "lucide-react";
+import { Bell, AlertTriangle, Info, Megaphone, BookOpen, ChevronDown, CalendarDays } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 
 type AnnouncementCategory = "urgente" | "importante" | "general" | "informativo";
 
@@ -29,7 +31,10 @@ const CAT_META: Record<AnnouncementCategory, {
 };
 
 function fmtDate(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("es-PE", {
+  // El API devuelve "YYYY-MM-DDT12:00:00" (mediodía local). Si por
+  // compatibilidad llegara una fecha pelada, se normaliza a mediodía.
+  const d = iso.includes("T") ? new Date(iso) : new Date(iso + "T12:00:00");
+  return d.toLocaleDateString("es-PE", {
     weekday: "short", day: "numeric", month: "short",
   });
 }
@@ -42,21 +47,25 @@ export default function TeacherAnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/announcements");
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error);
+      setAnnouncements(data.announcements);
+      setReadIds(new Set(data.announcements.filter((a: Announcement) => a.read).map((a: Announcement) => a.id)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error cargando avisos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/announcements");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setAnnouncements(data.announcements);
-        setReadIds(new Set(data.announcements.filter((a: Announcement) => a.read).map((a: Announcement) => a.id)));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando avisos");
-      } finally {
-        setLoading(false);
-      }
+      await load();
     })();
   }, []);
 
@@ -81,19 +90,16 @@ export default function TeacherAnnouncementsPage() {
       return next;
     });
     setReadIds((prev) => new Set([...prev, id]));
+    // Persistir la lectura por usuario (fire-and-forget); el badge del sidebar lo refleja.
+    fetch(`/api/announcements/${id}/read`, { method: "PATCH" }).catch(() => {});
   }
 
   if (loading) {
-    return (
-      <div className="py-16 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-        <p className="text-sm text-muted-foreground mt-2">Cargando avisos...</p>
-      </div>
-    );
+    return <LoadingState label="Cargando avisos..." />;
   }
 
   if (error) {
-    return <div className="py-16 text-center text-red-600 text-sm">{error}</div>;
+    return <ErrorState message={error} onRetry={load} />;
   }
 
   return (

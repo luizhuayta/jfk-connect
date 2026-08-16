@@ -43,10 +43,10 @@ export async function GET(request: NextRequest) {
        GROUP BY c.id`,
     );
 
-    const stats: Record<string, { pct: number; faltas: number; sesiones: number }> = {};
+    const stats: Record<string, { pct: number | null; faltas: number; sesiones: number }> = {};
     for (const r of rows) {
       stats[r.course_id] = {
-        pct: r.total ? Math.round((r.asistencias / r.total) * 100) : 100,
+        pct: r.total ? Math.round((r.asistencias / r.total) * 100) : null,
         faltas: r.faltas,
         sesiones: r.sesiones,
       };

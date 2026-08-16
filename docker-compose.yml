@@ -38,6 +38,9 @@ services:
       args:
         NEXT_BUILD_ID: ${NEXT_BUILD_ID:-local}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        # Necesario en build-time: lib/session.ts valida JWT_SECRET al importarse
+        # y "next build" importa las rutas API al recolectar datos de página.
+        JWT_SECRET: ${JWT_SECRET:-ijfk_dev_jwt_secret_32_chars_min_xxxxxx}
     image: ijfk-app:latest
     container_name: ijfk-app
     restart: unless-stopped
@@ -65,6 +68,13 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-IJFK Sistema Institucional}
       # --- Seguridad ---
       NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
+      # Define JWT_SECRET con >=32 chars aleatorios en producción (firma de la
+      # cookie de sesión). Sin él, la app falla cerrada a propósito.
+      JWT_SECRET: ${JWT_SECRET:-}
+      # Pon TRUST_PROXY=1 SOLO si la app va detrás de un reverse proxy de
+      # confianza (Nginx/Traefik/Vercel) que sobrescribe X-Forwarded-For.
+      # Sin proxy, dejar en 0 para que los rate limits no sean evadibles.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
       # --- Sentry (SaaS - free tier en sentry.io) ---
       # Para activar el monitoreo:
       #   1. Crea un proyecto JS/Next en https://sentry.io
@@ -89,7 +99,10 @@ services:
     networks:
       - ijfk-net
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      # 127.0.0.1 (IPv4) en vez de "localhost": wget resuelve localhost a ::1
+      # (IPv6) y la app escucha en 0.0.0.0 (IPv4), así que el check fallaba con
+      # "Connection refused" aunque la app respondía bien.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 30s
       timeout: 5s
       retries: 3

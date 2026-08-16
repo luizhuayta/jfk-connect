@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileText, FileImage, Presentation, Sheet, UploadCloud, Search, BookOpen, Filter, Loader2, Trash2, X, Upload } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
 
 type Material = {
   id: string;
@@ -14,13 +17,6 @@ type Material = {
   size: string;
   uploadedAt: string;
   topic: string;
-};
-
-type TeacherCourse = {
-  id: string;
-  subject: string;
-  grade: string;
-  section: string;
 };
 
 const TYPE_META: Record<Material["type"], { label: string; icon: typeof FileText; bg: string; text: string; border: string }> = {
@@ -38,50 +34,58 @@ function fmtDate(iso: string) {
 }
 
 export default function MaterialsPage() {
-  const [courses, setCourses] = useState<TeacherCourse[]>([]);
+  const { courses, loading, error: coursesError, reload } = useTeacherCourses();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string>("all");
   const [activeTopic, setActiveTopic] = useState<string>("all");
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [materialsLoading, setMaterialsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [form, setForm] = useState({ courseId: "", title: "", type: "pdf" as Material["type"], size: "", topic: "" });
   const [isDragging, setIsDragging] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
 
-  const loadMaterials = async (courseList: TeacherCourse[]) => {
-    const results = await Promise.all(
-      courseList.map(async (c) => {
-        const r = await fetch(`/api/teacher/courses/${c.id}/materials`);
-        const data = await r.json();
-        return data.ok ? (data.materials as Material[]) : [];
-      }),
-    );
-    setMaterials(results.flat());
-  };
+  const loadMaterials = useCallback(async (courseList: TeacherCourse[]) => {
+    setMaterialsLoading(true);
+    try {
+      const results = await Promise.all(
+        courseList.map(async (c) => {
+          const r = await fetch(`/api/teacher/courses/${c.id}/materials`);
+          const data = await r.json();
+          return data.ok ? (data.materials as Material[]) : [];
+        }),
+      );
+      setMaterials(results.flat());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error cargando materiales");
+    } finally {
+      setMaterialsLoading(false);
+    }
+  }, []);
 
+  // Carga los materiales una sola vez, apenas la lista de cursos esté lista
+  // (incluye el caso de un docente sin cursos, para no quedar cargando para siempre).
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/teacher/courses");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setCourses(data.courses);
-        if (data.courses.length > 0) {
-          setForm((f) => ({ ...f, courseId: data.courses[0].id }));
-          await loadMaterials(data.courses);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando materiales");
-      } finally {
-        setLoading(false);
+      if (initializedRef.current || loading) return;
+      initializedRef.current = true;
+      if (courses.length > 0) {
+        setForm((f) => ({ ...f, courseId: courses[0].id }));
+        await loadMaterials(courses);
+      } else {
+        setMaterialsLoading(false);
       }
     })();
-  }, []);
+  }, [courses, loading, loadMaterials]);
+
+  const retry = useCallback(async () => {
+    setError(null);
+    await reload();
+    initializedRef.current = false;
+  }, [reload]);
 
   const filtered = useMemo(() => {
     return materials.filter((m) => {
@@ -143,17 +147,12 @@ export default function MaterialsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="py-16 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" />
-        <p className="text-sm text-muted-foreground mt-2">Cargando materiales...</p>
-      </div>
-    );
+  if (loading || materialsLoading) {
+    return <LoadingState label="Cargando materiales..." />;
   }
 
-  if (error) {
-    return <div className="py-16 text-center text-red-600 text-sm">{error}</div>;
+  if (error || coursesError) {
+    return <ErrorState message={error ?? coursesError ?? ""} onRetry={retry} />;
   }
 
   return (
@@ -283,7 +282,7 @@ export default function MaterialsPage() {
                       {m.title}
                     </p>
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                      <Badge className={`text-[10px] font-bold px-1.5 py-0.5 border-0 ${meta.bg} ${meta.text} hover:${meta.bg}`}>
+                      <Badge className={`text-[10px] font-bold px-1.5 py-0.5 border-0 ${meta.bg} ${meta.text}`}>
                         {meta.label}
                       </Badge>
                       {m.size && <span className="text-[10px] text-muted-foreground">{m.size}</span>}

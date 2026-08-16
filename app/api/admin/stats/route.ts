@@ -28,16 +28,16 @@ export async function GET(request: NextRequest) {
       students: number;
       teachers: number;
       parents: number;
-      attendance_rate: number;
+      attendance_rate: number | null;
     }>(
       `SELECT
          (SELECT COUNT(*) FROM students WHERE status = 'activo')::int AS students,
          (SELECT COUNT(*) FROM users WHERE role = 'docente' AND is_active)::int AS teachers,
          (SELECT COUNT(*) FROM users WHERE role = 'padre' AND is_active)::int AS parents,
-         COALESCE((
+         (
            SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
            FROM attendance
-         ), 100)::int AS attendance_rate`,
+         )::int AS attendance_rate`,
     );
 
     // Asistencia por día (últimas 6 fechas con registros)

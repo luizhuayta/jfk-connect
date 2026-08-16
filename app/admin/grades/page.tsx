@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BarChart3, Users, TrendingUp, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { BarChart3, Users, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 
 type BimesterStat = { avg: number; approved: number; failed: number; total: number; hasData: boolean; inProgress: boolean };
 type AdminCourse = {
   id: string; subject: string; grade: string; section: string; shift: string;
-  room: string; studentsTotal: number; avgGrade: number; currentBimester: number; bimesters: Record<string, BimesterStat>;
+  room: string; studentsTotal: number; avgGrade: number | null; currentBimester: number; bimesters: Record<string, BimesterStat>;
 };
 type Student = { id: string; name: string; initials: string; order: number };
 type GradeRow = { studentId: string; n1: number; n2: number; n3: number; observation: string };
@@ -50,7 +52,7 @@ export default function AdminGradesPage() {
   const [loadingGrid, setLoadingGrid] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadGrid = async (courseId: string, bimester: string) => {
+  const loadGrid = useCallback(async (courseId: string, bimester: string) => {
     setLoadingGrid(true);
     try {
       const [stRes, grRes] = await Promise.all([
@@ -68,28 +70,33 @@ export default function AdminGradesPage() {
     } finally {
       setLoadingGrid(false);
     }
-  };
+  }, []);
+
+  const loadCourses = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/admin/courses");
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error);
+      setCourses(data.courses);
+      if (data.courses.length > 0) {
+        const firstId = data.courses[0].id;
+        setActiveCourseId(firstId);
+        await loadGrid(firstId, "1");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }, [loadGrid]);
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/admin/courses");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setCourses(data.courses);
-        if (data.courses.length > 0) {
-          const firstId = data.courses[0].id;
-          setActiveCourseId(firstId);
-          await loadGrid(firstId, "1");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error");
-      } finally {
-        setLoading(false);
-      }
+      await loadCourses();
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleCourse(id: string) { setActiveCourseId(id); loadGrid(id, activeBimester); }
@@ -119,8 +126,8 @@ export default function AdminGradesPage() {
     return { course: c, b1avg: b1?.avg ?? null, b2avg: b2?.avg ?? null };
   });
 
-  if (loading) { return <div className="py-16 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando notas...</p></div>; }
-  if (error) { return <div className="py-16 text-center text-red-600 text-sm">{error}</div>; }
+  if (loading) { return <LoadingState label="Cargando notas..." />; }
+  if (error) { return <ErrorState message={error} onRetry={loadCourses} />; }
 
   return (
     <div className="space-y-8">
@@ -200,7 +207,7 @@ export default function AdminGradesPage() {
       <Card className="border-none shadow-sm rounded-xl overflow-hidden">
         <CardContent className="p-0">
           {loadingGrid ? (
-            <div className="py-14 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando...</p></div>
+            <LoadingState label="Cargando..." className="py-14" />
           ) : (!hasData && !inProgress) ? (
             <div className="py-14 text-center text-muted-foreground"><BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm">Este bimestre aún no tiene notas registradas</p></div>
           ) : (

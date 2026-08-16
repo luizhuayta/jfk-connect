@@ -50,9 +50,9 @@ export async function GET(request: NextRequest) {
     const r = await query<SlotRow>(
       `SELECT day, period, time, subject, grade, section, room
        FROM schedule_entries
-       WHERE teacher = $1
+       WHERE teacher_id = $1
        ORDER BY day, period`,
-      [user.full_name],
+      [user.id],
     );
 
     const schedule: Record<string, (TeacherSlot | null)[]> = {};

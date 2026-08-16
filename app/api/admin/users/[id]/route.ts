@@ -13,6 +13,7 @@ import { query } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
 import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
+import { assertSameOrigin } from "@/lib/csrf";
 import { updateUserSchema } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
 
@@ -24,6 +25,9 @@ interface Params {
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   // Proteger: solo admin
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [admin, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 
@@ -113,6 +117,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
 export async function DELETE(request: NextRequest, { params }: Params) {
   // Proteger: solo admin
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [admin, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 

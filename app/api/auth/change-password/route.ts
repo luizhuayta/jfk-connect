@@ -1,24 +1,36 @@
 /**
  * POST /api/auth/change-password
  *
- * Cambia la contraseña del usuario (requiere estar autenticado).
+ * Cambia la contraseña del usuario AUTENTICADO (la sesión de la cookie es la
+ * única fuente de identidad; el `userId` del body se ignora por completo).
  * Si la contraseña actual coincide, marca must_change_password = false.
  *
  * Body esperado:
- *   { userId, currentPassword, newPassword }
+ *   { currentPassword, newPassword }
  *
  * Seguridad:
  *  - Usa scrypt (lib/password.ts).
- *  - Eliminado el backdoor "admin" para usuarios seed sin hash.
- *  - Valida la sesión contra la BD (el userId debe existir y estar activo).
+ *  - ANTES se confiaba en `userId` del body y no se verificaba sesión: cualquiera
+ *    podía apuntar a otro usuario y usar el endpoint sin rate limit como oráculo
+ *    de fuerza bruta. Ahora requireUser valida la sesión contra la BD.
+ *  - Rate limiting por usuario y por IP.
+ *  - Mensajes de error genéricos.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { query } from "@/lib/db";
-import { queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
+import { assertSameOrigin } from "@/lib/csrf";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { requireUser } from "@/lib/auth";
+import { parseBody } from "@/lib/validate";
+import { changePasswordSchema } from "@/lib/schemas";
+import { getClientIp, rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
+
+const USER_LIMIT = { maxAttempts: 10, windowMs: 15 * 60 * 1000 };     // 10 / 15 min por usuario
+const IP_LIMIT = { maxAttempts: 20, windowMs: 15 * 60 * 1000 };       // 20 / 15 min por IP
 
 interface UserRow {
   id: string;
@@ -28,24 +40,18 @@ interface UserRow {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const userId: string = body.userId ?? "";
-    const currentPassword: string = body.currentPassword ?? "";
-    const newPassword: string = body.newPassword ?? "";
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
 
-    if (!userId || !currentPassword || !newPassword) {
-      return NextResponse.json(
-        { ok: false, error: "Todos los campos son obligatorios." },
-        { status: 400 },
-      );
-    }
-    if (newPassword.length < 8) {
-      return NextResponse.json(
-        { ok: false, error: "La nueva contraseña debe tener al menos 8 caracteres." },
-        { status: 400 },
-      );
-    }
+  try {
+    // La identidad viene de la sesión (cookie JWT), nunca del body.
+    const [user, denied] = await requireUser(request);
+    if (denied) return denied;
+
+    const [parsed, validationError] = await parseBody(request, changePasswordSchema);
+    if (validationError) return validationError;
+    const { currentPassword, newPassword } = parsed;
+
     if (currentPassword === newPassword) {
       return NextResponse.json(
         { ok: false, error: "La nueva contraseña debe ser diferente a la actual." },
@@ -53,20 +59,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar contraseña actual
-    const user = await queryOne<UserRow>(
+    // Rate limiting por usuario + por IP (frena fuerza bruta de la contraseña
+    // actual, que antes no tenía ningún freno).
+    const ip = getClientIp(request);
+    const userResult = rateLimit(`changepw:user:${user.id}`, USER_LIMIT);
+    const ipResult = rateLimit(`changepw:ip:${ip}`, IP_LIMIT);
+    if (!userResult.ok || !ipResult.ok) {
+      const result = !userResult.ok ? userResult : ipResult;
+      const cfg = !userResult.ok ? USER_LIMIT : IP_LIMIT;
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Demasiados intentos. Intenta de nuevo en " +
+            `${Math.ceil(result.retryAfterSec / 60)} min.`,
+        },
+        { status: 429, headers: rateLimitHeaders(result, cfg) },
+      );
+    }
+
+    // Validar contraseña actual (siempre contra el usuario de la sesión)
+    const row = await queryOne<UserRow>(
       "SELECT id, password_hash, must_change_password, is_active FROM users WHERE id = $1",
-      [userId],
+      [user.id],
     );
 
-    if (!user || !user.is_active) {
+    if (!row || !row.is_active) {
       return NextResponse.json(
         { ok: false, error: "Usuario no encontrado." },
         { status: 404 },
       );
     }
 
-    if (!user.password_hash) {
+    if (!row.password_hash) {
       // Sin hash → no se permite (antes había un backdoor "admin")
       return NextResponse.json(
         { ok: false, error: "La contraseña actual es incorrecta." },
@@ -74,7 +99,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentValid = await verifyPassword(currentPassword, user.password_hash);
+    const currentValid = await verifyPassword(currentPassword, row.password_hash);
     if (!currentValid) {
       return NextResponse.json(
         { ok: false, error: "La contraseña actual es incorrecta." },
@@ -88,7 +113,7 @@ export async function POST(request: NextRequest) {
       `UPDATE users
        SET password_hash = $1, must_change_password = false, updated_at = now()
        WHERE id = $2`,
-      [newHash, userId],
+      [newHash, user.id],
     );
 
     return NextResponse.json({
@@ -96,7 +121,7 @@ export async function POST(request: NextRequest) {
       message: "¡Contraseña actualizada con éxito!",
     });
   } catch (err) {
-    console.error("[change-password] Error:", err);
+    logger.error({ err, route: "change-password" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

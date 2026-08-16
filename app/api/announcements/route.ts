@@ -12,6 +12,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
+import { assertSameOrigin } from "@/lib/csrf";
 import { createAnnouncementSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +27,6 @@ interface AnnouncementRow {
   is_read: boolean;
   published_at: string;
 }
-
-const CATEGORIES = ["urgente", "importante", "general", "informativo"] as const;
 
 export async function GET(request: NextRequest) {
   const [user, denied] = await requireUser(request);
@@ -55,12 +54,21 @@ export async function GET(request: NextRequest) {
               sender,
               audience,
               is_read,
-              to_char(published_at, 'YYYY-MM-DD') AS published_at
+              to_char(published_at, 'YYYY-MM-DD"T12:00:00"') AS published_at
        FROM announcements
        ${where}
        ORDER BY published_at DESC`,
       params,
     );
+
+    // Estado de lectura por usuario: la tabla announcement_reads registra los
+    // avisos que este usuario marcó como leídos; la columna global is_read se
+    // mantiene para compatibilidad (la conserva el admin al crear/editar).
+    const readRes = await query<{ announcement_id: string }>(
+      "SELECT announcement_id FROM announcement_reads WHERE user_id = $1",
+      [user.id],
+    );
+    const readIds = new Set(readRes.rows.map((r) => r.announcement_id));
 
     const announcements = r.rows.map((a) => ({
       id: a.id,
@@ -69,7 +77,7 @@ export async function GET(request: NextRequest) {
       body: a.body,
       sender: a.sender,
       date: a.published_at,
-      read: a.is_read,
+      read: a.is_read || readIds.has(a.id),
       audience: a.audience,
     }));
 
@@ -84,6 +92,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 
@@ -106,7 +117,7 @@ export async function POST(request: NextRequest) {
                  sender,
                  audience,
                  is_read,
-                 to_char(published_at, 'YYYY-MM-DD') AS published_at`,
+                 to_char(published_at, 'YYYY-MM-DD"T12:00:00"') AS published_at`,
       [category, title, bodyText, sender, audience],
     );
 

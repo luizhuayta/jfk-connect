@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileText, CheckCircle2, AlertTriangle, XCircle, Search, Plus, MoreHorizontal, CalendarDays, Loader2, Eye, Wallet, X, Hash, Copy } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -42,7 +43,6 @@ type StudentHit = { id: string; name: string; dni: string; grade: string; sectio
 type EditDraft = { status: "regular" | "condicional" | "pendiente"; docsSubmitted: number; apafaPaid: boolean; actividadesPaid: boolean };
 
 export default function AdminEnrollmentPage() {
-  const searchParams = useSearchParams();
   const [items, setItems] = useState<Enrollment[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
@@ -96,11 +96,13 @@ export default function AdminEnrollmentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
   useEffect(() => {
-    if (searchParams.get("nueva") === "1") {
+    // El query se lee en el cliente (window): usar useSearchParams rompería el
+    // prerender estático de la build (missing-suspense-with-csr-bailout).
+    if (new URLSearchParams(window.location.search).get("nueva") === "1") {
       openNew();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, []);
 
   // Buscar alumnos activos para el modal de nueva matrícula (debounce)
   useEffect(() => {
@@ -194,8 +196,8 @@ export default function AdminEnrollmentPage() {
     return true;
   }), [items, statusFilter, payFilter]);
 
-  if (loading) { return <div className="py-16 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#1E2A5E]" /><p className="text-sm text-muted-foreground mt-2">Cargando matrículas...</p></div>; }
-  if (error) { return <div className="py-16 text-center text-red-600 text-sm">{error}</div>; }
+  if (loading) { return <LoadingState label="Cargando matrículas..." />; }
+  if (error) { return <ErrorState message={error} onRetry={() => loadEnrollments(1)} />; }
 
   return (
     <div className="space-y-8">

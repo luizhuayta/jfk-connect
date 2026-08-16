@@ -8,7 +8,7 @@
  *   <Badge className={letterGradeColor(letter)}>{letter}</Badge>
  */
 
-export function letterGrade(avg: number): "A" | "B" | "C" | "D" | null {
+export function letterGrade(avg: number | null | undefined): "A" | "B" | "C" | "D" | null {
   if (avg === null || avg === undefined || Number.isNaN(avg)) return null;
   if (avg >= 18) return "A";
   if (avg >= 15) return "B";
@@ -24,4 +24,18 @@ export function letterGradeColor(letter: string | null): string {
     case "D": return "bg-red-100 text-red-600 hover:bg-red-100";
     default: return "bg-gray-100 text-gray-500 hover:bg-gray-100";
   }
+}
+
+/**
+ * Etiqueta de desempeño alineada con la letra canónica de la BD.
+ * Mismo criterio que `letterGrade`/trigger: A=18-20, B=15-17, C=10-14, D=0-9.
+ * Única fuente para los paneles (antes se duplicaba con umbrales distintos
+ * en el dashboard y la página de notas).
+ */
+export function desempeñoLabel(avg: number | null | undefined): string {
+  if (avg === null || avg === undefined || Number.isNaN(avg)) return "—";
+  if (avg >= 18) return "Logro destacado";
+  if (avg >= 15) return "Logro esperado";
+  if (avg >= 10) return "En proceso";
+  return "En inicio";
 }

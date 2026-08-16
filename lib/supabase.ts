@@ -69,13 +69,16 @@ export const SUPABASE_REST_URL = `${SUPABASE_URL}/rest/v1`;
 export const SUPABASE_STORAGE_URL = `${SUPABASE_URL}/storage/v1`;
 
 /**
- * Comprueba si la configuración de Supabase es válida
+ * Comprueba si la configuración de Supabase es válida.
+ * (Corregido el bug de precedencia: antes `|| NODE_ENV === "production"` hacía
+ * que SIEMPRE devolviera true en producción aunque no hubiera config.)
  */
 export function isSupabaseConfigured(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   return (
-    !!SUPABASE_URL &&
-    !!SUPABASE_ANON_KEY &&
-    SUPABASE_ANON_KEY !== "local-anon-key" ||
-    process.env.NODE_ENV === "production"
+    !!url &&
+    !!anonKey &&
+    anonKey !== "local-anon-key"
   );
 }

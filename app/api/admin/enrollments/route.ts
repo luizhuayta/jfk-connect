@@ -19,6 +19,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query, withTransaction } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
+import { assertSameOrigin } from "@/lib/csrf";
 import { createEnrollmentSchema } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
 
@@ -159,6 +160,9 @@ export async function GET(request: NextRequest) {
 // ─── POST: generar matrícula para un alumno existente ────────────────────────
 
 export async function POST(request: NextRequest) {
+  const blocked = assertSameOrigin(request);
+  if (blocked) return blocked;
+
   const [, denied] = await requireRole(request, ["admin"]);
   if (denied) return denied;
 
