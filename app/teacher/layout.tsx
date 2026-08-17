@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Navbar from "@/components/layout/Navbar";
+import TeacherNavbar from "@/components/TeacherNavbar";
 import TeacherSidebar from "@/components/TeacherSidebar";
 import { TeacherCoursesProvider } from "@/components/teacher/useTeacherCourses";
 
@@ -15,7 +15,7 @@ export default function TeacherLayout({
   return (
     <TeacherCoursesProvider>
       <div className="min-h-screen bg-[#F8FAFC]">
-        <Navbar onMenuClick={() => setMobileOpen(true)} />
+        <TeacherNavbar onMenuClick={() => setMobileOpen(true)} />
         <TeacherSidebar
           mobileOpen={mobileOpen}
           onCloseMobile={() => setMobileOpen(false)}

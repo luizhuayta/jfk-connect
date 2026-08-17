@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import AttendanceChart from "@/components/dashboard/admin/AttendanceChart";
 import GradeDistributionChart from "@/components/dashboard/admin/GradeDistributionChart";
+import { toLocalISODate } from "@/lib/format";
 
 type StatsData = {
   stats: {
@@ -75,6 +76,9 @@ export default function AdminDashboard() {
       }
     })();
   }, []);
+
+  // Solo eventos que aún no pasaron; evita mostrar "Próximo" en fechas vencidas.
+  const upcoming = upcomingEvents.filter((e) => e.date >= toLocalISODate());
 
   const today = new Date().toLocaleDateString("es-PE", {
     weekday: "long",
@@ -294,23 +298,29 @@ export default function AdminDashboard() {
 
           {activeTab === "eventos" && (
             <div className="space-y-3">
-              {upcomingEvents.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between rounded-xl border p-4"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-[#0F172A]">{item.title}</p>
-                    <p className="text-xs text-muted-foreground">{item.date}</p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="text-xs border-blue-200 text-blue-600 bg-blue-50"
+              {upcoming.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  No hay eventos próximos programados.
+                </p>
+              ) : (
+                upcoming.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between rounded-xl border p-4"
                   >
-                    Proximo
-                  </Badge>
-                </div>
-              ))}
+                    <div>
+                      <p className="text-sm font-medium text-[#0F172A]">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.date}</p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-blue-200 text-blue-600 bg-blue-50"
+                    >
+                      Proximo
+                    </Badge>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </CardContent>

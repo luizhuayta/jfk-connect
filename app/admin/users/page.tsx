@@ -43,6 +43,8 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState<UserRecord | null>(null);
   const [showDelete, setShowDelete] = useState<UserRecord | null>(null);
@@ -57,24 +59,28 @@ export default function AdminUsersPage() {
     fetch("/api/admin/subjects").then(r => r.json()).then(d => { if (d.ok) setSubjects(d.subjects); }).catch(() => {});
   }, []);
 
-  const loadUsers = async () => {
+  const loadUsers = async (targetPage: number) => {
     setLoading(true); setError(null);
     try {
       const params = new URLSearchParams();
       if (roleFilter !== "all") params.set("role", roleFilter);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (query) params.set("q", query);
+      params.set("page", String(targetPage));
+      params.set("limit", "50");
       const r = await fetch(`/api/admin/users?${params}`);
       const data = await r.json();
       if (!data.ok) throw new Error(data.error);
       setUsers(data.users);
+      setPagination(data.pagination);
+      setPage(targetPage);
     } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { loadUsers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [roleFilter, statusFilter]);
+  useEffect(() => { loadUsers(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [roleFilter, statusFilter]);
   useEffect(() => {
-    const t = setTimeout(() => loadUsers(), 300);
+    const t = setTimeout(() => loadUsers(1), 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
@@ -108,7 +114,7 @@ export default function AdminUsersPage() {
       setShowCreate(false);
       setForm({ fullName: "", email: "", role: "docente", phone: "", subject: "", shiftPreference: "Ambos" });
       setTempPwd(data.tempPassword);
-      await loadUsers();
+      await loadUsers(page);
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
@@ -128,7 +134,7 @@ export default function AdminUsersPage() {
       const data = await r.json();
       if (!data.ok) throw new Error(data.error);
       setShowEdit(null);
-      await loadUsers();
+      await loadUsers(page);
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
@@ -138,7 +144,7 @@ export default function AdminUsersPage() {
       const r = await fetch(`/api/admin/users/${u.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isActive: !u.is_active }) });
       const data = await r.json();
       if (!data.ok) throw new Error(data.error);
-      await loadUsers();
+      await loadUsers(page);
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
   };
 
@@ -150,7 +156,7 @@ export default function AdminUsersPage() {
       const data = await r.json();
       if (!data.ok) throw new Error(data.error);
       setShowDelete(null);
-      await loadUsers();
+      await loadUsers(page);
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
@@ -218,7 +224,7 @@ export default function AdminUsersPage() {
           {loading ? (
             <LoadingState label="Cargando usuarios..." className="py-12" />
           ) : error ? (
-            <ErrorState message={error} onRetry={loadUsers} />
+            <ErrorState message={error} onRetry={() => loadUsers(page)} />
           ) : users.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground text-sm">No se encontraron usuarios</div>
           ) : (
@@ -283,9 +289,9 @@ export default function AdminUsersPage() {
                       </TableCell>
                       <TableCell className="text-center pr-5">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors" title="Editar"><Edit className="h-4 w-4" /></button>
-                          <button onClick={() => handleToggleActive(u)} className={`p-1.5 rounded-lg transition-colors ${u.is_active ? "hover:bg-amber-50 text-amber-600" : "hover:bg-emerald-50 text-emerald-600"}`} title={u.is_active ? "Desactivar" : "Activar"}><Power className="h-4 w-4" /></button>
-                          <button onClick={() => setShowDelete(u)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors" title="Eliminar"><Trash2 className="h-4 w-4" /></button>
+                          <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors" title="Editar" aria-label="Editar"><Edit className="h-4 w-4" /></button>
+                          <button onClick={() => handleToggleActive(u)} className={`p-1.5 rounded-lg transition-colors ${u.is_active ? "hover:bg-amber-50 text-amber-600" : "hover:bg-emerald-50 text-emerald-600"}`} title={u.is_active ? "Desactivar" : "Activar"} aria-label={u.is_active ? "Desactivar" : "Activar"}><Power className="h-4 w-4" /></button>
+                          <button onClick={() => setShowDelete(u)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors" title="Eliminar" aria-label="Eliminar"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -295,8 +301,35 @@ export default function AdminUsersPage() {
             </Table>
           )}
           {!loading && users.length > 0 && (
-            <div className="px-5 py-3 border-t border-gray-100">
-              <p className="text-xs text-muted-foreground">Mostrando {users.length} usuario{users.length !== 1 ? "s" : ""}</p>
+            <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+              <p className="text-xs text-muted-foreground">
+                Mostrando {users.length} de {pagination.total} usuario{pagination.total !== 1 ? "s" : ""}
+              </p>
+              {pagination.totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1 || loading}
+                    onClick={() => loadUsers(page - 1)}
+                    className="h-8 px-3"
+                  >
+                    ← Anterior
+                  </Button>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Página {page} de {pagination.totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= pagination.totalPages || loading}
+                    onClick={() => loadUsers(page + 1)}
+                    className="h-8 px-3"
+                  >
+                    Siguiente →
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -308,7 +341,7 @@ export default function AdminUsersPage() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#1E2A5E]">Nuevo usuario</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
             </div>
             <p className="text-xs text-muted-foreground">La contraseña temporal se genera aleatoriamente y se mostrará tras crear el usuario.</p>
             <div className="space-y-3">
@@ -357,7 +390,7 @@ export default function AdminUsersPage() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#1E2A5E]">Editar usuario</h2>
-              <button onClick={() => setShowEdit(null)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              <button onClick={() => setShowEdit(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
             </div>
             <p className="text-xs text-muted-foreground">{showEdit.email}</p>
             <div className="space-y-3">
@@ -432,7 +465,7 @@ export default function AdminUsersPage() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-emerald-600">¡Usuario creado!</h2>
-              <button onClick={() => setTempPwd(null)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              <button onClick={() => setTempPwd(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
             </div>
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">
               <p className="font-semibold mb-1">Comparte esta contraseña temporal con el usuario:</p>

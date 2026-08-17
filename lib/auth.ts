@@ -18,6 +18,7 @@ export type AuthUser = {
   full_name: string;
   role: "admin" | "docente" | "padre";
   is_active: boolean;
+  phone: string | null;
 };
 
 interface UserRow {
@@ -26,6 +27,7 @@ interface UserRow {
   full_name: string;
   role: "admin" | "docente" | "padre";
   is_active: boolean;
+  phone: string | null;
 }
 
 /**
@@ -58,7 +60,7 @@ export async function getAuthUser(
   if (!userId) return null;
 
   const user = await queryOne<UserRow>(
-    `SELECT id, email, full_name, role, is_active
+    `SELECT id, email, full_name, role, is_active, phone
      FROM users
      WHERE id = $1
      LIMIT 1`,

@@ -8,6 +8,7 @@ export interface SessionUser {
   email: string;
   full_name: string;
   role: string;
+  phone: string | null;
 }
 
 type SessionUserState = { user: SessionUser | null; loading: boolean };

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, FileImage, Presentation, Sheet, UploadCloud, Search, BookOpen, Filter, Loader2, Trash2, X, Upload } from "lucide-react";
+import { FileText, FileImage, Presentation, Sheet, FilePlus2, Search, BookOpen, Filter, Loader2, Trash2, X } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
@@ -44,8 +44,6 @@ export default function MaterialsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [form, setForm] = useState({ courseId: "", title: "", type: "pdf" as Material["type"], size: "", topic: "" });
-  const [isDragging, setIsDragging] = useState(false);
-  const dropRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
 
   const loadMaterials = useCallback(async (courseList: TeacherCourse[]) => {
@@ -169,8 +167,8 @@ export default function MaterialsPage() {
           onClick={() => setShowUpload(true)}
           className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold"
         >
-          <UploadCloud className="h-4 w-4" />
-          Subir material
+          <FilePlus2 className="h-4 w-4" />
+          Registrar material
         </Button>
       </div>
 
@@ -302,6 +300,7 @@ export default function MaterialsPage() {
                           onClick={() => handleDelete(m)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-50 text-red-500"
                           title="Eliminar"
+                          aria-label={`Eliminar ${m.title}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -320,49 +319,12 @@ export default function MaterialsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !actionLoading && setShowUpload(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1E2A5E]">Subir material</h2>
-              <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              <h2 className="text-xl font-bold text-[#1E2A5E]">Registrar material</h2>
+              <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
             </div>
-
-            {/* Drop zone visual */}
-            <div
-              ref={dropRef}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragging(false);
-                const file = e.dataTransfer.files?.[0];
-                if (file) {
-                  const ext = file.name.split(".").pop()?.toLowerCase();
-                  const typeMap: Record<string, Material["type"]> = {
-                    pdf: "pdf", pptx: "pptx", docx: "docx", xlsx: "xlsx",
-                    jpg: "img", jpeg: "img", png: "img", gif: "img", webp: "img",
-                  };
-                  const detected = ext && typeMap[ext] ? typeMap[ext] : "pdf";
-                  const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                  setForm((f) => ({
-                    ...f,
-                    title: f.title || file.name.replace(/\.[^/.]+$/, ""),
-                    type: detected,
-                    size: `${sizeMB} MB`,
-                  }));
-                }
-              }}
-              className={`rounded-xl border-2 border-dashed p-5 text-center transition-colors ${
-                isDragging
-                  ? "border-[#2563EB] bg-[#2563EB]/5"
-                  : "border-gray-200 bg-gray-50/50"
-              }`}
-            >
-              <Upload className={`h-6 w-6 mx-auto mb-2 ${isDragging ? "text-[#2563EB]" : "text-gray-400"}`} />
-              <p className="text-sm font-semibold text-[#0F172A]">
-                Arrastra un archivo aquí
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                PDF, PPTX, DOCX, XLSX o imagen · o completa el formulario abajo
-              </p>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Esto registra el material en la lista del curso (título, tipo y tema); no sube ningún archivo.
+            </p>
 
             <div className="space-y-3">
               <div>
@@ -424,7 +386,7 @@ export default function MaterialsPage() {
             <div className="flex gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowUpload(false)} disabled={actionLoading} className="flex-1">Cancelar</Button>
               <Button onClick={handleUpload} disabled={actionLoading} className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]">
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Subir"}
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
               </Button>
             </div>
           </div>

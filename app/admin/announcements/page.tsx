@@ -148,7 +148,7 @@ export default function AdminAnnouncementsPage() {
           <CardContent className="p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-[#0F172A]">{editingId ? "Editar aviso" : "Redactar nuevo aviso"}</h2>
-              <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg hover:bg-gray-100"><X className="h-4 w-4 text-muted-foreground" /></button>
+              <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4 text-muted-foreground" /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -228,11 +228,11 @@ export default function AdminAnnouncementsPage() {
                           <span className="flex items-center gap-1 text-[10px] text-muted-foreground bg-[#1E2A5E]/8 rounded px-1.5 py-0.5 font-medium"><Users className="h-2.5 w-2.5" />{AUDIENCE_LABELS[a.audience] ?? a.audience}</span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => toggleExpand(a.id)} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors" title={isExpanded ? "Colapsar" : "Ver contenido"}>
+                          <button onClick={() => toggleExpand(a.id)} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors" title={isExpanded ? "Colapsar" : "Ver contenido"} aria-label={isExpanded ? "Colapsar" : "Ver contenido"}>
                             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                           </button>
-                          <button onClick={() => openEdit(a)} className="p-1.5 rounded-lg hover:bg-[#2563EB]/10 transition-colors" title="Editar"><Pencil className="h-4 w-4 text-[#2563EB]" /></button>
-                          <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar"><Trash2 className="h-4 w-4 text-red-500" /></button>
+                          <button onClick={() => openEdit(a)} className="p-1.5 rounded-lg hover:bg-[#2563EB]/10 transition-colors" title="Editar" aria-label="Editar"><Pencil className="h-4 w-4 text-[#2563EB]" /></button>
+                          <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar" aria-label="Eliminar"><Trash2 className="h-4 w-4 text-red-500" /></button>
                         </div>
                       </div>
                       <h3 className="mt-1.5 text-sm font-bold text-[#0F172A]">{a.title}</h3>

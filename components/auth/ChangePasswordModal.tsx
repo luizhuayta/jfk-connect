@@ -86,8 +86,12 @@ export default function ChangePasswordModal({ user, onSuccess, onClose, closable
               <ShieldCheck className="h-6 w-6 text-[#F4C15C]" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Cambio de contraseña obligatorio</h2>
-              <p className="text-sm text-white/80">Política de seguridad institucional</p>
+              <h2 className="text-xl font-bold">
+                {closable ? "Cambiar contraseña" : "Cambio de contraseña obligatorio"}
+              </h2>
+              <p className="text-sm text-white/80">
+                {closable ? "Actualiza tu contraseña de acceso" : "Política de seguridad institucional"}
+              </p>
             </div>
           </div>
         </div>
@@ -96,19 +100,21 @@ export default function ChangePasswordModal({ user, onSuccess, onClose, closable
         <div className="p-6 space-y-4">
           {!success ? (
             <>
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
-                <p className="font-semibold">¡Hola, {user.fullName.split(" ")[0]}!</p>
-                <p className="text-xs mt-1">
-                  El administrador te creó una cuenta con una <strong>contraseña temporal</strong>.
-                  Por políticas de seguridad, debes cambiarla antes de poder acceder al sistema.
-                </p>
-              </div>
+              {!closable && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+                  <p className="font-semibold">¡Hola, {user.fullName.split(" ")[0]}!</p>
+                  <p className="text-xs mt-1">
+                    El administrador te creó una cuenta con una <strong>contraseña temporal</strong>.
+                    Por políticas de seguridad, debes cambiarla antes de poder acceder al sistema.
+                  </p>
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div>
-                  <Label className="text-[#1E2A5E]">Contraseña actual (temporal)</Label>
+                  <Label className="text-[#1E2A5E]">Contraseña actual{!closable && " (temporal)"}</Label>
                   <div className="relative">
-                    <Input type={showCur ? "text" : "password"} value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="ijfk2026" className="pr-10" />
+                    <Input type={showCur ? "text" : "password"} value={current} onChange={(e) => setCurrent(e.target.value)} placeholder={closable ? undefined : "ijfk2026"} className="pr-10" />
                     <button type="button" onClick={() => setShowCur(!showCur)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-[#1E2A5E]">
                       {showCur ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -144,7 +150,7 @@ export default function ChangePasswordModal({ user, onSuccess, onClose, closable
 
                 <Button type="submit" disabled={loading} className="w-full bg-[#F4C15C] text-[#1E2A5E] font-bold hover:bg-[#e0b04f] h-11 mt-2">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-                    <><ShieldCheck className="h-4 w-4 mr-2" /> Cambiar contraseña y entrar</>
+                    <><ShieldCheck className="h-4 w-4 mr-2" /> {closable ? "Cambiar contraseña" : "Cambiar contraseña y entrar"}</>
                   )}
                 </Button>
 

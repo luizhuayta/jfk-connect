@@ -409,6 +409,7 @@ export default function AttendancePage() {
                                     setSaved(false);
                                   }}
                                   title={STATUS[s].label}
+                                  aria-label={`${STATUS[s].label} — ${student.name}`}
                                   className={`w-7 h-7 rounded-md text-xs font-bold transition-all ${
                                     status === s
                                       ? STATUS[s].btn

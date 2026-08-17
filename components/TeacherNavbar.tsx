@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -10,8 +10,12 @@ import Image from "next/image";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { getInitials, getRoleLabel } from "@/lib/format";
 
-export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
-  const pathname = usePathname();
+/**
+ * Barra superior del panel docente. Antes compartía components/layout/Navbar.tsx
+ * con el admin (una sola barra con `if (isAdmin)`/`if (isTeacher)` por dentro);
+ * ahora cada rol tiene la suya propia, como ya tenía el padre con FatherTopBar.
+ */
+export default function TeacherNavbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter();
   const { user } = useSessionUser();
   const [open, setOpen] = useState(false);
@@ -30,7 +34,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
         }
       })
       .catch(() => {});
-  }, [pathname]);
+  }, []);
 
   // Cerrar con click fuera y con Escape
   useEffect(() => {
@@ -57,15 +61,6 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
     toast.success("Sesión cerrada");
     router.push("/login");
   };
-
-  const isAdmin = pathname.startsWith("/admin");
-  const isTeacher = pathname.startsWith("/teacher");
-
-  const searchPlaceholder = isAdmin
-    ? "Buscar usuarios, cursos, notas..."
-    : isTeacher
-    ? "Buscar alumno, curso..."
-    : "Buscar alumno, curso, aviso...";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6">
@@ -95,7 +90,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
             CIJK
           </span>
           <span className="text-[10px] text-muted-foreground">
-            {isAdmin ? "Panel Admin" : isTeacher ? "Panel Docente" : "Panel de Padres"}
+            Panel Docente
           </span>
         </div>
       </div>
@@ -105,7 +100,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={searchPlaceholder}
+            placeholder="Buscar alumno, curso..."
             className="w-full rounded-full border-gray-200 bg-gray-50 pl-10 text-sm focus-visible:ring-[#F4C15C]"
           />
         </div>
@@ -189,7 +184,10 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
               <div className="p-1">
                 <button
                   role="menuitem"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    router.push("/teacher/profile");
+                  }}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#334155] hover:bg-gray-50 transition-colors"
                 >
                   <User className="h-4 w-4 text-muted-foreground" />
@@ -197,7 +195,10 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                 </button>
                 <button
                   role="menuitem"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    toast("Configuración — próximamente disponible.");
+                  }}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#334155] hover:bg-gray-50 transition-colors"
                 >
                   <Settings className="h-4 w-4 text-muted-foreground" />
@@ -205,7 +206,10 @@ export default function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                 </button>
                 <button
                   role="menuitem"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    toast("Ayuda — próximamente disponible.");
+                  }}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#334155] hover:bg-gray-50 transition-colors"
                 >
                   <HelpCircle className="h-4 w-4 text-muted-foreground" />

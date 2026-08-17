@@ -33,6 +33,10 @@ interface UserRow {
   shift_preference: string | null;
 }
 
+interface CountRow {
+  total: number;
+}
+
 /**
  * Genera una contraseña temporal aleatoria de 10 caracteres alfanuméricos.
  */
@@ -58,6 +62,11 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const q = searchParams.get("q");
 
+    // Paginación
+    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
+    const offset = (page - 1) * limit;
+
     const where: string[] = [];
     const params: unknown[] = [];
 
@@ -75,15 +84,33 @@ export async function GET(request: NextRequest) {
       where.push(`(LOWER(full_name) LIKE $${i} OR LOWER(email) LIKE $${i})`);
     }
 
-    const sql = `
-      SELECT id, email, full_name, role, phone, is_active, created_at, last_login_at, avatar_url, subject, shift_preference
-      FROM users
-      ${where.length ? "WHERE " + where.join(" AND ") : ""}
-      ORDER BY created_at DESC
-    `;
+    const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
 
-    const r = await query<UserRow>(sql, params);
-    return NextResponse.json({ ok: true, users: r.rows });
+    const countR = await query<CountRow>(
+      `SELECT COUNT(*)::int AS total FROM users ${whereClause}`,
+      params,
+    );
+    const total = countR.rows[0]?.total ?? 0;
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    const dataParams = [...params, limit, offset];
+    const limitIdx = dataParams.length - 1;
+    const offsetIdx = dataParams.length;
+
+    const r = await query<UserRow>(
+      `SELECT id, email, full_name, role, phone, is_active, created_at, last_login_at, avatar_url, subject, shift_preference
+       FROM users
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      dataParams,
+    );
+
+    return NextResponse.json({
+      ok: true,
+      users: r.rows,
+      pagination: { page, limit, total, totalPages },
+    });
   } catch (err) {
     console.error("[admin/users GET] Error:", err);
     return NextResponse.json(

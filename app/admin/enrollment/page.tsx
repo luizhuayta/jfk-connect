@@ -310,7 +310,7 @@ export default function AdminEnrollmentPage() {
                     </TableCell>
                     <TableCell className="text-center pr-5">
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors outline-none">
+                        <DropdownMenuTrigger className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors outline-none" aria-label="Acciones de matrícula">
                           <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="min-w-44">
@@ -348,7 +348,7 @@ export default function AdminEnrollmentPage() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#1E2A5E]">Nueva matrícula</h2>
-              <button onClick={() => setShowNew(false)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              <button onClick={() => setShowNew(false)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
             </div>
 
             {created ? (
@@ -441,7 +441,7 @@ export default function AdminEnrollmentPage() {
                 <h2 className="text-xl font-bold text-[#1E2A5E]">Editar pagos</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">{editTarget.studentName} · <span className="font-mono">{editTarget.code}</span></p>
               </div>
-              <button onClick={() => { setEditTarget(null); setEditDraft(null); }} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              <button onClick={() => { setEditTarget(null); setEditDraft(null); }} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-3">
@@ -498,7 +498,7 @@ export default function AdminEnrollmentPage() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#1E2A5E]">Detalle de matrícula</h2>
-              <button onClick={() => setDetail(null)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              <button onClick={() => setDetail(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
             </div>
             <div className="flex items-center gap-3">
               <Avatar className="h-12 w-12 shrink-0"><AvatarFallback className="bg-[#1E2A5E] text-white text-sm font-bold">{detail.initials}</AvatarFallback></Avatar>

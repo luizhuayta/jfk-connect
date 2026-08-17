@@ -25,18 +25,17 @@ interface MaterialRow {
   uploaded_at: string;
 }
 
-const TYPES = new Set(["pdf", "pptx", "docx", "xlsx", "img"]);
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
-  const [user, denied] = await requireRole(request, ["docente"]);
+  // Admin puede leer cualquier curso (solo lectura); docente solo los suyos
+  const [user, denied] = await requireRole(request, ["docente", "admin"]);
   if (denied) return denied;
 
   const { courseId } = await params;
 
-  if (!(await courseBelongsToTeacher(courseId, user.id))) {
+  if (user.role !== "admin" && !(await courseBelongsToTeacher(courseId, user.id))) {
     return NextResponse.json(
       { ok: false, error: "Este curso no está asignado a tu cuenta." },
       { status: 403 },

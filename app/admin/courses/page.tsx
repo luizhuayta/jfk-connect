@@ -344,7 +344,7 @@ export default function AdminCoursesPage() {
                             className="h-8 px-2 text-xs rounded-md border border-gray-200 bg-white text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 min-w-[160px]"
                           >
                             <option value="">{course.teacherName ?? "Asignar docente..."}</option>
-                            {teachers.map((t) => (
+                            {teachers.filter((t) => t.is_active).map((t) => (
                               <option key={t.id} value={t.id}>
                                 {t.full_name} ({t.courses_count} cursos)
                               </option>
@@ -367,7 +367,7 @@ export default function AdminCoursesPage() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#1E2A5E]">Nueva sección</h2>
-              <button onClick={() => setShowNew(false)} className="p-1 rounded hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              <button onClick={() => setShowNew(false)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-4">

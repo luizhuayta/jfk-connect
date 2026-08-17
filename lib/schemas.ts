@@ -70,6 +70,12 @@ export const changePasswordSchema = z.object({
     .min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
 });
 
+/** /api/auth/me (PATCH) — el usuario edita su propio nombre y teléfono */
+export const updateOwnProfileSchema = z.object({
+  fullName: nonEmpty("El nombre completo").min(3, "El nombre completo es obligatorio."),
+  phone: z.string().trim().max(30, "Teléfono demasiado largo.").optional().nullable(),
+});
+
 /** /api/admin/users (POST) */
 export const createUserSchema = z.object({
   email: emailField(),

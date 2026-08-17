@@ -103,6 +103,7 @@ export default function AppSidebar({
         key={item.href}
         href={item.href}
         title={collapsed ? item.label : undefined}
+        aria-label={collapsed ? item.label : undefined}
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
           active
@@ -251,6 +252,7 @@ export default function AppSidebar({
               collapsed && "justify-center",
             )}
             title={collapsed ? "Expandir menú" : "Colapsar menú"}
+            aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
           >
             {collapsed ? (
               <ChevronRight className="h-5 w-5" />
@@ -266,6 +268,7 @@ export default function AppSidebar({
           <button
             onClick={handleLogout}
             title="Cerrar sesión"
+            aria-label="Cerrar sesión"
             className={cn(
               "flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-white/80 hover:bg-red-500/20 hover:text-white transition-colors",
               collapsed && "justify-center",
