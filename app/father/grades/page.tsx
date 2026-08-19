@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Loader2, Download, Printer } from "lucide-react";
 import { toast } from "sonner";
+import BimesterTiles from "@/components/father/BimesterSelector";
 import { letterGrade, letterGradeColor, desempeñoLabel } from "@/lib/letter-grade";
 import { downloadBoletín, printBoletín } from "@/lib/report-pdf";
 import { SCHOOL_YEAR, SCHOOL_YEAR_LABEL } from "@/lib/school-year";
@@ -108,7 +109,7 @@ export default function GradesPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-[#1E2A5E]">Notas</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-primary">Notas</h1>
         <p className="text-muted-foreground mt-1">
           Calificaciones por bimestre — {SCHOOL_YEAR_LABEL}
         </p>
@@ -120,62 +121,16 @@ export default function GradesPage() {
       {students.length > 0 && (
         <>
           {/* Bimester strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {bimesterAverages.map((b, i) => {
-              const isActive = activeBimester === b.label;
-              const ltr = letterGrade(b.avg);
-              return (
-                <button
-                  key={b.label}
-                  onClick={() => setActiveBimester(b.label)}
-                  aria-pressed={isActive}
-                  className={`rounded-xl p-3 text-center transition-all border-2 ${
-                    isActive
-                      ? "bg-[#1E2A5E] border-[#1E2A5E] text-white shadow-sm"
-                      : "bg-white border-gray-100 hover:border-[#1E2A5E]/30 shadow-sm"
-                  }`}
-                >
-                  <p
-                    className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${
-                      isActive ? "text-white/80" : "text-muted-foreground"
-                    }`}
-                  >
-                    Bimestre {i + 1}
-                  </p>
-                  <div className="flex items-center justify-center gap-2">
-                    <p
-                      className={`text-xl font-bold ${
-                        isActive ? "text-[#F4C15C]" : "text-[#1E2A5E]"
-                      }`}
-                    >
-                      {b.avg != null ? b.avg.toFixed(1) : "—"}
-                    </p>
-                    {ltr && (
-                      <span
-                        className={`h-6 w-6 rounded-md border flex items-center justify-center text-[11px] font-bold ${
-                          isActive ? "border-white/40 text-white" : letterGradeColor(ltr)
-                        }`}
-                      >
-                        {ltr}
-                      </span>
-                    )}
-                  </div>
-                  <p
-                    className={`text-[10px] mt-1 font-medium ${
-                      isActive ? "text-white/80" : "text-muted-foreground"
-                    }`}
-                  >
-                    {desempeñoLabel(b.avg)}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
+          <BimesterTiles
+            averages={bimesterAverages}
+            active={activeBimester}
+            onSelect={setActiveBimester}
+          />
 
           {/* Grades Card */}
           <Card className="border-none shadow-sm rounded-xl overflow-hidden">
             <CardContent className="p-5 space-y-4">
-              <h2 className="text-base font-bold text-[#0F172A]">
+              <h2 className="text-base font-bold text-foreground">
                 Bimestre {activeBimester}
                 {student ? ` — ${student.name}` : ""}
               </h2>
@@ -185,10 +140,10 @@ export default function GradesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 hover:bg-gray-50">
-                      <TableHead className="text-[#0F172A] font-semibold text-sm">Curso</TableHead>
-                      <TableHead className="text-[#0F172A] font-semibold text-sm">Nota</TableHead>
-                      <TableHead className="text-[#0F172A] font-semibold text-sm">Nivel</TableHead>
-                      <TableHead className="text-right text-[#0F172A] font-semibold text-sm">
+                      <TableHead className="text-foreground font-semibold text-sm">Curso</TableHead>
+                      <TableHead className="text-foreground font-semibold text-sm">Nota</TableHead>
+                      <TableHead className="text-foreground font-semibold text-sm">Nivel</TableHead>
+                      <TableHead className="text-right text-foreground font-semibold text-sm">
                         Observación
                       </TableHead>
                     </TableRow>
@@ -203,15 +158,9 @@ export default function GradesPage() {
                     )}
                     {notes.map((row, idx) => {
                       const ltr = letterGrade(row.note);
-                      const rowBg =
-                        row.note >= 17
-                          ? "border-l-emerald-400"
-                          : row.note >= 14
-                          ? "border-l-blue-400"
-                          : "border-l-amber-400";
                       return (
-                        <TableRow key={idx} className={`border-l-4 hover:bg-gray-50/50 ${rowBg}`}>
-                          <TableCell className="text-sm font-medium text-[#0F172A] py-2.5">
+                        <TableRow key={idx} className="hover:bg-gray-50/50">
+                          <TableCell className="text-sm font-medium text-foreground py-2.5">
                             {row.course}
                           </TableCell>
                           <TableCell className="py-2.5">
@@ -220,7 +169,7 @@ export default function GradesPage() {
                                 row.note >= 17
                                   ? "text-emerald-600"
                                   : row.note >= 14
-                                  ? "text-[#1E2A5E]"
+                                  ? "text-primary"
                                   : "text-amber-600"
                               }`}
                             >
@@ -238,7 +187,7 @@ export default function GradesPage() {
                               <span className="text-xs text-muted-foreground">—</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground py-2.5">
+                          <TableCell className="text-right text-xs text-muted-foreground py-2.5 whitespace-normal break-words max-w-[220px]">
                             {row.observation}
                           </TableCell>
                         </TableRow>
@@ -249,13 +198,13 @@ export default function GradesPage() {
               </div>
 
               {/* Promedio */}
-              <div className="flex flex-wrap items-center justify-between gap-4 bg-[#1E2A5E] rounded-xl px-6 py-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 bg-primary rounded-xl px-6 py-5">
                 <div className="flex items-center gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-white/80">
                       Promedio del Bimestre {activeBimester}
                     </p>
-                    <p className="text-3xl font-bold text-[#F4C15C] mt-1">
+                    <p className="text-3xl font-bold text-accent mt-1">
                       {average != null ? average.toFixed(1) : "—"}
                     </p>
                   </div>
@@ -267,7 +216,7 @@ export default function GradesPage() {
                     </div>
                   )}
                 </div>
-                <Badge className="bg-[#F4C15C] text-[#1E2A5E] font-bold text-sm px-3 py-1 hover:bg-[#F4C15C]">
+                <Badge className="bg-accent text-primary font-bold text-sm px-3 py-1 hover:bg-accent">
                   {levelLabel}
                 </Badge>
               </div>
@@ -278,7 +227,7 @@ export default function GradesPage() {
                   onClick={() => handleBoletín("pdf")}
                   disabled={busy !== null || notes.length === 0}
                   variant="outline"
-                  className="rounded-lg border-[#1E2A5E]/20 text-[#1E2A5E] hover:bg-[#1E2A5E] hover:text-white transition-colors gap-2"
+                  className="rounded-lg border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors gap-2"
                 >
                   {busy === "pdf" ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -291,7 +240,7 @@ export default function GradesPage() {
                   onClick={() => handleBoletín("print")}
                   disabled={busy !== null || notes.length === 0}
                   variant="outline"
-                  className="rounded-lg border-[#1E2A5E]/20 text-[#1E2A5E] hover:bg-[#1E2A5E] hover:text-white transition-colors gap-2"
+                  className="rounded-lg border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors gap-2"
                 >
                   {busy === "print" ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

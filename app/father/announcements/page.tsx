@@ -14,12 +14,12 @@ import {
 
 const CATEGORY_CONFIG: Record<
   AnnouncementCategory,
-  { label: string; bg: string; text: string; border: string; bar: string; icon: React.ElementType }
+  { label: string; bg: string; text: string; border: string; icon: React.ElementType }
 > = {
-  urgente:     { label: "Urgente",     bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200",    bar: "bg-red-500",   icon: AlertTriangle },
-  importante:  { label: "Importante",  bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  bar: "bg-amber-500", icon: Bell },
-  general:     { label: "General",     bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   bar: "bg-blue-500",  icon: Megaphone },
-  informativo: { label: "Informativo", bg: "bg-gray-50",   text: "text-gray-600",   border: "border-gray-200",   bar: "bg-gray-400",  icon: Info },
+  urgente:     { label: "Urgente",     bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200",    icon: AlertTriangle },
+  importante:  { label: "Importante",  bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  icon: Bell },
+  general:     { label: "General",     bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   icon: Megaphone },
+  informativo: { label: "Informativo", bg: "bg-gray-50",   text: "text-gray-600",   border: "border-gray-200",   icon: Info },
 };
 
 const CATEGORIES: AnnouncementCategory[] = [
@@ -67,13 +67,13 @@ export default function AnnouncementsPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-[#1E2A5E]">Avisos</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold text-primary">Avisos</h1>
           <p className="text-muted-foreground mt-1">Comunicados de la institución</p>
         </div>
         {unreadCount > 0 && (
-          <div className="flex items-center gap-2 bg-[#1E2A5E]/5 border border-[#1E2A5E]/10 rounded-xl px-4 py-2">
-            <Bell className="h-4 w-4 text-[#1E2A5E]" aria-hidden />
-            <span className="text-sm font-semibold text-[#1E2A5E]">
+          <div className="flex items-center gap-2 bg-primary/5 border border-primary/10 rounded-xl px-4 py-2">
+            <Bell className="h-4 w-4 text-primary" aria-hidden />
+            <span className="text-sm font-semibold text-primary">
               {unreadCount} sin leer
             </span>
           </div>
@@ -86,13 +86,13 @@ export default function AnnouncementsPage() {
         <button
           onClick={() => setFilter("all")}
           aria-pressed={filter === "all"}
-          className={`rounded-xl border p-4 text-left transition-all hover:shadow-sm bg-[#1E2A5E]/5 border-[#1E2A5E]/10 ${
-            filter === "all" ? "ring-2 ring-[#1E2A5E]" : ""
+          className={`rounded-xl border p-4 text-left transition-all hover:shadow-sm bg-primary/5 border-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+            filter === "all" ? "ring-2 ring-primary" : ""
           }`}
         >
-          <Bell className="h-5 w-5 mb-2 text-[#1E2A5E]" aria-hidden />
-          <p className="text-xl font-bold text-[#1E2A5E]">{announcements.length}</p>
-          <p className="text-xs font-medium text-[#1E2A5E]">Todos</p>
+          <Bell className="h-5 w-5 mb-2 text-primary" aria-hidden />
+          <p className="text-xl font-bold text-primary">{announcements.length}</p>
+          <p className="text-xs font-medium text-primary">Todos</p>
         </button>
         {CATEGORIES.map((cat) => {
           const cfg = CATEGORY_CONFIG[cat];
@@ -103,8 +103,8 @@ export default function AnnouncementsPage() {
               key={cat}
               onClick={() => setFilter(cat)}
               aria-pressed={filter === cat}
-              className={`rounded-xl border p-4 text-left transition-all hover:shadow-sm ${cfg.bg} ${cfg.border} ${
-                filter === cat ? "ring-2 ring-[#1E2A5E]" : ""
+              className={`rounded-xl border p-4 text-left transition-all hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cfg.bg} ${cfg.border} ${
+                filter === cat ? "ring-2 ring-primary" : ""
               }`}
             >
               <Icon className={`h-5 w-5 mb-2 ${cfg.text}`} aria-hidden />
@@ -135,14 +135,21 @@ export default function AnnouncementsPage() {
           const Icon = cfg.icon;
           const isExpanded = expanded === aviso.id;
 
+          // "Urgente" lleva un tinte de fondo propio (no solo el ícono) para
+          // destacar de un vistazo entre avisos rutinarios; los demás usan el
+          // mismo tratamiento neutro sin depender de una barra de acento lateral.
+          const isUrgent = aviso.category === "urgente";
           return (
             <Card
               key={aviso.id}
-              className={`relative border shadow-sm rounded-xl transition-all overflow-hidden hover:shadow-md ${
-                !aviso.read ? "border-[#1E2A5E]/20 shadow-[#1E2A5E]/5" : "border-gray-100"
+              className={`border shadow-sm rounded-xl transition-all overflow-hidden hover:shadow-md ${
+                isUrgent
+                  ? "border-red-200 bg-red-50/40"
+                  : !aviso.read
+                  ? "border-primary/20 shadow-primary/5"
+                  : "border-gray-100"
               }`}
             >
-              <span className={`absolute inset-y-0 left-0 w-1 ${cfg.bar}`} aria-hidden />
               <button
                 className="w-full text-left"
                 onClick={() => toggle(aviso.id)}
@@ -152,7 +159,7 @@ export default function AnnouncementsPage() {
                   !aviso.read ? " sin leer" : ""
                 }: ${aviso.title}`}
               >
-                <CardContent className="p-5 pl-7">
+                <CardContent className="p-5">
                   <div className="flex items-start gap-4">
                     {/* Category icon */}
                     <div
@@ -168,8 +175,8 @@ export default function AnnouncementsPage() {
                             {cfg.label}
                           </Badge>
                           {!aviso.read && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1E2A5E]">
-                              <span className="h-2 w-2 rounded-full bg-[#1E2A5E]" aria-hidden />
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary">
+                              <span className="h-2 w-2 rounded-full bg-primary" aria-hidden />
                               Sin leer
                             </span>
                           )}
@@ -181,7 +188,7 @@ export default function AnnouncementsPage() {
 
                       <p
                         className={`mt-1.5 text-sm font-bold ${
-                          !aviso.read ? "text-[#0F172A]" : "text-[#334155]"
+                          !aviso.read ? "text-foreground" : "text-foreground/80"
                         }`}
                       >
                         {aviso.title}
@@ -213,9 +220,9 @@ export default function AnnouncementsPage() {
               {/* Contenido expandido: sin `max-h` fijo, los avisos largos ya no
                   se cortaban en silencio. */}
               {isExpanded && (
-                <div id={`aviso-${aviso.id}`} className="px-5 pb-5 pl-7">
+                <div id={`aviso-${aviso.id}`} className="px-5 pb-5">
                   <div
-                    className={`sm:ml-14 p-4 rounded-xl border text-sm text-[#334155] leading-relaxed whitespace-pre-line ${cfg.bg} ${cfg.border}`}
+                    className={`sm:ml-14 p-4 rounded-xl border text-sm text-foreground/80 leading-relaxed whitespace-pre-line ${cfg.bg} ${cfg.border}`}
                   >
                     {aviso.body}
                   </div>

@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, FileImage, Presentation, Sheet, BookOpen, FolderOpen } from "lucide-react";
+import StatCard from "@/components/father/StatCard";
 import { useFatherStudents } from "@/components/father/useFatherStudents";
 import { useCachedFatherResource } from "@/components/father/useCachedFatherResource";
 import ChildSelector from "@/components/father/ChildSelector";
@@ -71,7 +72,7 @@ export default function MaterialsPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-[#1E2A5E]">Materiales</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-primary">Materiales</h1>
         <p className="text-muted-foreground mt-1">
           Recursos compartidos por los docentes — {SCHOOL_YEAR_LABEL}
         </p>
@@ -84,28 +85,13 @@ export default function MaterialsPage() {
         <>
           {/* Summary strip */}
           <div className="grid grid-cols-2 gap-3">
-            <Card className="border-none shadow-sm rounded-xl border-l-4 border-l-[#1E2A5E]">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1E2A5E]/10">
-                  <FolderOpen className="h-5 w-5 text-[#1E2A5E]" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-[#1E2A5E]">{courses.length}</p>
-                  <p className="text-xs text-muted-foreground">Cursos</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-none shadow-sm rounded-xl border-l-4 border-l-amber-500">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50">
-                  <BookOpen className="h-5 w-5 text-amber-600" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-[#1E2A5E]">{totalMaterials}</p>
-                  <p className="text-xs text-muted-foreground">Materiales publicados</p>
-                </div>
-              </CardContent>
-            </Card>
+            <StatCard icon={FolderOpen} value={courses.length} label="Cursos" tone="primary" />
+            <StatCard
+              icon={BookOpen}
+              value={totalMaterials}
+              label="Materiales publicados"
+              tone="warning"
+            />
           </div>
 
           {/* List grouped by course */}
@@ -125,9 +111,11 @@ export default function MaterialsPage() {
               {coursesWithMaterials.map((course) => (
                 <Card key={course.id} className="border-none shadow-sm rounded-xl overflow-hidden">
                   <CardContent className="p-0">
-                    <div className="flex items-center justify-between bg-[#1E2A5E] px-5 py-3">
+                    <div className="flex items-center justify-between bg-primary px-5 py-3">
                       <h2 className="text-sm font-bold text-white">{course.subject}</h2>
-                      <Badge className="bg-[#F4C15C]/25 text-[#F4C15C] border border-[#F4C15C]/40 text-[11px] font-bold">
+                      {/* Dorado sólido (no al 25% de opacidad): mismo color
+                          institucional, mejor contraste sobre el navy. */}
+                      <Badge className="bg-accent text-primary text-[11px] font-bold hover:bg-accent">
                         {course.materials.length} archivo{course.materials.length === 1 ? "" : "s"}
                       </Badge>
                     </div>
@@ -146,7 +134,7 @@ export default function MaterialsPage() {
                               <Icon className={`h-5 w-5 ${meta.text}`} aria-hidden />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-[#0F172A] leading-tight">
+                              <p className="text-sm font-semibold text-foreground leading-tight">
                                 {m.title}
                               </p>
                               <div className="flex flex-wrap items-center gap-2 mt-1.5">

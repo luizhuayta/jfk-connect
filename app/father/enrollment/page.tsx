@@ -125,7 +125,7 @@ export default function EnrollmentPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-[#1E2A5E]">Matrícula</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-primary">Matrícula</h1>
         <p className="text-muted-foreground mt-1">
           Estado de matrícula — {SCHOOL_YEAR_LABEL}
         </p>
@@ -137,20 +137,12 @@ export default function EnrollmentPage() {
       {students.length > 0 &&
         (enrollment ? (
           <>
-            {/* Status banner */}
-            <div className="relative flex items-center justify-between bg-[#1E2A5E] rounded-xl px-6 py-5 flex-wrap gap-4 overflow-hidden">
-              <span
-                className={`absolute inset-y-0 left-0 w-1.5 ${
-                  enrollment.status === "regular"
-                    ? "bg-emerald-500"
-                    : enrollment.status === "condicional"
-                    ? "bg-amber-500"
-                    : "bg-red-500"
-                }`}
-              />
+            {/* Status banner — el estado ya lo comunica el Badge de la derecha,
+                sin necesitar además una barra de acento lateral redundante. */}
+            <div className="flex items-center justify-between bg-primary rounded-xl px-6 py-5 flex-wrap gap-4">
               <div className="flex items-center gap-4">
-                <Avatar className="h-14 w-14 border-2 border-[#F4C15C]/40">
-                  <AvatarFallback className="bg-[#F4C15C]/20 text-[#F4C15C] font-bold text-lg">
+                <Avatar className="h-14 w-14 border-2 border-accent/40">
+                  <AvatarFallback className="bg-accent/20 text-accent font-bold text-lg">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -170,7 +162,7 @@ export default function EnrollmentPage() {
               {/* Enrollment details */}
               <Card className="border-none shadow-sm rounded-xl">
                 <CardContent className="p-5 space-y-4">
-                  <h2 className="text-base font-bold text-[#0F172A]">Datos de Matrícula</h2>
+                  <h2 className="text-base font-bold text-foreground">Datos de Matrícula</h2>
                   <div className="space-y-2">
                     {[
                       { icon: Hash,          label: "Código",            value: enrollment.code },
@@ -184,12 +176,12 @@ export default function EnrollmentPage() {
                         key={row.label}
                         className="flex items-center gap-3 py-1.5 border-b border-gray-50 last:border-0"
                       >
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#1E2A5E]/10 shrink-0">
-                          <row.icon className="h-3.5 w-3.5 text-[#1E2A5E]" aria-hidden />
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                          <row.icon className="h-3.5 w-3.5 text-primary" aria-hidden />
                         </div>
                         <div className="flex-1 flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">{row.label}</span>
-                          <span className="text-sm font-semibold text-[#0F172A] text-right">
+                          <span className="text-sm font-semibold text-foreground text-right">
                             {row.value}
                           </span>
                         </div>
@@ -200,7 +192,7 @@ export default function EnrollmentPage() {
                   <Button
                     onClick={handleDownloadConstancia}
                     disabled={busy}
-                    className="w-full bg-[#F4C15C] text-[#1E2A5E] font-semibold hover:bg-[#e0b04f] rounded-lg h-10 gap-2"
+                    className="w-full bg-accent text-primary font-semibold hover:bg-accent-hover rounded-lg h-10 gap-2"
                   >
                     {busy ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -216,7 +208,7 @@ export default function EnrollmentPage() {
               <Card className="border-none shadow-sm rounded-xl">
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-[#0F172A]">Documentos</h2>
+                    <h2 className="text-base font-bold text-foreground">Documentos</h2>
                     <Badge
                       className={`text-xs font-bold ${
                         docsPercent === 100
@@ -234,7 +226,7 @@ export default function EnrollmentPage() {
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Progreso
                       </span>
-                      <span className="text-base font-bold text-[#1E2A5E]">{docsPercent}%</span>
+                      <span className="text-base font-bold text-primary">{docsPercent}%</span>
                     </div>
                     <div
                       className="h-3 bg-gray-100 rounded-full overflow-hidden"

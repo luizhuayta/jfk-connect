@@ -42,16 +42,16 @@ export default function ChildSelector() {
             key={s.id}
             onClick={() => selectStudent(s.id)}
             aria-pressed={isActive}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
               isActive
-                ? "border-[#1E2A5E] bg-[#1E2A5E]/5"
-                : "border-gray-200 bg-white hover:border-[#1E2A5E]/30"
+                ? "border-primary bg-primary/5"
+                : "border-gray-200 bg-white hover:border-primary/30"
             }`}
           >
-            <Avatar className="h-9 w-9 border border-[#F4C15C]/40">
+            <Avatar className="h-9 w-9 border border-accent/40">
               <AvatarFallback
                 className={`text-xs font-semibold ${
-                  isActive ? "bg-[#1E2A5E] text-white" : "bg-[#1E2A5E]/10 text-[#1E2A5E]"
+                  isActive ? "bg-primary text-white" : "bg-primary/10 text-primary"
                 }`}
               >
                 {getInitials(s.name)}
@@ -60,7 +60,7 @@ export default function ChildSelector() {
             <div className="text-left">
               <p
                 className={`text-sm font-semibold ${
-                  isActive ? "text-[#1E2A5E]" : "text-[#0F172A]"
+                  isActive ? "text-primary" : "text-foreground"
                 }`}
               >
                 {s.name}

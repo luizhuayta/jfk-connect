@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, GraduationCap, LogOut, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, GraduationCap, LogOut, Menu, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useSessionUser } from "@/lib/useSessionUser";
@@ -35,6 +35,15 @@ interface AppSidebarProps {
    * arranca pegado al borde superior (caso del padre, que ya no usa Navbar).
    */
   reserveTopSpace?: boolean;
+  /**
+   * Si es `false`, oculta el header de marca (logo + nombre) del sidebar.
+   * Úsalo cuando ese mismo logo ya vive en un top bar propio (panel de
+   * padres) para no repetirlo; el botón de cerrar el drawer móvil se
+   * reubica junto a los datos del usuario en ese caso. Default `true`.
+   */
+  showBrand?: boolean;
+  /** Ícono del botón colapsar/expandir. Default `"chevron"`. */
+  collapseIcon?: "chevron" | "hamburger";
 }
 
 /**
@@ -54,6 +63,8 @@ export default function AppSidebar({
   onCloseMobile,
   children,
   reserveTopSpace = true,
+  showBrand = true,
+  collapseIcon = "chevron",
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -161,7 +172,9 @@ export default function AppSidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
-        {/* Header de marca */}
+        {/* Header de marca — se omite cuando el mismo logo ya vive en un
+            top bar propio (panel de padres), para no repetirlo. */}
+        {showBrand && (
         <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
           {collapsed ? (
             brand.logoSrc ? (
@@ -213,8 +226,10 @@ export default function AppSidebar({
             <X className="h-4 w-4" />
           </button>
         </div>
+        )}
 
-        {/* Datos del usuario */}
+        {/* Datos del usuario. Sin header de marca (showBrand=false) este
+            bloque también aloja el cierre del drawer móvil. */}
         {user && (
           <div className={cn("p-4 border-b border-white/10 shrink-0", collapsed && "px-2")}>
             <div className={cn("flex", collapsed ? "justify-center" : "items-center gap-3")}>
@@ -228,6 +243,15 @@ export default function AppSidebar({
                   <p className="text-sm font-bold truncate">{user.full_name}</p>
                   <p className="text-xs text-white/70 truncate">{getRoleLabel(user.role)}</p>
                 </div>
+              )}
+              {!showBrand && (
+                <button
+                  onClick={onCloseMobile}
+                  className="lg:hidden p-1.5 rounded hover:bg-white/10 shrink-0"
+                  aria-label="Cerrar menú"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               )}
             </div>
           </div>
@@ -254,7 +278,9 @@ export default function AppSidebar({
             title={collapsed ? "Expandir menú" : "Colapsar menú"}
             aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
           >
-            {collapsed ? (
+            {collapseIcon === "hamburger" ? (
+              <Menu className="h-5 w-5" />
+            ) : collapsed ? (
               <ChevronRight className="h-5 w-5" />
             ) : (
               <ChevronLeft className="h-5 w-5" />

@@ -108,7 +108,7 @@ export default function SchedulePage() {
     <div className="space-y-8">
       {/* Header — el turno sale del alumno, no está escrito a mano */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-[#1E2A5E]">Horario</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-primary">Horario</h1>
         <p className="text-muted-foreground mt-1">
           {student?.shift ? `Turno ${student.shift.toLowerCase()} · ` : ""}
           {DAY_RANGE} · {SCHOOL_YEAR_LABEL}
@@ -125,7 +125,7 @@ export default function SchedulePage() {
             <CardContent className="p-0 overflow-x-auto">
               <div className="min-w-[640px]">
                 {/* Header row */}
-                <div className="grid grid-cols-[110px_repeat(5,1fr)] bg-[#1E2A5E]">
+                <div className="grid grid-cols-[110px_repeat(5,1fr)] bg-primary">
                   <div className="p-3 text-xs font-semibold text-white/80 flex items-center justify-center">
                     Período
                   </div>
@@ -135,13 +135,13 @@ export default function SchedulePage() {
                       <div
                         key={day}
                         className={`relative p-3 text-center text-xs font-bold text-white border-l border-white/10 ${
-                          isToday ? "bg-[#F4C15C]/25 ring-2 ring-[#F4C15C] ring-inset" : ""
+                          isToday ? "bg-accent/25 ring-2 ring-accent ring-inset" : ""
                         }`}
                       >
                         <span className="hidden sm:block">{day}</span>
                         <span className="sm:hidden">{DAY_SHORT[day]}</span>
                         {isToday && (
-                          <span className="block text-[10px] text-[#F4C15C] mt-0.5 font-bold tracking-wide">
+                          <span className="block text-[10px] text-accent mt-0.5 font-bold tracking-wide">
                             ● HOY
                           </span>
                         )}
@@ -178,10 +178,10 @@ export default function SchedulePage() {
                         return (
                           <div
                             key={day}
-                            className={`relative p-1.5 border-l border-gray-100 ${isToday ? "bg-[#1E2A5E]/[0.04]" : ""}`}
+                            className={`relative p-1.5 border-l border-gray-100 ${isToday ? "bg-primary/[0.04]" : ""}`}
                           >
                             {isToday && (
-                              <span className="absolute inset-y-0 left-0 w-0.5 bg-[#F4C15C]" />
+                              <span className="absolute inset-y-0 left-0 w-0.5 bg-accent" />
                             )}
                             {slot ? (
                               <div
@@ -211,7 +211,7 @@ export default function SchedulePage() {
           {/* Legend */}
           {subjects.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 {student ? `Cursos de ${student.name}` : "Cursos"}
               </p>
               <div className="flex flex-wrap gap-2">

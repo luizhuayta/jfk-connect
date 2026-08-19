@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { TrendingUp, CheckCircle2, Plus, Star } from "lucide-react";
 import ClaimChildModal from "@/components/father/ClaimChildModal";
 import NoChildrenState from "@/components/father/NoChildrenState";
+import StatCard from "@/components/father/StatCard";
+import BimesterTiles from "@/components/father/BimesterSelector";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
@@ -100,18 +102,24 @@ export default function StudentsPage() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-[#1E2A5E]">Mis Hijos</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold text-primary">Mis Hijos</h1>
           <p className="text-muted-foreground mt-1">
             Alumnos matriculados — {SCHOOL_YEAR_LABEL}
           </p>
         </div>
-        {students.length > 0 && canAddMore && (
-          <Button
-            onClick={() => setShowClaimModal(true)}
-            className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold"
-          >
-            <Plus className="h-4 w-4" aria-hidden /> Agregar hijo
-          </Button>
+        {students.length > 0 && (
+          canAddMore ? (
+            <Button
+              onClick={() => setShowClaimModal(true)}
+              className="bg-primary text-white hover:bg-primary-hover rounded-xl h-10 gap-2 font-semibold"
+            >
+              <Plus className="h-4 w-4" aria-hidden /> Agregar hijo
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground max-w-[220px] text-right">
+              Llegaste al máximo de {MAX_CHILDREN} hijos vinculados.
+            </p>
+          )
         )}
       </div>
 
@@ -121,43 +129,24 @@ export default function StudentsPage() {
         <>
           {/* Stats summary */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="border-none shadow-sm rounded-xl border-l-4 border-l-[#1E2A5E]">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1E2A5E]/10">
-                  <CheckCircle2 className="h-5 w-5 text-[#1E2A5E]" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-[#1E2A5E]">{students.length}</p>
-                  <p className="text-xs text-muted-foreground">Hijos matriculados</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-none shadow-sm rounded-xl border-l-4 border-l-amber-500">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50">
-                  <Star className="h-5 w-5 text-amber-600" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-[#1E2A5E]">
-                    {generalAverage != null ? generalAverage.toFixed(1) : "—"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Promedio general</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-none shadow-sm rounded-xl border-l-4 border-l-emerald-500">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50">
-                  <TrendingUp className="h-5 w-5 text-emerald-600" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-[#1E2A5E]">
-                    {averageAttendance != null ? `${averageAttendance}%` : "—"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Asistencia promedio</p>
-                </div>
-              </CardContent>
-            </Card>
+            <StatCard
+              icon={CheckCircle2}
+              value={students.length}
+              label="Hijos matriculados"
+              tone="primary"
+            />
+            <StatCard
+              icon={Star}
+              value={generalAverage != null ? generalAverage.toFixed(1) : "—"}
+              label="Promedio general"
+              tone="warning"
+            />
+            <StatCard
+              icon={TrendingUp}
+              value={averageAttendance != null ? `${averageAttendance}%` : "—"}
+              label="Asistencia promedio"
+              tone="success"
+            />
           </div>
 
           {/* Student Cards */}
@@ -182,6 +171,14 @@ export default function StudentsPage() {
                   ? "bg-blue-50"
                   : "bg-amber-50";
 
+              const bimesterAverages = BIMESTERS.map((b) => {
+                const notes = gradesMap[student.id]?.[b] ?? [];
+                const avg = notes.length
+                  ? notes.reduce((s, n) => s + n.note, 0) / notes.length
+                  : null;
+                return { label: b, avg };
+              });
+
               return (
                 <Card
                   key={student.id}
@@ -190,17 +187,17 @@ export default function StudentsPage() {
                   <CardContent className="p-5 space-y-4">
                     {/* Header */}
                     <div className="flex items-center gap-4">
-                      <Avatar className="h-14 w-14 border-2 border-[#F4C15C]/30">
-                        <AvatarFallback className="bg-[#1E2A5E]/10 text-[#1E2A5E] font-bold text-base">
+                      <Avatar className="h-14 w-14 border-2 border-accent/30">
+                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-base">
                           {getInitials(student.name)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <p className="font-semibold text-[#0F172A] text-base leading-tight">
+                        <p className="font-semibold text-foreground text-base leading-tight">
                           {student.name}
                         </p>
                         <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                          <Badge variant="secondary" className="bg-gray-100 text-[#64748B] text-[11px]">
+                          <Badge variant="secondary" className="bg-gray-100 text-muted-foreground text-[11px]">
                             {student.grade} &quot;{student.section}&quot;
                           </Badge>
                           <Badge className={`${statusCfg.bg} text-[11px]`}>{statusCfg.label}</Badge>
@@ -248,7 +245,7 @@ export default function StudentsPage() {
                         </p>
                       </div>
                       <div className="rounded-xl bg-gray-50 p-2.5 text-center">
-                        <p className="text-lg font-bold leading-tight text-[#1E2A5E]">
+                        <p className="text-lg font-bold leading-tight text-primary">
                           {student.courses_count ?? "—"}
                         </p>
                         <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mt-0.5">
@@ -259,25 +256,10 @@ export default function StudentsPage() {
 
                     {/* Bimester mini-summary */}
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Promedio por Bimestre
                       </p>
-                      <div className="grid grid-cols-4 gap-2">
-                        {BIMESTERS.map((b, i) => {
-                          const notes = gradesMap[student.id]?.[b] ?? [];
-                          const avg = notes.length
-                            ? notes.reduce((s, n) => s + n.note, 0) / notes.length
-                            : null;
-                          return (
-                            <div key={b} className="text-center bg-gray-50 rounded-lg py-2">
-                              <p className="text-xs text-muted-foreground">B{i + 1}</p>
-                              <p className="text-sm font-bold text-[#1E2A5E]">
-                                {avg != null ? avg.toFixed(1) : "—"}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <BimesterTiles averages={bimesterAverages} compact />
                     </div>
 
                     {/* Acciones: seleccionan al hijo antes de navegar, así la
@@ -288,7 +270,7 @@ export default function StudentsPage() {
                         className="flex-1"
                         onClick={() => selectStudent(student.id)}
                       >
-                        <Button className="w-full bg-[#F4C15C] text-[#1E2A5E] font-semibold hover:bg-[#e0b04f] rounded-lg h-10 text-sm">
+                        <Button className="w-full bg-accent text-primary font-semibold hover:bg-accent-hover rounded-lg h-10 text-sm">
                           Ver Notas
                         </Button>
                       </Link>
@@ -299,7 +281,7 @@ export default function StudentsPage() {
                       >
                         <Button
                           variant="outline"
-                          className="w-full rounded-lg border-[#1E2A5E]/20 text-[#1E2A5E] hover:bg-[#1E2A5E] hover:text-white h-10 text-sm transition-colors"
+                          className="w-full rounded-lg border-primary/20 text-primary hover:bg-primary hover:text-white h-10 text-sm transition-colors"
                         >
                           Asistencia
                         </Button>

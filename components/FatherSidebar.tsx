@@ -50,6 +50,8 @@ export default function FatherSidebar({
   return (
     <AppSidebar
       brand={{ short: "Colegio IJFK", sub: "Panel de padres", logoSrc: "/Image/logo.jpg" }}
+      showBrand={false}
+      collapseIcon="hamburger"
       groups={[menu]}
       mobileOpen={mobileOpen ?? false}
       onCloseMobile={onCloseMobile ?? (() => {})}

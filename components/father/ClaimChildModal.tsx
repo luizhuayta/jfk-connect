@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { GraduationCap, Hash, Loader2, CheckCircle2, X, Plus } from "lucide-react";
+import Modal, { ModalCloseButton } from "@/components/ui/modal";
+import { GraduationCap, Hash, Loader2, CheckCircle2, Plus } from "lucide-react";
 
 type ClaimedStudent = {
   id: string;
@@ -70,14 +71,14 @@ export default function ClaimChildModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+    <Modal open={open} onClose={handleClose} titleId="claim-child-title" closable={!loading}>
+      <>
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-[#1E2A5E]">Vincular a tu hijo</h2>
-          <button onClick={handleClose} className="p-1 rounded hover:bg-gray-100">
-            <X className="h-4 w-4" />
-          </button>
+          <h2 id="claim-child-title" className="text-xl font-bold text-primary">
+            Vincular a tu hijo
+          </h2>
+          <ModalCloseButton onClose={handleClose} disabled={loading} />
         </div>
 
         {success ? (
@@ -88,8 +89,8 @@ export default function ClaimChildModal({
                 <CheckCircle2 className="h-8 w-8 text-emerald-600" />
               </div>
               <p className="text-sm text-muted-foreground">¡Hijo vinculado!</p>
-              <p className="text-lg font-bold text-[#0F172A] mt-1">{success.name}</p>
-              <Badge className="mt-2 bg-[#1E2A5E]/10 text-[#1E2A5E] text-xs font-semibold">
+              <p className="text-lg font-bold text-foreground mt-1">{success.name}</p>
+              <Badge className="mt-2 bg-primary/10 text-primary text-xs font-semibold">
                 {success.grade} &quot;{success.section}&quot;
               </Badge>
             </div>
@@ -100,7 +101,7 @@ export default function ClaimChildModal({
               {canAddMore && (
                 <Button
                   onClick={handleClaimAnother}
-                  className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043] gap-2"
+                  className="flex-1 bg-primary text-white hover:bg-primary-hover gap-2"
                 >
                   <Plus className="h-4 w-4" /> Vincular otro
                 </Button>
@@ -117,7 +118,7 @@ export default function ClaimChildModal({
             </p>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide flex items-center gap-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                 <Hash className="h-3.5 w-3.5" /> Código de matrícula
               </label>
               <div className="relative">
@@ -130,7 +131,7 @@ export default function ClaimChildModal({
                   }}
                   onKeyDown={(e) => e.key === "Enter" && !loading && handleSubmit()}
                   placeholder="Ej: 2026-2A-0042"
-                  className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A] font-mono"
+                  className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground font-mono"
                   disabled={loading}
                   autoFocus
                 />
@@ -150,7 +151,7 @@ export default function ClaimChildModal({
               <Button
                 onClick={handleSubmit}
                 disabled={loading || !code.trim()}
-                className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]"
+                className="flex-1 bg-primary text-white hover:bg-primary-hover"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -169,7 +170,7 @@ export default function ClaimChildModal({
             </p>
           </>
         )}
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 }

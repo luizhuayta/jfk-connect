@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import Modal, { ModalCloseButton } from "@/components/ui/modal";
+import StatCard from "@/components/father/StatCard";
 import {
   CheckCircle2,
   XCircle,
@@ -12,8 +14,8 @@ import {
   TrendingUp,
   Loader2,
   FileQuestion,
-  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useFatherStudents } from "@/components/father/useFatherStudents";
 import { useCachedFatherResource } from "@/components/father/useCachedFatherResource";
 import ChildSelector from "@/components/father/ChildSelector";
@@ -41,11 +43,11 @@ type AttendanceRecord = {
 // identidad en cada render y dispare el warning de exhaustive-deps en useMemo.
 const EMPTY_RECORDS: AttendanceRecord[] = [];
 
-const STATUS_CONFIG: Record<AttendanceStatus, { label: string; short: string; dot: string; text: string; bg: string }> = {
-  A: { label: "Asistió",     short: "A", dot: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
-  F: { label: "Falta",       short: "F", dot: "bg-red-500",     text: "text-red-700",     bg: "bg-red-50 border-red-200" },
-  T: { label: "Tardanza",    short: "T", dot: "bg-amber-500",   text: "text-amber-700",   bg: "bg-amber-50 border-amber-200" },
-  J: { label: "Justificado", short: "J", dot: "bg-blue-400",    text: "text-blue-700",    bg: "bg-blue-50 border-blue-200" },
+const STATUS_CONFIG: Record<AttendanceStatus, { label: string; plural: string; short: string; dot: string; text: string; bg: string }> = {
+  A: { label: "Asistió",     plural: "Asistencias", short: "A", dot: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
+  F: { label: "Falta",       plural: "Faltas",       short: "F", dot: "bg-red-500",     text: "text-red-700",     bg: "bg-red-50 border-red-200" },
+  T: { label: "Tardanza",    plural: "Tardanzas",    short: "T", dot: "bg-amber-500",   text: "text-amber-700",   bg: "bg-amber-50 border-amber-200" },
+  J: { label: "Justificado", plural: "Justificados", short: "J", dot: "bg-blue-400",    text: "text-blue-700",    bg: "bg-blue-50 border-blue-200" },
 };
 
 // Chips para el estado de una justificación enviada por el padre.
@@ -124,16 +126,6 @@ export default function AttendancePage() {
     setJustifyTarget(null);
   }, [justifySending]);
 
-  // Cerrar el modal con Escape (antes solo se cerraba con el ratón).
-  useEffect(() => {
-    if (!justifyTarget) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeJustify();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [justifyTarget, closeJustify]);
-
   // Meses disponibles derivados de los registros reales (sin hardcodear).
   const months = useMemo(
     () => Array.from(new Set(records.map((r) => r.date.slice(0, 7)))).sort().reverse(),
@@ -203,6 +195,7 @@ export default function AttendancePage() {
       if (!data.ok) throw new Error(data.error);
       setJustifyTarget(null);
       setJustifyReason("");
+      toast.success("Justificación enviada. El docente la revisará.");
       if (activeStudentId) await refreshRecords(activeStudentId);
     } catch (err) {
       setJustifyError(err instanceof Error ? err.message : "Error al enviar la justificación");
@@ -219,7 +212,7 @@ export default function AttendancePage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-[#1E2A5E]">Asistencia</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-primary">Asistencia</h1>
         <p className="text-muted-foreground mt-1">
           Registro de asistencia — {SCHOOL_YEAR_LABEL}
         </p>
@@ -232,47 +225,50 @@ export default function AttendancePage() {
         <>
           {/* Year summary stats */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <Card className="border-none shadow-sm rounded-xl col-span-2 sm:col-span-1 border-l-4 border-l-[#1E2A5E]">
-              <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                <TrendingUp className="h-5 w-5 text-[#1E2A5E] mb-1" aria-hidden />
-                <p className="text-2xl font-bold text-[#1E2A5E]">{annualAttendance}%</p>
-                <p className="text-xs text-muted-foreground">Asist. anual</p>
-              </CardContent>
-            </Card>
+            <div className="col-span-2 sm:col-span-1">
+              <StatCard
+                icon={TrendingUp}
+                value={`${annualAttendance}%`}
+                label="Asist. anual"
+                tone="primary"
+                layout="centered"
+              />
+            </div>
             {(["A", "F", "T", "J"] as AttendanceStatus[]).map((s) => {
               const cfg = STATUS_CONFIG[s];
               const Icon = s === "A" ? CheckCircle2 : s === "F" ? XCircle : s === "T" ? Clock : FileCheck;
-              const borderColor =
-                s === "A" ? "border-l-emerald-500" : s === "F" ? "border-l-red-500" : s === "T" ? "border-l-amber-500" : "border-l-blue-400";
+              const tone: "success" | "error" | "warning" | "primary" =
+                s === "A" ? "success" : s === "F" ? "error" : s === "T" ? "warning" : "primary";
               return (
-                <Card key={s} className={`border-none shadow-sm rounded-xl border-l-4 ${borderColor}`}>
-                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <Icon className={`h-5 w-5 mb-1 ${cfg.text}`} aria-hidden />
-                    <p className={`text-2xl font-bold ${cfg.text}`}>{allCounts[s]}</p>
-                    <p className="text-xs text-muted-foreground">{cfg.label}s</p>
-                  </CardContent>
-                </Card>
+                <StatCard
+                  key={s}
+                  icon={Icon}
+                  value={allCounts[s]}
+                  label={cfg.plural}
+                  tone={tone}
+                  layout="centered"
+                />
               );
             })}
           </div>
 
           {/* Month selector + calendar */}
           <Card className="border-none shadow-sm rounded-xl overflow-hidden">
-            <CardContent className="p-6 space-y-5">
+            <CardContent className="p-4 sm:p-6 space-y-5">
               {/* Month tabs */}
               <div className="flex items-center justify-between flex-wrap gap-3">
-                <h2 className="text-lg font-bold text-[#0F172A]">Asistencia mensual</h2>
+                <h2 className="text-lg font-bold text-foreground">Asistencia mensual</h2>
                 {months.length > 0 && (
-                  <div className="flex gap-1 bg-gray-50 rounded-lg p-1 flex-wrap">
+                  <div className="flex gap-1 bg-surface-container-low rounded-lg p-1 flex-wrap">
                     {months.map((m) => (
                       <button
                         key={m}
                         onClick={() => setSelectedMonth(m)}
                         aria-pressed={activeMonth === m}
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
                           activeMonth === m
-                            ? "bg-[#1E2A5E] text-white"
-                            : "text-[#64748B] hover:text-[#0F172A]"
+                            ? "bg-primary text-white"
+                            : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
                         {new Date(m + "-01T12:00:00").toLocaleDateString("es-PE", {
@@ -304,8 +300,11 @@ export default function AttendancePage() {
                     })}
                   </div>
 
-                  {/* Calendar grid */}
-                  <div className="space-y-0.5">
+                  {/* Calendar grid — min-w garantiza celdas ≥44px (mínimo táctil)
+                      incluso en móvil; solo hace scroll horizontal por debajo
+                      de ese ancho, igual que la grilla de Horario. */}
+                  <div className="overflow-x-auto">
+                  <div className="space-y-0.5 min-w-[364px]">
                     {/* Day names header */}
                     <div className="grid grid-cols-7 mb-0.5">
                       {DAY_NAMES.map((d) => (
@@ -340,7 +339,8 @@ export default function AttendancePage() {
                               <span className={isToday ? "underline decoration-2" : undefined}>{day}</span>
                               {status && (
                                 <span
-                                  className={`text-[9px] font-bold leading-none mt-0.5 ${STATUS_CONFIG[status].text}`}
+                                  className={`text-[10px] font-bold leading-none mt-0.5 ${STATUS_CONFIG[status].text}`}
+                                  aria-hidden
                                 >
                                   {STATUS_CONFIG[status].short}
                                 </span>
@@ -370,7 +370,7 @@ export default function AttendancePage() {
                                 onClick={() => openJustify(rec)}
                                 title={`${label} — toca para justificar`}
                                 aria-label={`${label}. Justificar esta falta`}
-                                className={`relative flex flex-col items-center justify-center rounded-md aspect-square text-xs font-bold transition-colors cursor-pointer border ring-offset-1 hover:ring-2 hover:ring-red-300 focus-visible:ring-2 focus-visible:ring-red-400 ${STATUS_CONFIG.F.bg} ${STATUS_CONFIG.F.text}`}
+                                className={`relative flex min-h-11 flex-col items-center justify-center rounded-md aspect-square text-xs font-bold transition-colors cursor-pointer border ring-offset-1 hover:ring-2 hover:ring-red-300 focus-visible:ring-2 focus-visible:ring-red-400 ${STATUS_CONFIG.F.bg} ${STATUS_CONFIG.F.text}`}
                               >
                                 {cell}
                               </button>
@@ -381,20 +381,25 @@ export default function AttendancePage() {
                             <div
                               key={di}
                               title={label}
-                              className={`relative flex flex-col items-center justify-center rounded-md aspect-square text-xs font-medium transition-colors ${
+                              className={`relative flex min-h-11 flex-col items-center justify-center rounded-md aspect-square text-xs font-medium transition-colors ${
                                 weekend
-                                  ? "text-gray-300 bg-gray-50/50"
+                                  ? "text-gray-500 bg-gray-50/50"
                                   : status
                                   ? `${STATUS_CONFIG[status].bg} border ${STATUS_CONFIG[status].text} font-bold`
                                   : "text-gray-400 border border-dashed border-gray-200"
-                              } ${isToday ? "ring-2 ring-[#F4C15C]" : ""}`}
+                              } ${isToday ? "ring-2 ring-accent" : ""}`}
                             >
                               {cell}
+                              {/* `title` no se anuncia de forma confiable en lectores de
+                                  pantalla: el estado real del día también queda como
+                                  texto accesible aquí. */}
+                              <span className="sr-only">{label}</span>
                             </div>
                           );
                         })}
                       </div>
                     ))}
+                  </div>
                   </div>
 
                   {monthFaltas.length > 0 && (
@@ -407,7 +412,7 @@ export default function AttendancePage() {
                   {/* Faltas y justificaciones */}
                   {monthFaltas.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Faltas y justificaciones
                       </p>
                       <div className="space-y-2">
@@ -434,8 +439,8 @@ export default function AttendancePage() {
                                     : "text-amber-600"
                                 }`}
                               />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-[#0F172A] capitalize leading-tight">
+              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-foreground capitalize leading-tight">
                                   {longDate(rec.date)}
                                 </p>
                                 {just ? (
@@ -445,7 +450,7 @@ export default function AttendancePage() {
                                     </p>
                                     {just.adminResponse && (
                                       <p className="text-xs mt-0.5">
-                                        <span className="font-semibold text-[#334155]">
+                                        <span className="font-semibold text-foreground/80">
                                           Respuesta del docente:{" "}
                                         </span>
                                         <span className="text-muted-foreground">
@@ -469,7 +474,7 @@ export default function AttendancePage() {
                                   <Button
                                     size="sm"
                                     onClick={() => openJustify(rec)}
-                                    className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-lg text-xs h-8"
+                                    className="bg-primary text-white hover:bg-primary-hover rounded-lg text-xs h-8"
                                   >
                                     Justificar
                                   </Button>
@@ -483,15 +488,15 @@ export default function AttendancePage() {
                   )}
 
                   {/* Attendance bar */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 bg-[#1E2A5E] rounded-xl px-6 py-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-primary rounded-xl px-6 py-5">
                     <div>
                       <p className="text-sm text-white/80">Asistencia del mes</p>
-                      <p className="text-3xl font-bold text-[#F4C15C]">{attendance}%</p>
+                      <p className="text-3xl font-bold text-accent">{attendance}%</p>
                     </div>
                     <Badge
                       className={`font-bold text-sm px-3 py-1 ${
                         attendance >= 90
-                          ? "bg-[#F4C15C] text-[#1E2A5E] hover:bg-[#F4C15C]"
+                          ? "bg-accent text-primary hover:bg-accent"
                           : attendance >= 75
                           ? "bg-amber-300 text-amber-900 hover:bg-amber-300"
                           : "bg-red-500 text-white hover:bg-red-500"
@@ -523,93 +528,81 @@ export default function AttendancePage() {
       )}
 
       {/* Modal: justificar falta */}
-      {justifyTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={closeJustify}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="justify-title"
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <h2 id="justify-title" className="text-xl font-bold text-[#1E2A5E]">
-                Justificar falta
-              </h2>
-              <button
-                onClick={closeJustify}
-                disabled={justifySending}
-                aria-label="Cerrar"
-                className="p-1 rounded hover:bg-gray-100"
-              >
-                <X className="h-4 w-4" aria-hidden />
-              </button>
-            </div>
-
-            <p className="text-sm text-muted-foreground capitalize">
-              {longDate(justifyTarget.date)}
-            </p>
-
-            <div>
-              <label
-                htmlFor="justify-reason"
-                className="text-xs font-semibold text-[#64748B] uppercase tracking-wide"
-              >
-                Motivo de la justificación *
-              </label>
-              <textarea
-                id="justify-reason"
-                value={justifyReason}
-                onChange={(e) => setJustifyReason(e.target.value)}
-                rows={4}
-                maxLength={500}
-                autoFocus
-                placeholder="Ej: Inasistencia por cita médica..."
-                className="w-full mt-1.5 rounded-xl border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E]"
-              />
-              <p className="text-[10px] text-muted-foreground mt-1 text-right">
-                {justifyReason.length}/500
-              </p>
-            </div>
-
-            {justifyError && (
-              <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                {justifyError}
-              </p>
-            )}
-
-            <p className="text-[11px] text-muted-foreground bg-gray-50 rounded-lg px-3 py-2">
-              El docente revisará tu solicitud. Si la aprueba, la falta se marcará como
-              justificada en tu registro.
-            </p>
-
-            <div className="flex gap-2 pt-1">
-              <Button
-                variant="outline"
-                onClick={closeJustify}
-                disabled={justifySending}
-                className="flex-1 rounded-lg"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={submitJustify}
-                disabled={justifySending || !justifyReason.trim()}
-                className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-lg"
-              >
-                {justifySending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  "Enviar justificación"
-                )}
-              </Button>
-            </div>
+      <Modal
+        open={Boolean(justifyTarget)}
+        onClose={closeJustify}
+        titleId="justify-title"
+        closable={!justifySending}
+        className="space-y-4"
+      >
+        <>
+          <div className="flex items-center justify-between">
+            <h2 id="justify-title" className="text-xl font-bold text-primary">
+              Justificar falta
+            </h2>
+            <ModalCloseButton onClose={closeJustify} disabled={justifySending} />
           </div>
-        </div>
-      )}
+
+          <p className="text-sm text-muted-foreground capitalize">
+            {justifyTarget ? longDate(justifyTarget.date) : ""}
+          </p>
+
+          <div>
+            <label
+              htmlFor="justify-reason"
+              className="text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+            >
+              Motivo de la justificación *
+            </label>
+            <textarea
+              id="justify-reason"
+              value={justifyReason}
+              onChange={(e) => setJustifyReason(e.target.value)}
+              rows={4}
+              maxLength={500}
+              autoFocus
+              placeholder="Ej: Inasistencia por cita médica..."
+              className="w-full mt-1.5 rounded-xl border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1 text-right">
+              {justifyReason.length}/500
+            </p>
+          </div>
+
+          {justifyError && (
+            <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              {justifyError}
+            </p>
+          )}
+
+          <p className="text-[11px] text-muted-foreground bg-gray-50 rounded-lg px-3 py-2">
+            El docente revisará tu solicitud. Si la aprueba, la falta se marcará como
+            justificada en tu registro.
+          </p>
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="outline"
+              onClick={closeJustify}
+              disabled={justifySending}
+              className="flex-1 rounded-lg"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={submitJustify}
+              disabled={justifySending || !justifyReason.trim()}
+              className="flex-1 bg-primary text-white hover:bg-primary-hover rounded-lg"
+            >
+              {justifySending ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                "Enviar justificación"
+              )}
+            </Button>
+          </div>
+        </>
+      </Modal>
     </div>
   );
 }

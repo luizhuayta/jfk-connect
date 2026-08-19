@@ -148,8 +148,8 @@ export default function FatherDashboard() {
       if (!data.ok) throw new Error(data.error);
       setGradesCache((prev) => ({ ...prev, [studentId]: data.grades }));
       setDataError(null);
-    } catch (err) {
-      setDataError(err instanceof Error ? err.message : "Error cargando notas");
+    } catch {
+      setDataError("No pudimos cargar las notas. Intenta de nuevo.");
     }
   }, []);
 
@@ -245,13 +245,19 @@ export default function FatherDashboard() {
             Así va el avance de tus hijos hoy.
           </p>
         </div>
-        {students.length > 0 && canAddMore && (
-          <Button
-            onClick={() => setShowClaimModal(true)}
-            className="h-10 rounded-lg bg-[#1E2A5E] text-white font-semibold gap-1.5 hover:bg-[#162043] shadow-sm"
-          >
-            <Plus className="h-4 w-4" aria-hidden /> Agregar hijo
-          </Button>
+        {students.length > 0 && (
+          canAddMore ? (
+            <Button
+              onClick={() => setShowClaimModal(true)}
+              className="h-10 rounded-lg bg-primary text-white font-semibold gap-1.5 hover:bg-primary-hover shadow-sm"
+            >
+              <Plus className="h-4 w-4" aria-hidden /> Agregar hijo
+            </Button>
+          ) : (
+            <p className="text-xs text-on-surface-variant max-w-[200px] text-right">
+              Llegaste al máximo de {MAX_CHILDREN} hijos vinculados.
+            </p>
+          )
         )}
       </div>
 
@@ -290,7 +296,7 @@ export default function FatherDashboard() {
                     "group relative text-left rounded-2xl p-4 border transition-all duration-200",
                     "bg-surface-container-lowest",
                     active
-                      ? "border-[#1E2A5E] ring-1 ring-[#1E2A5E]/30 shadow-sm"
+                      ? "border-primary ring-1 ring-primary/30 shadow-sm"
                       : "border-outline-variant hover:-translate-y-0.5 hover:shadow-[0_12px_32px_-14px_rgba(17,28,44,0.2)]",
                     cardShadow,
                   )}
@@ -312,7 +318,7 @@ export default function FatherDashboard() {
 
                   {/* Badge "En vista" superpuesto en la esquina superior derecha. */}
                   {active && (
-                    <span className="absolute right-4 top-4 inline-flex items-center rounded-full bg-[#1E2A5E] px-2.5 py-1 text-[10px] font-semibold text-white">
+                    <span className="absolute right-4 top-4 inline-flex items-center rounded-full bg-primary px-2.5 py-1 text-[10px] font-semibold text-white">
                       En vista
                     </span>
                   )}
@@ -446,7 +452,7 @@ export default function FatherDashboard() {
                               <span className="text-xs text-on-surface-variant">—</span>
                             )}
                           </TableCell>
-                          <TableCell className="py-3 text-sm font-medium text-on-surface">
+                          <TableCell className="py-3 text-sm font-medium text-on-surface whitespace-normal break-words max-w-[220px]">
                             {row.observation}
                           </TableCell>
                         </TableRow>
@@ -460,7 +466,7 @@ export default function FatherDashboard() {
                   duplicar la misma descarga en dos sitios. */}
               <div className="flex flex-wrap gap-3 pt-1">
                 <Link href="/father/grades">
-                  <Button className="h-10 gap-1.5 rounded-lg bg-[#1E2A5E] text-white text-sm font-semibold hover:bg-[#162043]">
+                  <Button className="h-10 gap-1.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-hover">
                     Ver todas las notas y descargar boletín
                     <ChevronRight className="h-4 w-4" aria-hidden />
                   </Button>
@@ -484,7 +490,7 @@ export default function FatherDashboard() {
                     )}
                   </div>
                 </div>
-                <Badge className="rounded-lg bg-[#1E2A5E] px-3 py-1.5 text-xs font-semibold text-white">
+                <Badge className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white">
                   {levelLabel}
                 </Badge>
               </div>
@@ -538,7 +544,7 @@ export default function FatherDashboard() {
                             bg,
                             text,
                             isToday &&
-                              "ring-2 ring-[#F4C15C] ring-offset-2 ring-offset-surface-container-lowest",
+                              "ring-2 ring-accent ring-offset-2 ring-offset-surface-container-lowest",
                           )}
                         >
                           {status ?? "—"}
