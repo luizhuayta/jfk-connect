@@ -18,15 +18,16 @@ type ScheduleSlot = {
 };
 
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-const PERIODS = [
-  "7:45 - 8:30",
-  "8:30 - 9:15",
-  "9:15 - 10:00",
-  "10:20 - 11:05", // tras recreo
-  "11:05 - 11:50",
-  "11:50 - 12:35",
-  "12:35 - 13:20",
-];
+// Turno Mañana y Tarde son bloques de reloj distintos — Tarde arranca a las
+// 13:30, 10 min después de que termina Mañana (no el mismo horario
+// reetiquetado). Cada alumno pertenece a una sola sección, así que solo
+// necesita el bloque de SU turno.
+const PERIODS_MAÑANA = ["7:45 - 8:30", "8:30 - 9:15", "9:15 - 10:00", "10:20 - 11:05", "11:05 - 11:50", "11:50 - 12:35", "12:35 - 13:20"];
+const PERIODS_TARDE = ["13:30 - 14:15", "14:15 - 15:00", "15:00 - 15:45", "16:05 - 16:50", "16:50 - 17:35", "17:35 - 18:20", "18:20 - 19:05"];
+const RECESS_TIME: Record<string, string> = { Mañana: "10:00 – 10:20", Tarde: "15:45 – 16:05" };
+function periodsForShift(shift: string | undefined) {
+  return shift === "Tarde" ? PERIODS_TARDE : PERIODS_MAÑANA;
+}
 
 const SUBJECT_STYLES: Record<string, string> = {
   "Matemáticas":  "bg-blue-50   text-blue-800   border-blue-200",
@@ -50,9 +51,6 @@ const DAY_SHORT: Record<string, string> = {
   "Lunes": "Lun", "Martes": "Mar", "Miércoles": "Mié",
   "Jueves": "Jue", "Viernes": "Vie",
 };
-
-/** Rango horario real de la jornada, derivado de los períodos definidos. */
-const DAY_RANGE = `${PERIODS[0].split(" - ")[0]} – ${PERIODS[PERIODS.length - 1].split(" - ")[1]}`;
 
 const EMPTY_SCHEDULE: Record<string, (ScheduleSlot | null)[]> = {};
 
@@ -100,6 +98,9 @@ export default function SchedulePage() {
     ),
   ).sort();
 
+  const periods = periodsForShift(student?.shift);
+  const dayRange = `${periods[0].split(" - ")[0]} – ${periods[periods.length - 1].split(" - ")[1]}`;
+
   if (loading) return <LoadingState label="Cargando horario..." />;
 
   if (error) return <ErrorState message={error} onRetry={handleRetry} />;
@@ -111,7 +112,7 @@ export default function SchedulePage() {
         <h1 className="text-2xl lg:text-3xl font-bold text-primary">Horario</h1>
         <p className="text-muted-foreground mt-1">
           {student?.shift ? `Turno ${student.shift.toLowerCase()} · ` : ""}
-          {DAY_RANGE} · {SCHOOL_YEAR_LABEL}
+          {dayRange} · {SCHOOL_YEAR_LABEL}
         </p>
       </div>
 
@@ -151,12 +152,12 @@ export default function SchedulePage() {
                 </div>
 
                 {/* Recreo divider position — after 3rd period */}
-                {PERIODS.map((period, pi) => (
+                {periods.map((period, pi) => (
                   <Fragment key={period}>
                     {pi === 3 && (
                       <div className="grid grid-cols-[110px_repeat(5,1fr)] bg-amber-50 border-y border-amber-200">
                         <div className="p-2 text-xs font-semibold text-amber-700 flex items-center justify-center">
-                          10:00 – 10:20
+                          {RECESS_TIME[student?.shift ?? "Mañana"]}
                         </div>
                         <div className="col-span-5 p-2 flex items-center">
                           <span className="text-xs font-bold text-amber-700">Recreo</span>

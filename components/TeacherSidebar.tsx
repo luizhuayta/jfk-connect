@@ -76,6 +76,9 @@ export default function TeacherSidebar({
   return (
     <AppSidebar
       brand={{ short: "JOHN F. KENNEDY" }}
+      showBrand={false}
+      showUserBlock={false}
+      showLogoutButton={false}
       groups={[group1, group2]}
       mobileOpen={mobileOpen ?? false}
       onCloseMobile={onCloseMobile ?? (() => {})}

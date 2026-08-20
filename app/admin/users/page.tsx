@@ -7,20 +7,41 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, GraduationCap, UserCog, ShieldCheck, Search, Plus, CheckCircle2, XCircle, Edit, Trash2, Power, Loader2, X } from "lucide-react";
+import { Users, GraduationCap, UserCog, ShieldCheck, Search, Plus, CheckCircle2, XCircle, Edit, Trash2, Power, Loader2, X, Clock, CalendarDays } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { sectionShift } from "@/lib/section-shift";
 
 type Role = "admin" | "docente" | "padre";
+
+interface TeacherSection {
+  grade: string;
+  section: string;
+  shift: string;
+}
 
 interface UserRecord {
   id: string; email: string; full_name: string; role: Role;
   phone: string | null; is_active: boolean; created_at: string;
   last_login_at: string | null; avatar_url: string | null;
   subject: string | null; shift_preference: string | null;
+  sections?: TeacherSection[];
 }
+
+interface ScheduleEntry {
+  id: string;
+  grade: string;
+  section: string;
+  day: string;
+  period: number;
+  time: string;
+  subject: string;
+  room: string | null;
+}
+
+const DAY_ORDER = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
 const ROLE_META: Record<Role, { label: string; badge: string; icon: typeof Users }> = {
   admin:   { label: "Administrador",   badge: "bg-[#1E2A5E] text-white", icon: ShieldCheck },
@@ -53,6 +74,10 @@ export default function AdminUsersPage() {
   const [editForm, setEditForm] = useState({ fullName: "", role: "docente" as Role, phone: "", isActive: true, subject: "" as string, shiftPreference: "Ambos" as string });
   const [actionLoading, setActionLoading] = useState(false);
   const [subjects, setSubjects] = useState<string[]>([]);
+  const [showSchedule, setShowSchedule] = useState<UserRecord | null>(null);
+  const [scheduleEntries, setScheduleEntries] = useState<ScheduleEntry[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   // Cargar lista de asignaturas para el dropdown
   useEffect(() => {
@@ -146,6 +171,23 @@ export default function AdminUsersPage() {
       if (!data.ok) throw new Error(data.error);
       await loadUsers(page);
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
+  };
+
+  const openSchedule = async (u: UserRecord) => {
+    setShowSchedule(u);
+    setScheduleEntries([]);
+    setScheduleError(null);
+    setScheduleLoading(true);
+    try {
+      const r = await fetch(`/api/admin/teachers/${u.id}/schedule`);
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error);
+      setScheduleEntries(data.entries);
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : "Error al cargar el horario");
+    } finally {
+      setScheduleLoading(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -264,11 +306,36 @@ export default function AdminUsersPage() {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         {u.role === "docente" && u.subject ? (
-                          <div>
-                            <p className="text-xs font-medium text-[#0F172A]">{u.subject}</p>
-                            {u.shift_preference && (
-                              <p className="text-[11px] text-muted-foreground">{u.shift_preference}</p>
+                          <div className="space-y-1.5">
+                            <div>
+                              <p className="text-xs font-medium text-[#0F172A]">{u.subject}</p>
+                              {u.shift_preference && (
+                                <p className="text-[11px] text-muted-foreground">{u.shift_preference}</p>
+                              )}
+                            </div>
+                            {u.sections && u.sections.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                {u.sections.slice(0, 3).map((s) => (
+                                  <span
+                                    key={`${s.grade}-${s.section}`}
+                                    className="inline-flex items-center rounded-md bg-blue-50 text-blue-700 text-[10px] font-semibold px-1.5 py-0.5"
+                                  >
+                                    {s.grade} &quot;{s.section}&quot;
+                                  </span>
+                                ))}
+                                {u.sections.length > 3 && (
+                                  <span className="text-[10px] text-muted-foreground font-medium">
+                                    +{u.sections.length - 3} más
+                                  </span>
+                                )}
+                              </div>
                             )}
+                            <button
+                              onClick={() => openSchedule(u)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1E2A5E] hover:underline"
+                            >
+                              <Clock className="h-3 w-3" /> Ver horario
+                            </button>
                           </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
@@ -473,6 +540,70 @@ export default function AdminUsersPage() {
               <p className="text-xs mt-2">El usuario podrá cambiarla al iniciar sesión.</p>
             </div>
             <Button onClick={() => setTempPwd(null)} className="w-full bg-[#1E2A5E] text-white hover:bg-[#162043]">Entendido</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Horario del docente */}
+      {showSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowSchedule(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between p-6 pb-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-xl font-bold text-[#1E2A5E] flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5" /> Horario
+                </h2>
+                <p className="text-sm text-muted-foreground mt-0.5">{showSchedule.full_name} · {showSchedule.subject ?? "—"}</p>
+              </div>
+              <button onClick={() => setShowSchedule(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="overflow-y-auto p-6 pt-4">
+              {scheduleLoading ? (
+                <LoadingState label="Cargando horario..." className="py-10" />
+              ) : scheduleError ? (
+                <ErrorState message={scheduleError} onRetry={() => openSchedule(showSchedule)} />
+              ) : scheduleEntries.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  Este docente no tiene horas asignadas en el horario.
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {DAY_ORDER.filter((day) => scheduleEntries.some((e) => e.day === day)).map((day) => (
+                    <div key={day}>
+                      <p className="text-xs font-bold uppercase tracking-wide text-[#1E2A5E] mb-2">{day}</p>
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 hover:bg-gray-50">
+                            <TableHead className="text-[11px] font-semibold text-[#0F172A]">Hora</TableHead>
+                            <TableHead className="text-[11px] font-semibold text-[#0F172A]">Sección</TableHead>
+                            <TableHead className="text-[11px] font-semibold text-[#0F172A]">Aula</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {scheduleEntries
+                            .filter((e) => e.day === day)
+                            .sort((a, b) => {
+                              // Orden cronológico real: Mañana (7:45-13:20) siempre
+                              // antes que Tarde (13:30-19:05) — comparar solo por
+                              // `period` mezclaría los turnos, ya que period=1 existe
+                              // en ambos pero son horas de reloj distintas.
+                              const shiftDiff = (sectionShift(a.section) === "Tarde" ? 1 : 0) - (sectionShift(b.section) === "Tarde" ? 1 : 0);
+                              return shiftDiff !== 0 ? shiftDiff : a.period - b.period;
+                            })
+                            .map((e) => (
+                              <TableRow key={e.id} className="hover:bg-gray-50/50">
+                                <TableCell className="text-xs text-[#0F172A] font-medium py-2">{e.time}</TableCell>
+                                <TableCell className="text-xs text-[#0F172A] py-2">{e.grade} &quot;{e.section}&quot;</TableCell>
+                                <TableCell className="text-xs text-muted-foreground py-2">{e.room ?? "—"}</TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

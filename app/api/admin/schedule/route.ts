@@ -13,6 +13,8 @@ import { requireRole } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { updateScheduleSchema } from "@/lib/schemas";
+import { findTeacherConflicts, type ScheduleSlotRef } from "@/lib/scheduleConflicts";
+import { sectionShift } from "@/lib/section-shift";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +81,50 @@ export async function PATCH(request: NextRequest) {
     const updates = parsed.updates;
     if (updates.length === 0) {
       return NextResponse.json({ ok: true });
+    }
+
+    // Antes de mover nada: simular el resultado final y verificar que ningún
+    // docente quede en dos secciones a la vez. El seed llena
+    // `schedule_entries.teacher_id` con el mismo `teacher_id` de `courses`,
+    // y este mismo endpoint es el único que edita horarios — y solo mueve
+    // día/período/hora, nunca la asignatura ni el docente — así que la
+    // columna se mantiene confiable sin necesidad de resolverla vía join.
+    const allEntries = await query<
+      { id: string; grade: string; section: string; day: string; period: number; subject: string; teacher_id: string | null }
+    >(`SELECT id, grade, section, day, period, subject, teacher_id FROM schedule_entries`);
+
+    const updateById = new Map(updates.map((u) => [u.id, u]));
+    const simulated: (ScheduleSlotRef & { teacherId: string | null })[] = allEntries.rows.map((e) => {
+      const u = updateById.get(e.id);
+      return {
+        grade: e.grade,
+        section: e.section,
+        day: u ? u.day : e.day,
+        period: u ? u.period : e.period,
+        subject: e.subject,
+        shift: sectionShift(e.section),
+        teacherId: e.teacher_id,
+      };
+    });
+
+    const conflicts = findTeacherConflicts(simulated, (e) => e.teacherId);
+    if (conflicts.length > 0) {
+      const teacherIds = [...new Set(conflicts.map((c) => c.teacherId))];
+      const names = await query<{ id: string; full_name: string }>(
+        `SELECT id, full_name FROM users WHERE id = ANY($1::uuid[])`,
+        [teacherIds],
+      );
+      const nameById = new Map(names.rows.map((n) => [n.id, n.full_name]));
+      const detail = conflicts
+        .map((c) => {
+          const sections = c.sections.map((s) => `${s.grade} "${s.section}"`).join(" y ");
+          return `${nameById.get(c.teacherId) ?? "Un docente"} quedaría en ${sections} el ${c.day} a las ${c.period}ª hora`;
+        })
+        .join("; ");
+      return NextResponse.json(
+        { ok: false, error: `Ese cambio cruza el horario de un docente: ${detail}.` },
+        { status: 409 },
+      );
     }
 
     // Actualizar en una transacción. Primero movemos cada fila a un slot

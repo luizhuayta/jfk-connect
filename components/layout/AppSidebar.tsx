@@ -42,6 +42,18 @@ interface AppSidebarProps {
    * reubica junto a los datos del usuario en ese caso. Default `true`.
    */
   showBrand?: boolean;
+  /**
+   * Si es `false`, oculta el bloque de avatar + nombre + rol del usuario.
+   * Úsalo cuando esos mismos datos ya viven en un top bar propio con
+   * dropdown (panel docente), para no repetirlos. Default `true`.
+   */
+  showUserBlock?: boolean;
+  /**
+   * Si es `false`, oculta el botón "Cerrar sesión" del sidebar. Úsalo cuando
+   * el cierre de sesión ya vive en el dropdown de un top bar propio (panel
+   * docente), para no repetirlo. Default `true`.
+   */
+  showLogoutButton?: boolean;
   /** Ícono del botón colapsar/expandir. Default `"chevron"`. */
   collapseIcon?: "chevron" | "hamburger";
 }
@@ -64,6 +76,8 @@ export default function AppSidebar({
   children,
   reserveTopSpace = true,
   showBrand = true,
+  showUserBlock = true,
+  showLogoutButton = true,
   collapseIcon = "chevron",
 }: AppSidebarProps) {
   const pathname = usePathname();
@@ -230,7 +244,7 @@ export default function AppSidebar({
 
         {/* Datos del usuario. Sin header de marca (showBrand=false) este
             bloque también aloja el cierre del drawer móvil. */}
-        {user && (
+        {showUserBlock && user && (
           <div className={cn("p-4 border-b border-white/10 shrink-0", collapsed && "px-2")}>
             <div className={cn("flex", collapsed ? "justify-center" : "items-center gap-3")}>
               <Avatar className="h-10 w-10 shrink-0 ring-2 ring-[#F4C15C]">
@@ -254,6 +268,22 @@ export default function AppSidebar({
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Cierre del drawer móvil de respaldo: si ni la marca ni los datos
+            del usuario están visibles (panel docente, donde ambos ya viven
+            en el top bar), igual necesitamos un botón alcanzable para cerrar
+            el menú en móvil sin depender solo del overlay. */}
+        {!showBrand && !showUserBlock && (
+          <div className="lg:hidden flex justify-end p-2 border-b border-white/10 shrink-0">
+            <button
+              onClick={onCloseMobile}
+              className="p-1.5 rounded hover:bg-white/10 shrink-0"
+              aria-label="Cerrar menú"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
@@ -289,7 +319,9 @@ export default function AppSidebar({
           </button>
         </div>
 
-        {/* Botón logout */}
+        {/* Botón logout — se omite cuando el mismo cierre de sesión ya vive
+            en el dropdown de un top bar propio (panel docente). */}
+        {showLogoutButton && (
         <div className="p-3 border-t border-white/10 shrink-0 overflow-x-hidden">
           <button
             onClick={handleLogout}
@@ -304,6 +336,7 @@ export default function AppSidebar({
             {!collapsed && <span>Cerrar sesión</span>}
           </button>
         </div>
+        )}
       </aside>
 
       {/* Contenido principal */}

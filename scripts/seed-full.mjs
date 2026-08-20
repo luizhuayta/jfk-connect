@@ -80,7 +80,20 @@ const GRADES = [
 const SECTIONS = ["A","B","C","D","E","F","G","H","I","J","K","L","M"];
 
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-const PERIODS = ["7:45 - 8:30","8:30 - 9:15","9:15 - 10:00","10:20 - 11:05","11:05 - 11:50","11:50 - 12:35","12:35 - 13:20"];
+// Turno Mañana y turno Tarde son bloques horarios reales distintos (no el
+// mismo 7:45-13:20 reetiquetado) — antes las secciones "Tarde" (G-M)
+// guardaban el mismo texto de hora que las de "Mañana", así que el horario
+// de un docente con secciones de ambos turnos se veía ilógico (una clase
+// "Tarde" apareciendo a las 8:30 am). El turno Tarde arranca 10 min después
+// de que termina el turno Mañana, con la misma estructura (7 bloques de 45
+// min + un recreo de 20 min tras el 3er bloque).
+const PERIODS_MAÑANA = ["7:45 - 8:30","8:30 - 9:15","9:15 - 10:00","10:20 - 11:05","11:05 - 11:50","11:50 - 12:35","12:35 - 13:20"];
+const PERIODS_TARDE  = ["13:30 - 14:15","14:15 - 15:00","15:00 - 15:45","16:05 - 16:50","16:50 - 17:35","17:35 - 18:20","18:20 - 19:05"];
+const PERIODS = PERIODS_MAÑANA; // alias: se usa donde el turno ya no importa (ids, conteos)
+const RECESS_TIME = { Mañana: "10:00 – 10:20", Tarde: "15:45 – 16:05" };
+function periodsForShift(shift) {
+  return shift === "Tarde" ? PERIODS_TARDE : PERIODS_MAÑANA;
+}
 
 // Distribución de slots por asignatura (suma = 35 = 5 días × 7 períodos)
 const SLOTS_PER_SUBJECT = {
@@ -252,7 +265,7 @@ async function main() {
         const shiftPref = shiftR < 6 ? "Ambos" : shiftR < 8 ? "Mañana" : "Tarde";
 
         teacherRows.push([tid, email, fullName, "docente", null, true, passwordHash, subject, shiftPref]);
-        teachersBySubject[subject].push({ id: tid, name: fullName, email });
+        teachersBySubject[subject].push({ id: tid, name: fullName, email, shiftPref });
         teacherN++;
       }
     }
@@ -312,6 +325,19 @@ async function main() {
     const courseRows = [];
     let courseN = 50001;
     const coursesBySection = {}; // "grade|section" → [{id, subject, teacherId, teacherName}]
+    // Rotación de docente POR ASIGNATURA Y TURNO, continua a través de las
+    // secciones de ese turno (en vez de reiniciarse en cada grado, y
+    // respetando `shift_preference`). Antes rotaba sin mirar el turno: un
+    // docente "Mañana" o "Tarde" podía terminar dictando en el turno
+    // contrario. Cada sección solo elige entre los docentes de esa
+    // asignatura cuyo shift_preference es "Ambos" o coincide con el turno
+    // de la sección. Además, con `secI % teachers.length` (13 secciones, 11
+    // docentes) las secciones A y L caían siempre en el mismo docente en
+    // los 5 grados, dándole 10 secciones — con asignaturas de 5 horas/semana
+    // (Matemáticas, Comunicación) eso exige 50 slots en una semana de solo
+    // 35, imposible de armar sin cruces. Repartiendo parejo (round-robin
+    // continuo dentro del pool elegible) el máximo queda holgado.
+    const teacherRotation = {}; // "asignatura|turno" → próximo índice a repartir
 
     for (const grade of GRADES) {
       for (let secI = 0; secI < SECTIONS.length; secI++) {
@@ -325,8 +351,14 @@ async function main() {
           const subject = SUBJECTS[subjI];
           const cid = id(courseN);
           // Asignar docente: rotar entre los docentes de esta asignatura
-          const teachers = teachersBySubject[subject];
-          const teacher = teachers[secI % teachers.length];
+          // que pueden dictar en este turno, repartiendo parejo.
+          const allTeachers = teachersBySubject[subject];
+          const eligible = allTeachers.filter((t) => t.shiftPref === "Ambos" || t.shiftPref === shift);
+          const pool = eligible.length > 0 ? eligible : allTeachers; // resguardo, no debería activarse
+          const rotKey = `${subject}|${shift}`;
+          const rotIdx = teacherRotation[rotKey] ?? 0;
+          const teacher = pool[rotIdx % pool.length];
+          teacherRotation[rotKey] = rotIdx + 1;
           const hours = SLOTS_PER_SUBJECT[subject];
 
           courseRows.push([
@@ -466,46 +498,152 @@ async function main() {
     console.log(`[seed-full]   ${enrRows.length} matrículas insertadas`);
 
     // ── 7. Horarios (~2,275) ─────────────────────────────────────────────
+    // Se arma sección por sección, pero respetando un solo requisito extra:
+    // un docente no puede quedar en dos secciones distintas al mismo
+    // (día, período) — un profesor no puede estar en dos aulas a la vez.
+    // `teacherBusy` acumula, en todo el barrido de las 65 secciones, qué
+    // slots ya tiene ocupados cada docente; al llenar cada sección se busca,
+    // para cada slot, el primer curso pendiente cuyo docente siga libre ahí.
     console.log("[seed-full] Generando horarios...");
-    const schRows = [];
     let schN = 400001;
+    const ALL_SLOTS = []; // estructural: el texto de hora depende del turno de cada sección
+    for (const day of DAYS) {
+      for (let pi = 0; pi < 7; pi++) ALL_SLOTS.push({ day, period: pi + 1 });
+    }
+    // teacherId → Set("día-turno-período") ya ocupados. El turno entra en la
+    // llave porque un docente "Ambos" puede legítimamente dictar Mañana-
+    // período-3 y Tarde-período-3 el mismo día: son horas de reloj distintas
+    // y no chocan de verdad.
+    const teacherBusy = {};
+    let scheduleConflicts = 0;
+    const scheduleRows = []; // objetos mutables {grade, section, day, period, time, course, room}
 
     for (const grade of GRADES) {
       for (let secI = 0; secI < SECTIONS.length; secI++) {
         const section = SECTIONS[secI];
+        const shift = shiftForSection(section);
+        const periods = periodsForShift(shift);
         const key = `${grade.label}|${section}`;
         const courses = coursesBySection[key];
         const room = `Aula ${sectionRoom(grade.num, secI)}`;
 
-        // Construir malla: asignar slots según SLOTS_PER_SUBJECT
-        const slots = [];
+        // Cola de cursos pendientes por colocar (uno por hora semanal, según
+        // SLOTS_PER_SUBJECT), mezclada deterministamente.
+        const pending = [];
         for (const course of courses) {
           const count = SLOTS_PER_SUBJECT[course.subject] || 1;
-          for (let s = 0; s < count; s++) slots.push(course);
+          for (let s = 0; s < count; s++) pending.push(course);
         }
-        // Mezclar deterministamente
-        for (let i = slots.length - 1; i > 0; i--) {
+        for (let i = pending.length - 1; i > 0; i--) {
           const j = detRandom(grade.num, secI, i) % (i + 1);
-          [slots[i], slots[j]] = [slots[j], slots[i]];
+          [pending[i], pending[j]] = [pending[j], pending[i]];
         }
 
-        // Llenar 35 slots (5 días × 7 períodos), los extras se descartan
-        let slotIdx = 0;
-        for (const day of DAYS) {
-          for (let pi = 0; pi < 7; pi++) {
-            if (slotIdx >= slots.length) break;
-            const course = slots[slotIdx++];
-            schRows.push([
-              id(schN++), grade.label, section, day, pi + 1,
-              PERIODS[pi], course.subject, course.teacherName, room,
-            ]);
+        // Orden de slots también mezclado, para variar qué día/período cae
+        // primero en cada sección. El texto de hora sale del turno de ESTA
+        // sección (periods), no de un bloque fijo compartido.
+        const slotOrder = ALL_SLOTS.map((s) => ({ ...s, time: periods[s.period - 1] }));
+        for (let i = slotOrder.length - 1; i > 0; i--) {
+          const j = detRandom(grade.num, secI, i, 7) % (i + 1);
+          [slotOrder[i], slotOrder[j]] = [slotOrder[j], slotOrder[i]];
+        }
+
+        const placed = []; // filas ya colocadas en ESTA sección (mismos objetos que scheduleRows)
+
+        for (const slot of slotOrder) {
+          if (pending.length === 0) break;
+          const slotKey = `${slot.day}-${shift}-${slot.period}`;
+
+          // De los pendientes libres en este slot, elegir el del docente con
+          // MENOS slots libres restantes en toda la semana ("más restringido
+          // primero"): si se toma cualquiera libre sin priorizar, el docente
+          // más ocupado puede quedarse sin hueco más adelante y forzar un
+          // cruce. Priorizándolo ahora, casi siempre se evita.
+          let idx = -1;
+          let bestRemaining = Infinity;
+          for (let i = 0; i < pending.length; i++) {
+            const c = pending[i];
+            if (teacherBusy[c.teacherId]?.has(slotKey)) continue;
+            const remaining = ALL_SLOTS.length - (teacherBusy[c.teacherId]?.size ?? 0);
+            if (remaining < bestRemaining) {
+              bestRemaining = remaining;
+              idx = i;
+            }
           }
+
+          let course = null;
+          if (idx !== -1) {
+            course = pending.splice(idx, 1)[0];
+          } else {
+            // Nadie pendiente está libre en este slot. Antes de forzar un
+            // cruce, intentar reparar por intercambio: buscar una fila YA
+            // colocada en esta misma sección cuyo docente esté libre aquí, y
+            // que a su vez deje su slot original libre para algún pendiente.
+            // Si existe, se intercambian de lugar — ningún curso cambia de
+            // sección, solo permutan qué día/período ocupan dentro de ella.
+            outer: for (let pi = 0; pi < pending.length; pi++) {
+              const candidate = pending[pi];
+              for (const placedRow of placed) {
+                const oldDay = placedRow.day;
+                const oldPeriod = placedRow.period;
+                const oldTime = placedRow.time;
+                const oldKey = `${oldDay}-${shift}-${oldPeriod}`;
+                const placedTeacherFreeHere = !teacherBusy[placedRow.course.teacherId]?.has(slotKey);
+                const candidateFreeAtOldSlot = !teacherBusy[candidate.teacherId]?.has(oldKey);
+                if (placedTeacherFreeHere && candidateFreeAtOldSlot) {
+                  // Liberar el slot viejo de placedRow y ocuparlo con `candidate`.
+                  teacherBusy[placedRow.course.teacherId].delete(oldKey);
+                  teacherBusy[placedRow.course.teacherId].add(slotKey);
+                  teacherBusy[candidate.teacherId] ??= new Set();
+                  teacherBusy[candidate.teacherId].add(oldKey);
+
+                  // placedRow se muda a `slot`; `candidate` ocupa el slot que dejó libre.
+                  placedRow.day = slot.day;
+                  placedRow.period = slot.period;
+                  placedRow.time = slot.time;
+
+                  const newRow = { grade: grade.label, section, day: oldDay, period: oldPeriod, time: oldTime, course: candidate, room };
+                  scheduleRows.push(newRow);
+                  placed.push(newRow);
+                  pending.splice(pi, 1);
+
+                  course = "SWAPPED"; // ya se insertaron las dos filas arriba
+                  break outer;
+                }
+              }
+            }
+
+            if (course === null) {
+              // Tampoco se pudo reparar (holgura realmente agotada) — se
+              // coloca igual el primero de la cola para no dejar el slot
+              // vacío, y se cuenta como conflicto para poder detectarlo.
+              course = pending.splice(0, 1)[0];
+              scheduleConflicts++;
+            }
+          }
+
+          if (course === "SWAPPED") continue;
+
+          teacherBusy[course.teacherId] ??= new Set();
+          teacherBusy[course.teacherId].add(slotKey);
+
+          const row = { grade: grade.label, section, day: slot.day, period: slot.period, time: slot.time, course, room };
+          scheduleRows.push(row);
+          placed.push(row);
         }
       }
     }
 
+    const schRows = scheduleRows.map((r) => [
+      id(schN++), r.grade, r.section, r.day, r.period, r.time, r.course.subject, r.course.teacherName, r.room, r.course.teacherId,
+    ]);
+
+    if (scheduleConflicts > 0) {
+      console.warn(`[seed-full]   ⚠ ${scheduleConflicts} slot(s) no pudieron evitar cruce de docente (holgura agotada)`);
+    }
+
     await insertMany(client, "schedule_entries",
-      ["id","grade","section","day","period","time","subject","teacher","room"],
+      ["id","grade","section","day","period","time","subject","teacher","room","teacher_id"],
       schRows, 500);
     console.log(`[seed-full]   ${schRows.length} entradas de horario insertadas`);
 

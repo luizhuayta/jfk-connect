@@ -63,19 +63,28 @@ export default function TeacherNavbar({ onMenuClick }: { onMenuClick?: () => voi
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6">
+    <header
+      className={[
+        "fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-6",
+        // Mismo vidrio esmerilado navy que el header del panel de padres,
+        // para que ambas barras compartan una sola identidad institucional.
+        "bg-primary/95 backdrop-blur-xl",
+        "supports-[backdrop-filter]:bg-primary/90",
+        "border-b border-white/10 shadow-[0_1px_0_rgba(255,255,255,0.06)_inset,0_12px_24px_-16px_rgba(15,23,42,0.45)]",
+      ].join(" ")}
+    >
       {/* Left: Logo */}
       <div className="flex items-center gap-3 min-w-[240px]">
         {onMenuClick && (
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
+            className="lg:hidden p-2 rounded-md hover:bg-white/10 transition-colors"
             aria-label="Abrir menú"
           >
-            <Menu className="h-5 w-5 text-[#1E2A5E]" />
+            <Menu className="h-5 w-5 text-white" />
           </button>
         )}
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-gray-200 overflow-hidden">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white ring-1 ring-white/40 overflow-hidden shrink-0">
           <Image
             src="/Image/logo.jpg"
             alt="Logo CIJK"
@@ -86,10 +95,10 @@ export default function TeacherNavbar({ onMenuClick }: { onMenuClick?: () => voi
           />
         </div>
         <div className="flex flex-col leading-none">
-          <span className="text-sm font-bold text-[#1E2A5E] tracking-tight">
+          <span className="text-sm font-bold text-white tracking-tight">
             CIJK
           </span>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[10px] text-white/70">
             Panel Docente
           </span>
         </div>
@@ -98,10 +107,10 @@ export default function TeacherNavbar({ onMenuClick }: { onMenuClick?: () => voi
       {/* Center: Search */}
       <div className="hidden md:flex flex-1 max-w-md mx-6">
         <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60" />
           <Input
             placeholder="Buscar alumno, curso..."
-            className="w-full rounded-full border-gray-200 bg-gray-50 pl-10 text-sm focus-visible:ring-[#F4C15C]"
+            className="w-full rounded-full border-white/20 bg-white/10 pl-10 text-sm text-white placeholder:text-white/50 focus-visible:ring-[#F4C15C] focus-visible:bg-white/15"
           />
         </div>
       </div>
@@ -109,23 +118,23 @@ export default function TeacherNavbar({ onMenuClick }: { onMenuClick?: () => voi
       {/* Right: Notifications + User */}
       <div className="flex items-center gap-4">
         <button
-          className="relative p-2 rounded-full hover:bg-gray-50 transition-colors"
+          className="relative p-2 rounded-full hover:bg-white/10 transition-colors"
           aria-label={unreadAnnouncements > 0 ? `${unreadAnnouncements} avisos sin leer` : "Avisos"}
         >
-          <Bell className="h-5 w-5 text-[#1E2A5E]" />
+          <Bell className="h-5 w-5 text-white" />
           {unreadAnnouncements > 0 && (
-            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-primary/70">
               {unreadAnnouncements > 9 ? "9+" : unreadAnnouncements}
             </span>
           )}
         </button>
 
-        <div className="hidden sm:flex items-center gap-3 pl-4 border-l border-gray-100">
+        <div className="hidden sm:flex items-center gap-3 pl-4 border-l border-white/10">
           <div className="text-right leading-tight">
-            <p className="text-sm font-semibold text-[#0F172A]">
+            <p className="text-sm font-semibold text-white">
               {user?.full_name ?? "—"}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-white/70">
               {user ? getRoleLabel(user.role) : ""}
             </p>
           </div>
@@ -135,15 +144,15 @@ export default function TeacherNavbar({ onMenuClick }: { onMenuClick?: () => voi
               onClick={() => setOpen((v) => !v)}
               aria-haspopup="menu"
               aria-expanded={open}
-              className="flex items-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E2A5E]/30"
+              className="flex items-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F4C15C]/60"
             >
-              <Avatar className="h-9 w-9 border border-gray-200">
-                <AvatarFallback className="bg-[#1E2A5E] text-white text-xs font-semibold">
+              <Avatar className="h-9 w-9 ring-2 ring-[#F4C15C]">
+                <AvatarFallback className="bg-[#F4C15C] text-[#1E2A5E] text-xs font-semibold">
                   {user ? getInitials(user.full_name) : "?"}
                 </AvatarFallback>
               </Avatar>
               <ChevronDown
-                className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ease-out ${
+                className={`h-4 w-4 text-white/70 transition-transform duration-150 ease-out ${
                   open ? "rotate-180" : ""
                 }`}
               />

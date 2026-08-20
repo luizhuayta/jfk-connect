@@ -31,6 +31,14 @@ interface UserRow {
   avatar_url: string | null;
   subject: string | null;
   shift_preference: string | null;
+  sections?: { grade: string; section: string; shift: string }[];
+}
+
+interface SectionRow {
+  teacher_id: string;
+  grade: string;
+  section: string;
+  shift: string;
 }
 
 interface CountRow {
@@ -106,9 +114,33 @@ export async function GET(request: NextRequest) {
       dataParams,
     );
 
+    // Secciones que dicta cada docente de esta página (para la columna
+    // "Asignatura" de la tabla). Se resuelve vía `courses.teacher_id`, la
+    // única relación confiable: varios docentes de seed comparten el mismo
+    // full_name, así que no se puede inferir por nombre.
+    const teacherIds = r.rows.filter((u) => u.role === "docente").map((u) => u.id);
+    const sectionsByTeacher = new Map<string, { grade: string; section: string; shift: string }[]>();
+    if (teacherIds.length > 0) {
+      const sr = await query<SectionRow>(
+        `SELECT DISTINCT teacher_id, grade, section, shift::text AS shift
+         FROM courses
+         WHERE teacher_id = ANY($1::uuid[])
+         ORDER BY grade, section`,
+        [teacherIds],
+      );
+      for (const row of sr.rows) {
+        const list = sectionsByTeacher.get(row.teacher_id) ?? [];
+        list.push({ grade: row.grade, section: row.section, shift: row.shift });
+        sectionsByTeacher.set(row.teacher_id, list);
+      }
+    }
+    const users = r.rows.map((u) =>
+      u.role === "docente" ? { ...u, sections: sectionsByTeacher.get(u.id) ?? [] } : u,
+    );
+
     return NextResponse.json({
       ok: true,
-      users: r.rows,
+      users,
       pagination: { page, limit, total, totalPages },
     });
   } catch (err) {

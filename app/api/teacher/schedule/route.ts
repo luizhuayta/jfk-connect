@@ -1,8 +1,15 @@
 /**
  * GET /api/teacher/schedule
  *
- * Horario semanal del docente autenticado (sus slots en las mallas por sección).
- * Respuesta: { ok, days, periods, schedule: { <day>: [slot|null ×7] } }
+ * Horario semanal del docente autenticado (sus slots en las mallas por
+ * sección). Un docente con shift_preference "Ambos" puede tener clases en
+ * turno Mañana y turno Tarde el mismo día — son bloques de reloj distintos
+ * (Tarde arranca a las 13:30), así que NO se pueden mezclar en una sola
+ * grilla de 7 períodos (period=3 de Mañana y period=3 de Tarde son horas
+ * distintas; meterlas en el mismo casillero ocultaría una de las dos).
+ * Por eso la respuesta trae una malla separada por turno.
+ *
+ * Respuesta: { ok, days, schedule: { Mañana: {<day>: [slot|null ×7]}, Tarde: {...} } }
  *
  * Seguridad: solo rol 'docente'.
  */
@@ -10,19 +17,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
+import { sectionShift } from "@/lib/section-shift";
 
 export const dynamic = "force-dynamic";
 
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-const PERIODS = [
-  "7:45 - 8:30",
-  "8:30 - 9:15",
-  "9:15 - 10:00",
-  "10:20 - 11:05",
-  "11:05 - 11:50",
-  "11:50 - 12:35",
-  "12:35 - 13:20",
-];
+const SHIFTS = ["Mañana", "Tarde"] as const;
 
 interface SlotRow {
   day: string;
@@ -55,11 +55,16 @@ export async function GET(request: NextRequest) {
       [user.id],
     );
 
-    const schedule: Record<string, (TeacherSlot | null)[]> = {};
-    for (const day of DAYS) schedule[day] = Array(7).fill(null);
+    const schedule: Record<(typeof SHIFTS)[number], Record<string, (TeacherSlot | null)[]>> = {
+      Mañana: {},
+      Tarde: {},
+    };
+    for (const shift of SHIFTS) {
+      for (const day of DAYS) schedule[shift][day] = Array(7).fill(null);
+    }
     for (const row of r.rows) {
-      if (!schedule[row.day]) schedule[row.day] = Array(7).fill(null);
-      schedule[row.day][row.period - 1] = {
+      const shift = sectionShift(row.section);
+      schedule[shift][row.day][row.period - 1] = {
         time: row.time,
         subject: row.subject,
         grade: row.grade,
@@ -68,7 +73,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    return NextResponse.json({ ok: true, days: DAYS, periods: PERIODS, schedule });
+    return NextResponse.json({ ok: true, days: DAYS, schedule });
   } catch (err) {
     console.error("[teacher/schedule GET] Error:", err);
     return NextResponse.json(

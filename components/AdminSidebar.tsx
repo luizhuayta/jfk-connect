@@ -45,6 +45,9 @@ export default function AdminSidebar({
   return (
     <AppSidebar
       brand={{ short: "JOHN F. KENNEDY", sub: "Panel Admin" }}
+      showBrand={false}
+      showUserBlock={false}
+      showLogoutButton={false}
       groups={[MENU]}
       mobileOpen={mobileOpen ?? false}
       onCloseMobile={onCloseMobile ?? (() => {})}

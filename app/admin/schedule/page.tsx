@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { MapPin, Pencil, Save, X, CheckCircle2, Sun, Moon, Loader2 } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
+import { sectionShift } from "@/lib/section-shift";
 
 type AdminSection = {
   id: string; grade: string; section: string;
@@ -21,7 +22,15 @@ type ScheduleEntry = {
 };
 
 const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-const PERIODS = ["7:45 - 8:30", "8:30 - 9:15", "9:15 - 10:00", "10:20 - 11:05", "11:05 - 11:50", "11:50 - 12:35", "12:35 - 13:20"];
+// Turno Mañana y Tarde son bloques de reloj distintos, no el mismo horario
+// reetiquetado — Tarde arranca a las 13:30, 10 min después de que termina
+// Mañana. Ver la nota igual de scripts/seed-full.mjs.
+const PERIODS_MAÑANA = ["7:45 - 8:30", "8:30 - 9:15", "9:15 - 10:00", "10:20 - 11:05", "11:05 - 11:50", "11:50 - 12:35", "12:35 - 13:20"];
+const PERIODS_TARDE = ["13:30 - 14:15", "14:15 - 15:00", "15:00 - 15:45", "16:05 - 16:50", "16:50 - 17:35", "17:35 - 18:20", "18:20 - 19:05"];
+const RECESS_TIME: Record<string, string> = { Mañana: "10:00 – 10:20", Tarde: "15:45 – 16:05" };
+function periodsForShift(shift: string) {
+  return shift === "Tarde" ? PERIODS_TARDE : PERIODS_MAÑANA;
+}
 const GRADES = ["1ro", "2do", "3ro", "4to", "5to"];
 
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -49,15 +58,22 @@ function subjectStyle(subject: string) {
   return SUBJECT_COLORS[subject] ?? { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200" };
 }
 
-function timeForPeriod(period: number) {
-  return PERIODS[period - 1] ?? "";
+function timeForPeriod(period: number, shift: string) {
+  return periodsForShift(shift)[period - 1] ?? "";
 }
 
+/**
+ * Un docente con shift_preference "Ambos" puede legítimamente dictar
+ * Mañana-período-3 y Tarde-período-3 el mismo día — son horas de reloj
+ * distintas. Por eso solo cuenta como cruce cuando el turno de la entrada
+ * candidata coincide con el de la sección donde se está moviendo/soltando.
+ */
 function findTeacherConflict(
   entries: ScheduleEntry[],
   teacherId: string | null,
   day: string,
   period: number,
+  shift: string,
   excludeIds: string[],
 ): ScheduleEntry | null {
   if (!teacherId) return null;
@@ -66,6 +82,7 @@ function findTeacherConflict(
       e.teacher_id === teacherId &&
       e.day === day &&
       e.period === period &&
+      sectionShift(e.section) === shift &&
       !excludeIds.includes(e.id),
   ) ?? null;
 }
@@ -116,7 +133,7 @@ export default function AdminSchedulePage() {
   const section = sections.find((s) => s.id === activeSectionId);
   const schedule = useMemo(() => {
     const grid: Record<string, (ScheduleEntry | null)[]> = {};
-    for (const day of DAYS) grid[day] = Array(PERIODS.length).fill(null);
+    for (const day of DAYS) grid[day] = Array(PERIODS_MAÑANA.length).fill(null);
     if (!section) return grid;
     for (const e of entries) {
       if (e.grade === section.grade && e.section === section.section) {
@@ -196,6 +213,7 @@ export default function AdminSchedulePage() {
       source.teacher_id,
       targetDay,
       targetPeriod,
+      section.shift,
       excludeIds,
     );
     if (sourceConflict) {
@@ -212,6 +230,7 @@ export default function AdminSchedulePage() {
         targetEntry.teacher_id,
         source.day,
         source.period,
+        section.shift,
         excludeIds,
       );
       if (targetConflict) {
@@ -230,7 +249,7 @@ export default function AdminSchedulePage() {
             ...e,
             day: targetDay,
             period: targetPeriod,
-            time: timeForPeriod(targetPeriod),
+            time: timeForPeriod(targetPeriod, section.shift),
           };
         }
         if (targetEntry && e.id === targetEntry.id) {
@@ -238,7 +257,7 @@ export default function AdminSchedulePage() {
             ...e,
             day: source.day,
             period: source.period,
-            time: timeForPeriod(source.period),
+            time: timeForPeriod(source.period, section.shift),
           };
         }
         return e;
@@ -328,11 +347,11 @@ export default function AdminSchedulePage() {
               );
             })}
           </div>
-          {PERIODS.map((period, pi) => (
+          {periodsForShift(section?.shift ?? "Mañana").map((period, pi) => (
             <Fragment key={period}>
               {pi === 3 && (
                 <div className="grid grid-cols-[100px_repeat(5,1fr)] bg-amber-50 border-y border-amber-200">
-                  <div className="p-2 text-xs font-semibold text-amber-700 flex items-center justify-center">10:00 – 10:20</div>
+                  <div className="p-2 text-xs font-semibold text-amber-700 flex items-center justify-center">{RECESS_TIME[section?.shift ?? "Mañana"]}</div>
                   <div className="col-span-5 p-2 flex items-center"><span className="text-xs font-bold text-amber-700">🔔 Recreo</span></div>
                 </div>
               )}
