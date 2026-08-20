@@ -27,7 +27,8 @@ import ClaimChildModal from "@/components/father/ClaimChildModal";
 import NoChildrenState from "@/components/father/NoChildrenState";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
-import { letterGrade, letterGradeColor, desempeñoLabel } from "@/lib/letter-grade";
+import { levelFromScore, levelBadgeClass, LEVEL_LABEL, dominantLevel } from "@/lib/grades/scale";
+import LevelBadge from "@/components/grades/LevelBadge";
 import { useFatherStudents } from "@/components/father/useFatherStudents";
 import {
   useAnnouncements,
@@ -37,24 +38,15 @@ import { useSessionUser } from "@/lib/useSessionUser";
 import { cn } from "@/lib/utils";
 import { getInitials, toLocalISODate } from "@/lib/format";
 import { useIsClient } from "@/lib/useIsClient";
+import { BIMESTERS } from "@/lib/grades/bimesters";
+import type { LibretaData, BimesterKey } from "@/lib/grades/libreta";
 
 /* ─── Tipos ──────────────────────────────────────────────────────── */
-type GradeRow = {
-  bimester: number;
-  course: string;
-  note: number;
-  level: "AD" | "A" | "B" | "C" | null;
-  letter_grade: string | null;
-  observation: string;
-};
-
 type AttendanceRecord = {
   id: string;
   date: string;
   status: "A" | "F" | "T" | "J";
 };
-
-const BIMESTERS = ["1", "2", "3", "4"];
 
 /** Máximo de hijos que un padre puede vincular (límite del claim). */
 const MAX_CHILDREN = 5;
@@ -132,7 +124,7 @@ export default function FatherDashboard() {
 
   const [dataError, setDataError] = useState<string | null>(null);
   const [activeBimester, setActiveBimester] = useState("1");
-  const [gradesCache, setGradesCache] = useState<Record<string, Record<string, GradeRow[]>>>({});
+  const [libretaCache, setLibretaCache] = useState<Record<string, LibretaData>>({});
   const loadedIds = useRef(new Set<string>());
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [dismissedClaim, setDismissedClaim] = useState(false);
@@ -143,10 +135,10 @@ export default function FatherDashboard() {
 
   const loadGrades = useCallback(async (studentId: string) => {
     try {
-      const r = await fetch(`/api/father/grades?studentId=${studentId}`);
+      const r = await fetch(`/api/libreta?studentId=${studentId}`);
       const data = await r.json();
       if (!data.ok) throw new Error(data.error);
-      setGradesCache((prev) => ({ ...prev, [studentId]: data.grades }));
+      setLibretaCache((prev) => ({ ...prev, [studentId]: data.libreta as LibretaData }));
       setDataError(null);
     } catch {
       setDataError("No pudimos cargar las notas. Intenta de nuevo.");
@@ -215,10 +207,19 @@ export default function FatherDashboard() {
   const canAddMore = students.length < MAX_CHILDREN;
   const claimModalOpen = showClaimModal || (!dismissedClaim && students.length === 0);
   const error = dataError ?? studentsError;
-  const currentNotes = (activeStudentId && gradesCache[activeStudentId]?.[activeBimester]) || [];
-  const average =
-    currentNotes.reduce((sum, n) => sum + n.note, 0) / (currentNotes.length || 1);
-  const levelLabel = desempeñoLabel(average);
+
+  // Competencias calificadas del bimestre activo, aplanadas de todas las
+  // áreas — el padre nunca ve la nota 0-20 aquí, solo el nivel (igual que en
+  // la libreta oficial, lib/grades/libreta.ts).
+  const activeLibreta = activeStudentId ? libretaCache[activeStudentId] : null;
+  const bimesterNum = Number(activeBimester) as BimesterKey;
+  const currentCompetencies = (activeLibreta?.areas ?? []).flatMap((area) =>
+    area.competencies
+      .map((c) => ({ area: area.name, competency: c.name, ...c.bimesters[bimesterNum] }))
+      .filter((c) => c.level !== null),
+  );
+  const bimesterLevel = dominantLevel(currentCompetencies.map((c) => c.level));
+  const levelLabel = bimesterLevel ? LEVEL_LABEL[bimesterLevel] : "Sin notas registradas";
   const recentAnnouncements = announcements.slice(0, 3);
 
   const firstName = (user?.full_name ?? "").split(" ")[0] || "Padre";
@@ -278,7 +279,7 @@ export default function FatherDashboard() {
             {students.map((child) => {
               const active = child.id === activeStudentId;
               const avg = child.avg_grade != null ? child.avg_grade.toFixed(1) : "—";
-              const ltr = child.avg_grade != null ? letterGrade(child.avg_grade) : null;
+              const ltr = child.avg_grade != null ? levelFromScore(child.avg_grade) : null;
               const attendanceRate = child.attendance_rate;
               const attendance = attendanceRate != null ? `${attendanceRate}%` : "—";
               const attendanceTint =
@@ -331,7 +332,7 @@ export default function FatherDashboard() {
                       <div className="mt-0.5 flex items-center gap-1.5">
                         <span className="text-base font-bold text-on-surface">{avg}</span>
                         {ltr && (
-                          <Badge className={cn("text-[10px] font-bold", letterGradeColor(ltr))}>
+                          <Badge className={cn("text-[10px] font-bold", levelBadgeClass(ltr))}>
                             {ltr}
                           </Badge>
                         )}
@@ -399,65 +400,51 @@ export default function FatherDashboard() {
                 </div>
               </div>
 
-              {/* Tabla */}
+              {/* Tabla — el padre ve el nivel de logro por competencia, nunca
+                  la nota 0-20 (misma regla que la libreta oficial). */}
               <div className="overflow-hidden rounded-xl border border-outline-variant">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-surface-container-low hover:bg-surface-container-low">
                       <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
-                        Curso
-                      </TableHead>
-                      <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
-                        Nota
+                        Área / Competencia
                       </TableHead>
                       <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
                         Nivel
                       </TableHead>
                       <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
-                        Observación
+                        Conclusión
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {currentNotes.length === 0 && (
+                    {currentCompetencies.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={4}
+                          colSpan={3}
                           className="py-10 text-center text-sm text-on-surface-variant"
                         >
                           Aún no hay notas registradas para este bimestre.
                         </TableCell>
                       </TableRow>
                     )}
-                    {currentNotes.map((row, idx) => {
-                      const ltr = letterGrade(row.note);
-                      const finalLetter = row.letter_grade ?? ltr;
-                      return (
-                        <TableRow
-                          key={idx}
-                          className="border-outline-variant hover:bg-surface-container-low/70 even:bg-surface-container-low/60"
-                        >
-                          <TableCell className="py-3 text-sm font-medium text-on-surface">
-                            {row.course}
-                          </TableCell>
-                          <TableCell className="py-3 text-sm font-bold text-primary">
-                            {row.note.toFixed(1)}
-                          </TableCell>
-                          <TableCell className="py-3">
-                            {finalLetter ? (
-                              <Badge className={cn("text-[11px] font-bold", letterGradeColor(finalLetter))}>
-                                {finalLetter}
-                              </Badge>
-                            ) : (
-                              <span className="text-xs text-on-surface-variant">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-3 text-sm font-medium text-on-surface whitespace-normal break-words max-w-[220px]">
-                            {row.observation}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {currentCompetencies.map((row, idx) => (
+                      <TableRow
+                        key={idx}
+                        className="border-outline-variant hover:bg-surface-container-low/70 even:bg-surface-container-low/60"
+                      >
+                        <TableCell className="py-3 text-sm font-medium text-on-surface">
+                          <p>{row.competency}</p>
+                          <p className="text-xs text-on-surface-variant">{row.area}</p>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <LevelBadge level={row.level} />
+                        </TableCell>
+                        <TableCell className="py-3 text-sm font-medium text-on-surface whitespace-normal break-words max-w-[220px]">
+                          {row.conclusion || "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -473,20 +460,19 @@ export default function FatherDashboard() {
                 </Link>
               </div>
 
-              {/* Promedio del bimestre (compacto al pie). */}
+              {/* Nivel predominante del bimestre (compacto al pie). */}
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
-                    Promedio del Bimestre
+                    Nivel predominante del Bimestre
                   </p>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <p className="text-xl font-bold tracking-tight text-on-surface">
-                      {average.toFixed(1)}
-                    </p>
-                    {letterGrade(average) && (
-                      <Badge className={cn("text-xs font-bold", letterGradeColor(letterGrade(average)))}>
-                        {letterGrade(average)}
+                    {bimesterLevel ? (
+                      <Badge className={cn("text-sm font-bold", levelBadgeClass(bimesterLevel))}>
+                        {bimesterLevel}
                       </Badge>
+                    ) : (
+                      <p className="text-xl font-bold tracking-tight text-on-surface">—</p>
                     )}
                   </div>
                 </div>

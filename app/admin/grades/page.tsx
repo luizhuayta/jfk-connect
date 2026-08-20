@@ -1,268 +1,153 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BarChart3, Users, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
+import { Save, Loader2, Pencil, Eye } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
+import { useCompetencyGrid } from "@/components/grades/useCompetencyGrid";
+import CompetencyGradeTable from "@/components/grades/CompetencyGradeTable";
+import ScopeSelector, { type ScopeOption } from "@/components/grades/ScopeSelector";
+import BimesterTabs from "@/components/grades/BimesterTabs";
+import GradeSummaryCards from "@/components/grades/GradeSummaryCards";
+import { CURRENT_BIMESTER } from "@/lib/grades/bimesters";
+import { encodeScope, decodeScope } from "@/lib/grades/scopeValue";
+import { computeGridStats } from "@/lib/grades/stats";
 
-type BimesterStat = { avg: number; approved: number; failed: number; total: number; hasData: boolean; inProgress: boolean };
-type AdminCourse = {
-  id: string; subject: string; grade: string; section: string; shift: string;
-  room: string; studentsTotal: number; avgGrade: number | null; currentBimester: number; bimesters: Record<string, BimesterStat>;
-};
-type Student = { id: string; name: string; initials: string; order: number };
-type GradeRow = { studentId: string; n1: number; n2: number; n3: number; observation: string };
+type AdminCourseOption = { id: string; subject: string; grade: string; section: string };
+type SectionOption = { grade: string; section: string };
 
-const BIMESTERS = ["1", "2", "3", "4"];
-const SUBJECT_COLORS: Record<string, { bg: string; text: string }> = {
-  "Matemáticas": { bg: "bg-blue-50", text: "text-blue-700" },
-  "Lengua Castellana": { bg: "bg-purple-50", text: "text-purple-700" },
-  "Historia": { bg: "bg-amber-50", text: "text-amber-700" },
-  "Comunicación": { bg: "bg-purple-50", text: "text-purple-700" },
-  "Ciencia y Tecnología": { bg: "bg-emerald-50", text: "text-emerald-700" },
-  "Inglés": { bg: "bg-cyan-50", text: "text-cyan-700" },
-};
-
-function avg3(n1: number, n2: number, n3: number) { return (n1 + n2 + n3) / 3; }
-function levelBadge(avg: number) {
-  if (avg >= 18) return { label: "AD", cls: "bg-emerald-100 text-emerald-700" };
-  if (avg >= 14) return { label: "A", cls: "bg-blue-100 text-blue-700" };
-  if (avg >= 11) return { label: "B", cls: "bg-amber-100 text-amber-700" };
-  return { label: "C", cls: "bg-red-100 text-red-600" };
-}
-function gradeColor(n: number) {
-  if (n === 0) return "text-gray-400";
-  if (n >= 17) return "text-emerald-600 font-bold";
-  if (n >= 11) return "text-[#0F172A] font-semibold";
-  return "text-red-500 font-bold";
-}
-
+/**
+ * Vista del admin: misma grilla que el docente (CompetencyGradeTable), en
+ * modo solo-lectura por defecto con un botón "Editar notas" que la
+ * desbloquea — evita ediciones accidentales sobre las ~700 secciones del
+ * colegio. A diferencia del docente, el admin puede elegir "Competencias
+ * transversales" de CUALQUIER sección (no solo donde es tutor — el guard
+ * del servidor ya lo permite para el rol admin).
+ */
 export default function AdminGradesPage() {
-  const [courses, setCourses] = useState<AdminCourse[]>([]);
-  const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
-  const [activeBimester, setActiveBimester] = useState("1");
-  const [students, setStudents] = useState<Student[]>([]);
-  const [entries, setEntries] = useState<Record<string, GradeRow>>({});
-  const [loading, setLoading] = useState(true);
-  const [loadingGrid, setLoadingGrid] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadGrid = useCallback(async (courseId: string, bimester: string) => {
-    setLoadingGrid(true);
-    try {
-      const [stRes, grRes] = await Promise.all([
-        fetch(`/api/teacher/courses/${courseId}/students`),
-        fetch(`/api/teacher/courses/${courseId}/grades?bimester=${bimester}`),
-      ]);
-      const st = await stRes.json();
-      const gr = await grRes.json();
-      if (!st.ok) throw new Error(st.error);
-      if (!gr.ok) throw new Error(gr.error);
-      setStudents(st.students);
-      setEntries(Object.fromEntries((gr.entries as GradeRow[]).map((e) => [e.studentId, e])));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error cargando notas");
-    } finally {
-      setLoadingGrid(false);
-    }
-  }, []);
-
-  const loadCourses = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const r = await fetch("/api/admin/courses");
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setCourses(data.courses);
-      if (data.courses.length > 0) {
-        const firstId = data.courses[0].id;
-        setActiveCourseId(firstId);
-        await loadGrid(firstId, "1");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  }, [loadGrid]);
+  const [courses, setCourses] = useState<AdminCourseOption[]>([]);
+  const [sections, setSections] = useState<SectionOption[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
+  const [scopeRaw, setScopeRaw] = useState<string | null>(null);
+  const [bimester, setBimester] = useState(String(CURRENT_BIMESTER));
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     (async () => {
-      await loadCourses();
+      setCoursesLoading(true);
+      setCoursesError(null);
+      try {
+        const r = await fetch("/api/admin/courses");
+        const data = await r.json();
+        if (!data.ok) throw new Error(data.error);
+        setCourses(data.courses);
+        setSections(data.sections ?? []);
+      } catch (err) {
+        setCoursesError(err instanceof Error ? err.message : "Error cargando cursos");
+      } finally {
+        setCoursesLoading(false);
+      }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleCourse(id: string) { setActiveCourseId(id); loadGrid(id, activeBimester); }
-  function handleBimester(b: string) { setActiveBimester(b); if (activeCourseId) loadGrid(activeCourseId, b); }
+  const options: ScopeOption[] = useMemo(
+    () => [
+      ...courses.map((c) => ({
+        value: encodeScope({ type: "course", courseId: c.id }),
+        label: `${c.subject} · ${c.grade} "${c.section}"`,
+      })),
+      ...sections.map((s) => ({
+        value: encodeScope({ type: "transversal", grade: s.grade, section: s.section }),
+        label: `${s.grade} "${s.section}"`,
+        group: "Competencias transversales",
+      })),
+    ],
+    [courses, sections],
+  );
 
-  const course = courses.find((c) => c.id === activeCourseId);
-  const entriesArr = Object.values(entries);
-  const hasData = entriesArr.some((e) => e.n3 > 0);
-  const inProgress = entriesArr.some((e) => e.n1 > 0) && !hasData;
+  const activeRaw = scopeRaw ?? options[0]?.value ?? null;
+  const scope = useMemo(() => (activeRaw ? decodeScope(activeRaw) : null), [activeRaw]);
 
-  const stats = useMemo(() => {
-    const complete = entriesArr.filter((e) => e.n1 > 0 && e.n2 > 0 && e.n3 > 0);
-    const avgs = complete.map((e) => avg3(e.n1, e.n2, e.n3));
-    const classAvg = avgs.length ? avgs.reduce((a, b) => a + b, 0) / avgs.length : 0;
-    return {
-      registered: complete.length,
-      total: students.length,
-      approved: avgs.filter((a) => a >= 11).length,
-      failed: avgs.filter((a) => a < 11 && a > 0).length,
-      classAvg,
-    };
-  }, [entriesArr, students]);
+  const grid = useCompetencyGrid(scope, Number(bimester));
+  const readOnly = !editMode || grid.scope?.editable === false;
+  const stats = useMemo(
+    () =>
+      computeGridStats(
+        grid.students.map((s) => s.id),
+        grid.competencies.map((c) => c.id),
+        (studentId, competencyId) => grid.getEntry(studentId, competencyId).score,
+      ),
+    [grid],
+  );
 
-  const globalRows = courses.map((c) => {
-    const b1 = c.bimesters["1"];
-    const b2 = c.bimesters["2"];
-    return { course: c, b1avg: b1?.avg ?? null, b2avg: b2?.avg ?? null };
-  });
-
-  if (loading) { return <LoadingState label="Cargando notas..." />; }
-  if (error) { return <ErrorState message={error} onRetry={loadCourses} />; }
+  if (coursesLoading) return <LoadingState label="Cargando cursos..." />;
+  if (coursesError) return <ErrorState message={coursesError} />;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-[#0F172A]">Notas</h1>
-        <p className="text-muted-foreground mt-1">Registro académico por curso y bimestre · Año Lectivo 2026</p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        {globalRows.map(({ course: c, b1avg, b2avg }) => {
-          const color = SUBJECT_COLORS[c.subject] ?? { bg: "bg-gray-50", text: "text-gray-700" };
-          return (
-            <Card key={c.id} className="border-none shadow-sm rounded-xl">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color.bg} shrink-0`}><BarChart3 className={`h-4 w-4 ${color.text}`} /></div>
-                  <div><p className="text-sm font-bold text-[#0F172A]">{c.subject}</p><p className="text-xs text-muted-foreground">{c.grade} &quot;{c.section}&quot; · {c.studentsTotal} alumnos</p></div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[{ label: "B1", val: b1avg }, { label: "B2", val: b2avg }].map(({ label, val }) => (
-                    <div key={label} className={`rounded-lg p-2 text-center border ${val ? "bg-white border-gray-100" : "bg-gray-50 border-gray-100"}`}>
-                      <p className="text-[10px] text-muted-foreground">{label}</p>
-                      {val ? <p className={`text-base font-bold ${val >= 14 ? "text-emerald-600" : val >= 11 ? "text-amber-600" : "text-red-500"}`}>{val.toFixed(1)}</p>
-                        : <p className="text-xs text-muted-foreground">—</p>}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex gap-2 flex-wrap">
-          {courses.map((c) => {
-            const isActive = activeCourseId === c.id;
-            const color = SUBJECT_COLORS[c.subject] ?? { bg: "bg-gray-50", text: "text-gray-700" };
-            return (
-              <button key={c.id} onClick={() => handleCourse(c.id)} className={`px-3 py-2 rounded-lg border transition-all text-left ${isActive ? "border-[#2563EB] bg-[#2563EB]/5" : "border-gray-200 bg-white hover:border-[#2563EB]/30"}`}>
-                <p className={`text-xs font-bold ${isActive ? "text-[#2563EB]" : "text-[#0F172A]"}`}>{c.subject}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{c.grade} &quot;{c.section}&quot; · {c.studentsTotal}</p>
-              </button>
-            );
-          })}
+    <div className="space-y-6">
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-[#0F172A]">Notas</h1>
+          <p className="text-muted-foreground mt-1">Registro académico por curso y bimestre · Año Lectivo 2026</p>
         </div>
-        <div className="flex gap-1 bg-gray-50 rounded-lg p-1 w-fit">
-          {BIMESTERS.map((b) => {
-            const stat = course?.bimesters[b];
-            const done = stat?.hasData ?? false;
-            const prog = stat?.inProgress ?? false;
-            return (
-              <button key={b} onClick={() => handleBimester(b)} className={`relative px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${activeBimester === b ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>
-                Bimestre {b}
-                {done && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-500 border border-white" />}
-                {prog && !done && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500 border border-white" />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[
-          { label: "Registrados", value: `${stats.registered}/${stats.total}`, icon: Users, cls: "bg-gray-50 border-gray-200 text-[#0F172A]", border: "border-l-gray-300" },
-          { label: "Aprobados", value: stats.approved, icon: CheckCircle2, cls: "bg-emerald-50 border-emerald-200 text-emerald-700", border: "border-l-emerald-500" },
-          { label: "Desaprobados", value: stats.failed, icon: AlertTriangle, cls: "bg-red-50 border-red-200 text-red-600", border: "border-l-red-500" },
-          { label: "Promedio aula", value: stats.classAvg > 0 ? stats.classAvg.toFixed(1) : "—", icon: TrendingUp, cls: "bg-blue-50 border-blue-200 text-blue-700", border: "border-l-blue-500" },
-        ].map((s) => (
-          <div key={s.label} className={`rounded-xl border-l-4 ${s.border} border p-3 flex items-center gap-3 ${s.cls}`}>
-            <s.icon className="h-4 w-4 shrink-0 opacity-70" />
-            <div><p className="text-xl font-bold">{s.value}</p><p className="text-[10px] font-medium opacity-70 uppercase tracking-wide">{s.label}</p></div>
-          </div>
-        ))}
-      </div>
-
-      <Card className="border-none shadow-sm rounded-xl overflow-hidden">
-        <CardContent className="p-0">
-          {loadingGrid ? (
-            <LoadingState label="Cargando..." className="py-14" />
-          ) : (!hasData && !inProgress) ? (
-            <div className="py-14 text-center text-muted-foreground"><BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm">Este bimestre aún no tiene notas registradas</p></div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 hover:bg-gray-50">
-                  <TableHead className="text-[#0F172A] font-semibold text-sm pl-5 w-10">N°</TableHead>
-                  <TableHead className="text-[#0F172A] font-semibold text-sm">Alumno</TableHead>
-                  <TableHead className="text-center text-[#0F172A] font-semibold text-sm">N1</TableHead>
-                  <TableHead className="text-center text-[#0F172A] font-semibold text-sm">N2</TableHead>
-                  <TableHead className="text-center text-[#0F172A] font-semibold text-sm">N3</TableHead>
-                  <TableHead className="text-center text-[#0F172A] font-semibold text-sm">Promedio</TableHead>
-                  <TableHead className="text-center text-[#0F172A] font-semibold text-sm">Nivel</TableHead>
-                  <TableHead className="text-[#0F172A] font-semibold text-sm pr-5">Observación</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {students.map((st) => {
-                  const row = entries[st.id];
-                  const complete = row && row.n1 > 0 && row.n2 > 0 && row.n3 > 0;
-                  const average = complete ? avg3(row.n1, row.n2, row.n3) : null;
-                  const level = average !== null ? levelBadge(average) : null;
-                  const rowBorder = average === null ? "border-l-transparent" : average >= 17 ? "border-l-emerald-400" : average >= 11 ? "border-l-blue-400" : "border-l-red-400";
-                  return (
-                    <TableRow key={st.id} className={`hover:bg-gray-50/50 border-l-4 ${rowBorder}`}>
-                      <TableCell className="pl-5 text-xs text-muted-foreground font-medium">{String(st.order).padStart(2, "0")}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2.5">
-                          <Avatar className="h-7 w-7 shrink-0"><AvatarFallback className="bg-[#2563EB] text-white text-[10px] font-bold">{st.initials}</AvatarFallback></Avatar>
-                          <span className="text-sm font-medium text-[#0F172A]">{st.name}</span>
-                        </div>
-                      </TableCell>
-                      {(["n1", "n2", "n3"] as const).map((f) => (
-                        <TableCell key={f} className="text-center">
-                          <span className={`text-sm ${row ? gradeColor(row[f]) : "text-gray-400"}`}>{row && row[f] > 0 ? row[f] : "—"}</span>
-                        </TableCell>
-                      ))}
-                      <TableCell className="text-center">
-                        {average !== null ? <span className={`text-sm font-bold ${gradeColor(average)}`}>{average.toFixed(1)}</span> : <span className="text-xs text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {level ? <Badge className={`text-xs font-bold border-0 ${level.cls} hover:opacity-90`}>{level.label}</Badge> : <span className="text-xs text-muted-foreground">—</span>}
-                        {average !== null && letterGrade(average) && (
-                          <Badge className={`text-xs font-bold ml-1 ${letterGradeColor(letterGrade(average))}`}>{letterGrade(average)}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground pr-5">{row?.observation || "—"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setEditMode((v) => !v)}
+            className="rounded-xl h-10 gap-2 font-semibold"
+          >
+            {editMode ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+            {editMode ? "Ver solo lectura" : "Editar notas"}
+          </Button>
+          {editMode && (
+            <Button
+              onClick={grid.save}
+              disabled={grid.dirtyCount === 0 || grid.saving || grid.scope?.editable === false}
+              className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold"
+            >
+              {grid.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {grid.dirtyCount > 0 ? `Guardar (${grid.dirtyCount})` : "Guardar"}
+            </Button>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <ScopeSelector options={options} value={activeRaw ?? ""} onChange={setScopeRaw} className="max-w-xs" />
+        <BimesterTabs active={bimester} onSelect={setBimester} />
+      </div>
+
+      {grid.loading ? (
+        <LoadingState label="Cargando notas..." />
+      ) : grid.error ? (
+        <ErrorState message={grid.error} onRetry={grid.reload} />
+      ) : (
+        <>
+          <GradeSummaryCards stats={stats} />
+
+          {editMode && grid.scope && !grid.scope.editable && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              Este bimestre aún no está disponible para registro — puedes ver las notas pero no editarlas.
+            </p>
+          )}
+
+          <Card className="border-none shadow-sm rounded-xl overflow-hidden">
+            <CardContent className="p-0">
+              <CompetencyGradeTable
+                competencies={grid.competencies}
+                students={grid.students}
+                getEntry={grid.getEntry}
+                readOnly={readOnly}
+                onScoreChange={grid.setScore}
+                onConclusionChange={grid.setConclusion}
+              />
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -10,14 +10,17 @@ import {
 } from "@/components/ui/table";
 import {
   GraduationCap, Users, TrendingUp, Search, Plus, MoreHorizontal, Phone, AlertTriangle, Loader2,
-  Eye, UserX, X, CheckCircle2, RefreshCw,
+  Eye, UserX, X, CheckCircle2, RefreshCw, Download,
 } from "lucide-react";
+import { toast } from "sonner";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { levelFromScore, levelBadgeClass } from "@/lib/grades/scale";
+import { downloadLibreta } from "@/lib/report";
 
 type Student = {
   id: string; name: string; initials: string; dni: string;
@@ -29,13 +32,6 @@ type Section = { id: string; grade: string; section: string; studentsTotal: numb
 
 const GRADES = ["1ro", "2do", "3ro", "4to", "5to"];
 
-function levelBadge(avg: number | null) {
-  if (avg === null) return { label: "—", cls: "bg-gray-100 text-gray-500" };
-  if (avg >= 18) return { label: "AD", cls: "bg-emerald-100 text-emerald-700" };
-  if (avg >= 14) return { label: "A",  cls: "bg-blue-100 text-blue-700" };
-  if (avg >= 11) return { label: "B",  cls: "bg-amber-100 text-amber-700" };
-  return              { label: "C",  cls: "bg-red-100 text-red-600" };
-}
 function avgColor(avg: number | null) {
   if (avg === null) return "text-gray-400";
   if (avg >= 14) return "text-emerald-600 font-bold";
@@ -70,6 +66,18 @@ export default function AdminStudentsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [detail, setDetail] = useState<Student | null>(null);
+  const [downloadingLibreta, setDownloadingLibreta] = useState(false);
+
+  const handleDownloadLibreta = async (studentId: string) => {
+    setDownloadingLibreta(true);
+    try {
+      await downloadLibreta(studentId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo descargar la libreta");
+    } finally {
+      setDownloadingLibreta(false);
+    }
+  };
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
 
@@ -268,7 +276,7 @@ export default function AdminStudentsPage() {
             </TableHeader>
             <TableBody>
               {students.map((st, idx) => {
-                const level = levelBadge(st.avg_grade);
+                const level = levelFromScore(st.avg_grade);
                 const isAtRisk = (st.avg_grade !== null && st.avg_grade < 11) || (st.attendance_rate !== null && st.attendance_rate < 80);
                 const rowNum = (page - 1) * 50 + idx + 1;
                 return (
@@ -293,7 +301,7 @@ export default function AdminStudentsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center"><span className={`text-sm ${avgColor(st.avg_grade)}`}>{st.avg_grade !== null ? st.avg_grade.toFixed(1) : "—"}</span></TableCell>
-                    <TableCell className="text-center hidden sm:table-cell"><Badge className={`text-[11px] font-bold border-0 ${level.cls} hover:opacity-90`}>{level.label}</Badge></TableCell>
+                    <TableCell className="text-center hidden sm:table-cell"><Badge className={`text-[11px] font-bold border-0 ${levelBadgeClass(level)} hover:opacity-90`}>{level ?? "—"}</Badge></TableCell>
                     <TableCell className="text-center hidden lg:table-cell"><span className={`text-sm font-semibold ${attendanceColor(st.attendance_rate)}`}>{st.attendance_rate !== null ? `${st.attendance_rate}%` : "—"}</span></TableCell>
                     <TableCell className="text-center">
                       {st.status === "activo" ? <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Activo</span>
@@ -482,7 +490,18 @@ export default function AdminStudentsPage() {
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Asistencia</p><p className={`mt-0.5 font-semibold ${attendanceColor(detail.attendance_rate)}`}>{detail.attendance_rate !== null ? `${detail.attendance_rate}%` : "—"}</p></div>
               <div className="rounded-xl bg-gray-50 p-3 col-span-2"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Apoderado</p><p className="font-semibold text-[#0F172A] mt-0.5">{detail.parent_name ?? "Sin apoderado vinculado"}{detail.parent_phone ? ` · ${detail.parent_phone}` : ""}</p></div>
             </div>
-            <Button variant="outline" onClick={() => setDetail(null)} className="w-full">Cerrar</Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleDownloadLibreta(detail.id)}
+                disabled={downloadingLibreta}
+                className="flex-1 gap-2"
+              >
+                {downloadingLibreta ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Descargar libreta
+              </Button>
+              <Button variant="outline" onClick={() => setDetail(null)} className="flex-1">Cerrar</Button>
+            </div>
           </div>
         </div>
       )}

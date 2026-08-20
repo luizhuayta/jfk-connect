@@ -9,6 +9,8 @@ import { MapPin, Pencil, Save, X, CheckCircle2, Sun, Moon, Loader2 } from "lucid
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { sectionShift } from "@/lib/section-shift";
+import { areaColor } from "@/lib/curriculum/colors";
+import { useCurriculum } from "@/lib/curriculum/client";
 
 type AdminSection = {
   id: string; grade: string; section: string;
@@ -33,29 +35,13 @@ function periodsForShift(shift: string) {
 }
 const GRADES = ["1ro", "2do", "3ro", "4to", "5to"];
 
-const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  "Matemáticas": { bg: "bg-blue-50", text: "text-blue-800", border: "border-blue-200" },
-  "Comunicación": { bg: "bg-purple-50", text: "text-purple-800", border: "border-purple-200" },
-  "Lengua Castellana": { bg: "bg-purple-50", text: "text-purple-800", border: "border-purple-200" },
-  "Historia": { bg: "bg-amber-50", text: "text-amber-800", border: "border-amber-200" },
-  "HGE": { bg: "bg-amber-50", text: "text-amber-800", border: "border-amber-200" },
-  "Ciencias": { bg: "bg-emerald-50", text: "text-emerald-800", border: "border-emerald-200" },
-  "Inglés": { bg: "bg-cyan-50", text: "text-cyan-800", border: "border-cyan-200" },
-  "Ed. Física": { bg: "bg-lime-50", text: "text-lime-800", border: "border-lime-200" },
-  "DPCC": { bg: "bg-rose-50", text: "text-rose-800", border: "border-rose-200" },
-  "EPT": { bg: "bg-orange-50", text: "text-orange-800", border: "border-orange-200" },
-  "Arte": { bg: "bg-fuchsia-50", text: "text-fuchsia-800", border: "border-fuchsia-200" },
-  "Tutoría": { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200" },
-  "Religión": { bg: "bg-stone-50", text: "text-stone-700", border: "border-stone-200" },
-};
-
 const DAY_SHORT: Record<string, string> = { Lunes: "Lun", Martes: "Mar", Miércoles: "Mié", Jueves: "Jue", Viernes: "Vie" };
 
 const TODAY_DAY = new Date().toLocaleDateString("es-PE", { weekday: "long" });
 const TODAY_CAPITALIZED = TODAY_DAY.charAt(0).toUpperCase() + TODAY_DAY.slice(1);
 
 function subjectStyle(subject: string) {
-  return SUBJECT_COLORS[subject] ?? { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200" };
+  return areaColor(subject);
 }
 
 function timeForPeriod(period: number, shift: string) {
@@ -88,6 +74,7 @@ function findTeacherConflict(
 }
 
 export default function AdminSchedulePage() {
+  const { areas } = useCurriculum();
   const [sections, setSections] = useState<AdminSection[]>([]);
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
@@ -411,9 +398,12 @@ export default function AdminSchedulePage() {
       <div className="space-y-2">
         <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Leyenda de colores</p>
         <div className="flex flex-wrap gap-2">
-          {Object.entries(SUBJECT_COLORS).slice(0, 8).map(([subject, color]) => (
-            <div key={subject} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${color.bg} ${color.text} ${color.border}`}>{subject}</div>
-          ))}
+          {areas.filter((a) => !a.isTransversal).map((area) => {
+            const color = areaColor(area.name);
+            return (
+              <div key={area.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${color.bg} ${color.text} ${color.border}`}>{area.shortName}</div>
+            );
+          })}
         </div>
       </div>
     </div>

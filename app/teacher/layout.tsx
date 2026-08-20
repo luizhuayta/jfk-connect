@@ -4,6 +4,7 @@ import { useState } from "react";
 import TeacherNavbar from "@/components/TeacherNavbar";
 import TeacherSidebar from "@/components/TeacherSidebar";
 import { TeacherCoursesProvider } from "@/components/teacher/useTeacherCourses";
+import { CurriculumProvider } from "@/lib/curriculum/client";
 
 export default function TeacherLayout({
   children,
@@ -13,16 +14,18 @@ export default function TeacherLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <TeacherCoursesProvider>
-      <div className="min-h-screen bg-[#F8FAFC]">
-        <TeacherNavbar onMenuClick={() => setMobileOpen(true)} />
-        <TeacherSidebar
-          mobileOpen={mobileOpen}
-          onCloseMobile={() => setMobileOpen(false)}
-        >
-          {children}
-        </TeacherSidebar>
-      </div>
-    </TeacherCoursesProvider>
+    <CurriculumProvider>
+      <TeacherCoursesProvider>
+        <div className="min-h-screen bg-[#F8FAFC]">
+          <TeacherNavbar onMenuClick={() => setMobileOpen(true)} />
+          <TeacherSidebar
+            mobileOpen={mobileOpen}
+            onCloseMobile={() => setMobileOpen(false)}
+          >
+            {children}
+          </TeacherSidebar>
+        </div>
+      </TeacherCoursesProvider>
+    </CurriculumProvider>
   );
 }

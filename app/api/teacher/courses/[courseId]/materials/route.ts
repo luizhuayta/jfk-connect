@@ -7,8 +7,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { courseBelongsToTeacher } from "@/lib/guards";
+import { requireOwnedCourse } from "@/lib/guards";
 import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { createMaterialSchema } from "@/lib/schemas";
@@ -29,18 +28,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
-  // Admin puede leer cualquier curso (solo lectura); docente solo los suyos
-  const [user, denied] = await requireRole(request, ["docente", "admin"]);
-  if (denied) return denied;
-
   const { courseId } = await params;
 
-  if (user.role !== "admin" && !(await courseBelongsToTeacher(courseId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este curso no está asignado a tu cuenta." },
-      { status: 403 },
-    );
-  }
+  // Admin puede leer cualquier curso (solo lectura); docente solo los suyos
+  const [, denied] = await requireOwnedCourse(request, courseId);
+  if (denied) return denied;
 
   try {
     const r = await query<MaterialRow>(
@@ -80,17 +72,10 @@ export async function POST(
   const blocked = assertSameOrigin(request);
   if (blocked) return blocked;
 
-  const [user, denied] = await requireRole(request, ["docente"]);
-  if (denied) return denied;
-
   const { courseId } = await params;
 
-  if (!(await courseBelongsToTeacher(courseId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este curso no está asignado a tu cuenta." },
-      { status: 403 },
-    );
-  }
+  const [, denied] = await requireOwnedCourse(request, courseId, { allowAdmin: false });
+  if (denied) return denied;
 
   try {
     const [parsed, validationError] = await parseBody(request, createMaterialSchema);

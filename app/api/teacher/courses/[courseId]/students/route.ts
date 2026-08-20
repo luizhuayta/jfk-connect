@@ -7,9 +7,8 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { query, queryOne } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { courseBelongsToTeacher } from "@/lib/guards";
+import { query } from "@/lib/db";
+import { requireOwnedCourse } from "@/lib/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -24,31 +23,14 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
-  // Admin puede leer cualquier curso (solo lectura); docente solo los suyos
-  const [user, denied] = await requireRole(request, ["docente", "admin"]);
-  if (denied) return denied;
-
   const { courseId } = await params;
 
-  if (user.role !== "admin" && !(await courseBelongsToTeacher(courseId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este curso no está asignado a tu cuenta." },
-      { status: 403 },
-    );
-  }
+  // Admin puede leer cualquier curso (solo lectura); docente solo los suyos
+  const [ctx, denied] = await requireOwnedCourse(request, courseId);
+  if (denied) return denied;
+  const { course } = ctx;
 
   try {
-    const course = await queryOne<{ grade: string; section: string }>(
-      "SELECT grade, section FROM courses WHERE id = $1",
-      [courseId],
-    );
-    if (!course) {
-      return NextResponse.json(
-        { ok: false, error: "Curso no encontrado." },
-        { status: 404 },
-      );
-    }
-
     const r = await query<StudentRow>(
       `SELECT s.id,
               s.full_name AS name,

@@ -21,6 +21,7 @@ import { parseBody } from "@/lib/validate";
 import { assertSameOrigin } from "@/lib/csrf";
 import { createStudentSchema } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
+import { SCHOOL_YEAR } from "@/lib/school-year";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,8 @@ export async function GET(request: NextRequest) {
 
     // Query de datos con LIMIT/OFFSET
     const dataParams = [...params];
+    dataParams.push(SCHOOL_YEAR);
+    const yearIdx = dataParams.length;
     dataParams.push(limit);
     const limitIdx = dataParams.length;
     dataParams.push(offset);
@@ -120,8 +123,8 @@ export async function GET(request: NextRequest) {
          p.full_name AS parent_name,
          p.phone AS parent_phone,
          (
-           SELECT ROUND(AVG(g.average)::numeric, 2)
-           FROM grades g WHERE g.student_id = s.id AND g.n3 IS NOT NULL
+           SELECT ROUND(AVG(v.score)::numeric, 2)
+           FROM v_area_grades v WHERE v.student_id = s.id AND v.graded = v.expected AND v.year = $${yearIdx}
          )::float AS avg_grade,
          (
            SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))

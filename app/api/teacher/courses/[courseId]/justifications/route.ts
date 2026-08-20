@@ -9,8 +9,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { courseBelongsToTeacher } from "@/lib/guards";
+import { requireOwnedCourse } from "@/lib/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -30,17 +29,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
-  const [user, denied] = await requireRole(request, ["docente", "admin"]);
-  if (denied) return denied;
-
   const { courseId } = await params;
 
-  if (user.role !== "admin" && !(await courseBelongsToTeacher(courseId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este curso no está asignado a tu cuenta." },
-      { status: 403 },
-    );
-  }
+  const [, denied] = await requireOwnedCourse(request, courseId);
+  if (denied) return denied;
 
   try {
     const r = await query<JustificationRow>(

@@ -6,6 +6,7 @@ import FatherTopBar from "@/components/layout/FatherTopBar";
 import { FatherStudentsProvider } from "@/components/father/useFatherStudents";
 import { AnnouncementsProvider } from "@/components/father/AnnouncementsProvider";
 import { SessionUserProvider } from "@/lib/useSessionUser";
+import { CurriculumProvider } from "@/lib/curriculum/client";
 
 /**
  * Layout del panel del padre.
@@ -36,17 +37,19 @@ export default function FatherLayout({
 
   return (
     <SessionUserProvider>
-      <FatherStudentsProvider>
-        <AnnouncementsProvider>
-          <FatherSidebar
-            mobileOpen={mobileOpen}
-            onCloseMobile={() => setMobileOpen(false)}
-          >
-            <FatherTopBar onMenuClick={() => setMobileOpen((v) => !v)} />
-            {children}
-          </FatherSidebar>
-        </AnnouncementsProvider>
-      </FatherStudentsProvider>
+      <CurriculumProvider>
+        <FatherStudentsProvider>
+          <AnnouncementsProvider>
+            <FatherSidebar
+              mobileOpen={mobileOpen}
+              onCloseMobile={() => setMobileOpen(false)}
+            >
+              <FatherTopBar onMenuClick={() => setMobileOpen((v) => !v)} />
+              {children}
+            </FatherSidebar>
+          </AnnouncementsProvider>
+        </FatherStudentsProvider>
+      </CurriculumProvider>
     </SessionUserProvider>
   );
 }

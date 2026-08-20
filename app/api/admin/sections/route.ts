@@ -21,6 +21,8 @@ import { parseBody } from "@/lib/validate";
 import { assertSameOrigin } from "@/lib/csrf";
 import { createSectionSchema } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
+import { fetchCatalog } from "@/lib/curriculum/server";
+import { SCHOOL_YEAR } from "@/lib/school-year";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +43,12 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
 
   try {
+    // avg_grade y attendance_rate se calculan UNA sola vez por sección (CTEs
+    // section_avg/section_attendance), no con una subconsulta correlacionada
+    // por cada una de las 65 secciones: eso obligaba a Postgres a reagregar
+    // competency_grades (127k filas) y attendance (133k filas) 65 veces cada
+    // uno — ~10s de respuesta. Con un solo GROUP BY por tabla y un LEFT JOIN
+    // a `keys`, la misma información sale en una sola pasada.
     const r = await query<SectionRow>(
       `WITH keys AS (
          SELECT s.grade, s.grade_num, s.section, s.shift::text AS shift
@@ -51,41 +59,64 @@ export async function GET(request: NextRequest) {
                 c.section,
                 c.shift::text AS shift
          FROM courses c
+       ),
+       section_totals AS (
+         SELECT grade, section, COUNT(*)::int AS total
+         FROM students WHERE status = 'activo'
+         GROUP BY grade, section
+       ),
+       section_avg AS (
+         SELECT s.grade, s.section, ROUND(AVG(v.score)::numeric, 2) AS avg_grade
+         FROM v_area_grades v
+         JOIN students s ON s.id = v.student_id
+         WHERE v.graded = v.expected AND v.year = $1
+         GROUP BY s.grade, s.section
+       ),
+       section_attendance AS (
+         SELECT s.grade, s.section,
+           ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0)) AS attendance_rate
+         FROM attendance a
+         JOIN students s ON s.id = a.student_id
+         GROUP BY s.grade, s.section
+       ),
+       section_tutor AS (
+         SELECT t.grade, t.section, u.full_name AS tutor
+         FROM section_tutors t
+         JOIN users u ON u.id = t.teacher_id
+         WHERE t.year = $1
+       ),
+       -- Respaldo si una sección no tiene tutor de DPCC asignado todavía:
+       -- el docente del primer curso de esa sección.
+       section_fallback_teacher AS (
+         SELECT DISTINCT ON (c.grade, c.section) c.grade, c.section, u.full_name AS teacher
+         FROM courses c
+         JOIN users u ON u.id = c.teacher_id
+         ORDER BY c.grade, c.section, c.id
+       ),
+       section_room AS (
+         SELECT DISTINCT ON (grade, section) grade, section, classroom AS room
+         FROM courses WHERE classroom IS NOT NULL
+         ORDER BY grade, section
        )
        SELECT
          k.grade,
          k.grade_num,
          k.section,
          k.shift,
-         COALESCE((
-           SELECT COUNT(*) FROM students s
-           WHERE s.grade = k.grade AND s.section = k.section AND s.status = 'activo'
-         ), 0)::int AS students_total,
-         (
-           SELECT ROUND(AVG(g.average)::numeric, 2)
-           FROM grades g
-           JOIN students s2 ON s2.id = g.student_id
-           WHERE s2.grade = k.grade AND s2.section = k.section AND g.n3 IS NOT NULL
-         )::float AS avg_grade,
-         (
-           SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
-           FROM attendance a
-           JOIN students s3 ON s3.id = a.student_id
-           WHERE s3.grade = k.grade AND s3.section = k.section
-         )::int AS attendance_rate,
-         (
-           SELECT u.full_name FROM courses c
-           JOIN users u ON u.id = c.teacher_id
-           WHERE c.grade = k.grade AND c.section = k.section
-           LIMIT 1
-         ) AS tutor,
-         (
-           SELECT c.classroom FROM courses c
-           WHERE c.grade = k.grade AND c.section = k.section AND c.classroom IS NOT NULL
-           LIMIT 1
-         ) AS room
+         COALESCE(st.total, 0) AS students_total,
+         sa.avg_grade::float AS avg_grade,
+         sat.attendance_rate::int AS attendance_rate,
+         COALESCE(stu.tutor, sft.teacher) AS tutor,
+         sr.room AS room
         FROM keys k
+        LEFT JOIN section_totals st ON st.grade = k.grade AND st.section = k.section
+        LEFT JOIN section_avg sa ON sa.grade = k.grade AND sa.section = k.section
+        LEFT JOIN section_attendance sat ON sat.grade = k.grade AND sat.section = k.section
+        LEFT JOIN section_tutor stu ON stu.grade = k.grade AND stu.section = k.section
+        LEFT JOIN section_fallback_teacher sft ON sft.grade = k.grade AND sft.section = k.section
+        LEFT JOIN section_room sr ON sr.grade = k.grade AND sr.section = k.section
         ORDER BY k.grade_num, k.section`,
+      [SCHOOL_YEAR],
     );
 
     return NextResponse.json({
@@ -113,22 +144,10 @@ export async function GET(request: NextRequest) {
 }
 
 // ─── POST: crear sección (grado + sección + aula + turno) ────────────────────
-
-// Mismo set de materias por sección que usa el padrón de la institución.
-const SUBJECTS: { name: string; hours: number }[] = [
-  { name: "Matemáticas", hours: 5 },
-  { name: "Comunicación", hours: 5 },
-  { name: "Ciencia y Tecnología", hours: 4 },
-  { name: "Inglés", hours: 3 },
-  { name: "HGE", hours: 3 },
-  { name: "Tutoría", hours: 3 },
-  { name: "Cívica", hours: 2 },
-  { name: "Religión", hours: 2 },
-  { name: "Arte", hours: 2 },
-  { name: "Educación Física", hours: 2 },
-  { name: "EPT", hours: 2 },
-  { name: "DPCC", hours: 2 },
-];
+// Las áreas y sus horas ya no están hardcodeadas acá — se leen del catálogo
+// real (curricular_areas), fuente única compartida con el resto de la app
+// (ver lib/curriculum/). Las transversales no llevan curso propio (no tienen
+// grade/section: las califica el tutor de la sección, no un docente de área).
 
 export async function POST(request: NextRequest) {
   const blocked = assertSameOrigin(request);
@@ -174,16 +193,19 @@ export async function POST(request: NextRequest) {
     const bimester = yearRow?.bimester ?? 1;
     const classroom = room?.trim() || `Aula ${grade}-${section}`;
 
+    const { areas } = await fetchCatalog();
+    const courseAreas = areas.filter((a) => !a.isTransversal);
+
     const values: string[] = [];
     const params: unknown[] = [];
-    for (const s of SUBJECTS) {
-      params.push(s.name, grade, section, year, shift, classroom, bimester, s.hours);
+    for (const a of courseAreas) {
+      params.push(a.name, grade, section, year, shift, classroom, bimester, a.hoursPerWeek, a.id);
       const b = params.length;
-      values.push(`($${b - 7}, $${b - 6}, $${b - 5}, $${b - 4}, $${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
+      values.push(`($${b - 8}, $${b - 7}, $${b - 6}, $${b - 5}, $${b - 4}, $${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
     }
 
     await query(
-      `INSERT INTO courses (name, grade, section, year, shift, classroom, bimester, hours_per_week)
+      `INSERT INTO courses (name, grade, section, year, shift, classroom, bimester, hours_per_week, area_id)
        VALUES ${values.join(", ")}
        ON CONFLICT (name, grade, section, year) DO NOTHING`,
       params,
@@ -193,7 +215,7 @@ export async function POST(request: NextRequest) {
       {
         ok: true,
         section: { grade, section, shift, room: classroom, year },
-        message: `Sección ${grade} "${section}" creada con ${SUBJECTS.length} cursos.`,
+        message: `Sección ${grade} "${section}" creada con ${courseAreas.length} cursos.`,
       },
       { status: 201 },
     );

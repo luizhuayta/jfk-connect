@@ -1,13 +1,16 @@
-import { letterGrade, letterGradeColor, desempeñoLabel } from "@/lib/letter-grade";
+import { LEVEL_LABEL, levelBadgeClass, type Level } from "@/lib/grades/scale";
 import { cn } from "@/lib/utils";
 
-export type BimesterAverage = { label: string; avg: number | null };
+/** Nivel predominante de un bimestre — nunca un número (el padre solo ve letras). */
+export type BimesterAverage = { label: string; level: Level | null };
 
 /**
  * Selector/resumen de bimestres compartido (antes implementado por separado
  * en grades y students con markup casi idéntico). `onSelect` ausente lo
  * vuelve un resumen no interactivo (ficha de alumno); presente, un selector
- * con estado activo (página de Notas).
+ * con estado activo. Muestra solo el nivel de logro (AD/A/B/C), nunca la
+ * nota 0-20 — coherente con la libreta (lib/grades/libreta.ts) que tampoco
+ * expone el número al padre.
  */
 export default function BimesterTiles({
   averages,
@@ -26,8 +29,8 @@ export default function BimesterTiles({
         {averages.map((b, i) => (
           <div key={b.label} className="text-center bg-surface-container-low rounded-lg py-2">
             <p className="text-xs text-on-surface-variant">B{i + 1}</p>
-            <p className="text-sm font-bold text-primary">
-              {b.avg != null ? b.avg.toFixed(1) : "—"}
+            <p className={cn("text-sm font-bold", b.level ? levelBadgeClass(b.level) : "text-primary")}>
+              {b.level ?? "—"}
             </p>
           </div>
         ))}
@@ -40,7 +43,6 @@ export default function BimesterTiles({
       {averages.map((b, i) => {
         const isActive = active === b.label;
         const interactive = Boolean(onSelect);
-        const ltr = letterGrade(b.avg);
         const Wrapper = interactive ? "button" : "div";
         return (
           <Wrapper
@@ -65,18 +67,17 @@ export default function BimesterTiles({
               Bimestre {i + 1}
             </p>
             <div className="flex items-center justify-center gap-2">
-              <p className={cn("text-xl font-bold", isActive ? "text-accent" : "text-primary")}>
-                {b.avg != null ? b.avg.toFixed(1) : "—"}
-              </p>
-              {ltr && (
+              {b.level ? (
                 <span
                   className={cn(
-                    "h-6 w-6 rounded-md border flex items-center justify-center text-[11px] font-bold",
-                    isActive ? "border-white/40 text-white" : letterGradeColor(ltr),
+                    "h-8 min-w-8 px-2 rounded-md border flex items-center justify-center text-base font-bold",
+                    isActive ? "border-white/40 text-white" : levelBadgeClass(b.level),
                   )}
                 >
-                  {ltr}
+                  {b.level}
                 </span>
+              ) : (
+                <p className={cn("text-xl font-bold", isActive ? "text-accent" : "text-primary")}>—</p>
               )}
             </div>
             <p
@@ -85,7 +86,7 @@ export default function BimesterTiles({
                 isActive ? "text-white/80" : "text-on-surface-variant",
               )}
             >
-              {desempeñoLabel(b.avg)}
+              {b.level ? LEVEL_LABEL[b.level] : "Sin notas"}
             </p>
           </Wrapper>
         );

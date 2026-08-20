@@ -9,6 +9,7 @@ import { CheckCircle2, XCircle, Clock, Users, CalendarDays, TrendingUp, Loader2 
 import { recentWeekdays } from "@/lib/format";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
+import { areaColor } from "@/lib/curriculum/colors";
 
 type AdminCourse = {
   id: string; subject: string; grade: string; section: string;
@@ -22,15 +23,6 @@ const STATUS_META = {
   F: { label: "Falta", icon: XCircle, badge: "bg-red-50 border-red-200 text-red-600" },
   T: { label: "Tardanza", icon: Clock, badge: "bg-amber-50 border-amber-200 text-amber-700" },
 };
-const SUBJECT_COLORS: Record<string, { bg: string; text: string }> = {
-  "Matemáticas": { bg: "bg-blue-50", text: "text-blue-700" },
-  "Lengua Castellana": { bg: "bg-purple-50", text: "text-purple-700" },
-  "Historia": { bg: "bg-amber-50", text: "text-amber-700" },
-  "Comunicación": { bg: "bg-purple-50", text: "text-purple-700" },
-  "Ciencia y Tecnología": { bg: "bg-emerald-50", text: "text-emerald-700" },
-  "Inglés": { bg: "bg-cyan-50", text: "text-cyan-700" },
-};
-
 function fmtDate(iso: string) { return new Date(iso + "T12:00:00").toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" }); }
 function fmtDateLong(iso: string) { return new Date(iso + "T12:00:00").toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); }
 
@@ -130,7 +122,7 @@ export default function AdminAttendancePage() {
       <div className="grid gap-3 sm:grid-cols-3">
         {courses.map((c) => {
           const stat = courseStats[c.id] ?? { pct: c.attendanceRate, faltas: 0, sesiones: 0 };
-          const color = SUBJECT_COLORS[c.subject] ?? { bg: "bg-gray-50", text: "text-gray-700" };
+          const color = areaColor(c.subject);
           const isActive = activeCourseId === c.id;
           const borderColor = stat.pct === null ? "border-l-gray-300" : stat.pct >= 90 ? "border-l-emerald-500" : stat.pct >= 75 ? "border-l-amber-500" : "border-l-red-500";
           return (

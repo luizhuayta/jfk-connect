@@ -13,6 +13,7 @@ import ErrorState from "@/components/common/ErrorState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { sectionShift } from "@/lib/section-shift";
+import { useCurriculum } from "@/lib/curriculum/client";
 
 type Role = "admin" | "docente" | "padre";
 
@@ -73,16 +74,12 @@ export default function AdminUsersPage() {
   const [form, setForm] = useState({ fullName: "", email: "", role: "docente" as Role, phone: "", subject: "", shiftPreference: "Ambos" as string });
   const [editForm, setEditForm] = useState({ fullName: "", role: "docente" as Role, phone: "", isActive: true, subject: "" as string, shiftPreference: "Ambos" as string });
   const [actionLoading, setActionLoading] = useState(false);
-  const [subjects, setSubjects] = useState<string[]>([]);
+  const { areas } = useCurriculum();
+  const subjects = areas.filter((a) => !a.isTransversal).map((a) => a.name);
   const [showSchedule, setShowSchedule] = useState<UserRecord | null>(null);
   const [scheduleEntries, setScheduleEntries] = useState<ScheduleEntry[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
-
-  // Cargar lista de asignaturas para el dropdown
-  useEffect(() => {
-    fetch("/api/admin/subjects").then(r => r.json()).then(d => { if (d.ok) setSubjects(d.subjects); }).catch(() => {});
-  }, []);
 
   const loadUsers = async (targetPage: number) => {
     setLoading(true); setError(null);

@@ -8,8 +8,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { queryOne } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { courseBelongsToTeacher } from "@/lib/guards";
+import { requireOwnedCourse } from "@/lib/guards";
 import { assertSameOrigin } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
@@ -21,17 +20,10 @@ export async function DELETE(
   const blocked = assertSameOrigin(request);
   if (blocked) return blocked;
 
-  const [user, denied] = await requireRole(request, ["docente"]);
-  if (denied) return denied;
-
   const { courseId, materialId } = await params;
 
-  if (!(await courseBelongsToTeacher(courseId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este curso no está asignado a tu cuenta." },
-      { status: 403 },
-    );
-  }
+  const [, denied] = await requireOwnedCourse(request, courseId, { allowAdmin: false });
+  if (denied) return denied;
 
   try {
     const deleted = await queryOne<{ id: string }>(

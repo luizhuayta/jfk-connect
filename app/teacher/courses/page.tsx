@@ -9,7 +9,8 @@ import {
   Users, BookOpen, MapPin, ChevronRight, ChevronDown, ChevronUp,
   BarChart3, CheckCircle2, AlertCircle,
 } from "lucide-react";
-import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
+import { levelFromScore, levelBadgeClass } from "@/lib/grades/scale";
+import { areaColor } from "@/lib/curriculum/colors";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
@@ -31,8 +32,6 @@ const ICON_COLORS = {
 };
 
 // ─── Color condicional unificado (mismo criterio que Dashboard) ───────────────
-// Bug fix: antes usaba ≥16/≥13 que era inconsistente con el Dashboard (≥15/≥11).
-// Ahora usa el mismo umbral que letterGrade: ≥15 verde, ≥11 ámbar, <11 rojo.
 function avgColor(avg: number | null): string {
   if (avg === null) return "text-gray-400";
   if (avg >= 15) return "text-emerald-600";
@@ -59,21 +58,6 @@ function avgOf(nums: (number | null)[]): number | null {
   const vals = nums.filter((n): n is number => n !== null);
   return vals.length ? vals.reduce((s, n) => s + n, 0) / vals.length : null;
 }
-
-const SUBJECT_DOT: Record<string, string> = {
-  "Matemáticas": "bg-blue-500",
-  "Comunicación": "bg-purple-500",
-  "Ciencia y Tecnología": "bg-cyan-500",
-  "Cívica": "bg-rose-500",
-  "Religión": "bg-violet-500",
-  "Arte": "bg-pink-500",
-  "Educación Física": "bg-lime-500",
-  "EPT": "bg-orange-500",
-  "Tutoría": "bg-slate-500",
-  "Inglés": "bg-emerald-500",
-  "HGE": "bg-amber-500",
-  "DPCC": "bg-teal-500",
-};
 
 export default function CoursesPage() {
   const { courses, loading, error, reload } = useTeacherCourses();
@@ -195,9 +179,9 @@ export default function CoursesPage() {
             <div>
               <div className="flex items-baseline gap-2">
                 <p className="text-2xl font-bold text-[#0F172A]">{globalAvg !== null ? globalAvg.toFixed(1) : "—"}</p>
-                {letterGrade(globalAvg) && (
-                  <Badge className={`text-xs font-bold ${letterGradeColor(letterGrade(globalAvg))}`}>
-                    {letterGrade(globalAvg)}
+                {levelFromScore(globalAvg) && (
+                  <Badge className={`text-xs font-bold ${levelBadgeClass(levelFromScore(globalAvg))}`}>
+                    {levelFromScore(globalAvg)}
                   </Badge>
                 )}
               </div>
@@ -210,7 +194,7 @@ export default function CoursesPage() {
       {/* Course cards — agrupadas por subject (punto 1) */}
       <div className="space-y-4">
         {groupedCourses.map(([subject, subjectCourses]) => {
-          const dot = SUBJECT_DOT[subject] ?? "bg-gray-400";
+          const dot = areaColor(subject).dot;
           const isCollapsed = collapsedGroups.has(subject);
           const subjectAvg = avgOf(subjectCourses.map((c) => c.avgGrade));
           const subjectAttendanceRaw = avgOf(subjectCourses.map((c) => c.attendanceRate));

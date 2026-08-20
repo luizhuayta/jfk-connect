@@ -9,6 +9,7 @@ import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
 import { useIsClient } from "@/lib/useIsClient";
+import { areaColor } from "@/lib/curriculum/colors";
 
 type ScheduleSlot = {
   time: string;
@@ -29,22 +30,9 @@ function periodsForShift(shift: string | undefined) {
   return shift === "Tarde" ? PERIODS_TARDE : PERIODS_MAÑANA;
 }
 
-const SUBJECT_STYLES: Record<string, string> = {
-  "Matemáticas":  "bg-blue-50   text-blue-800   border-blue-200",
-  "Comunicación": "bg-purple-50 text-purple-800 border-purple-200",
-  "Inglés":       "bg-emerald-50 text-emerald-800 border-emerald-200",
-  "HGE":          "bg-amber-50  text-amber-800  border-amber-200",
-  "Ciencias":     "bg-cyan-50   text-cyan-800   border-cyan-200",
-  "EPT":          "bg-orange-50 text-orange-800 border-orange-200",
-  "Ed. Física":   "bg-lime-50   text-lime-800   border-lime-200",
-  "Arte":         "bg-pink-50   text-pink-800   border-pink-200",
-  "DPCC":         "bg-teal-50   text-teal-800   border-teal-200",
-  "Religión":     "bg-violet-50 text-violet-800 border-violet-200",
-  "Tutoría":      "bg-gray-100  text-gray-700   border-gray-200",
-};
-
 function subjectStyle(subject: string) {
-  return SUBJECT_STYLES[subject] ?? "bg-gray-50 text-gray-700 border-gray-200";
+  const c = areaColor(subject);
+  return `${c.bg} ${c.text} ${c.border}`;
 }
 
 const DAY_SHORT: Record<string, string> = {

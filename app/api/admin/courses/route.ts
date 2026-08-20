@@ -2,7 +2,14 @@
  * GET /api/admin/courses
  *
  * Todos los cursos del año en curso con docente asignado, totales y
- * estadísticas por bimestre (para el panel de notas del admin).
+ * estadísticas por bimestre (para el panel de notas del admin), más la
+ * lista de secciones (para poder elegir "Competencias transversales" de
+ * cualquiera, no solo cursos).
+ *
+ * Las estadísticas leen las vistas `v_area_grades`/`v_course_bimester_stats`
+ * (migración 008, agregan `competency_grades`) en vez del viejo `grades`
+ * (n1/n2/n3). `graded = expected` reemplaza `n3 IS NOT NULL` como criterio
+ * de "bimestre cerrado".
  *
  * Seguridad: solo rol 'admin'.
  */
@@ -10,6 +17,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
+import { SCHOOL_YEAR } from "@/lib/school-year";
 
 export const dynamic = "force-dynamic";
 
@@ -55,8 +63,31 @@ export async function GET(request: NextRequest) {
     if (section) { params.push(section); where.push(`c.section = $${params.length}`); }
     const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
 
+    // students_total/avg_grade/attendance_rate se agregan UNA vez cada uno
+    // (CTEs) y se pegan con JOIN, en vez de una subconsulta correlacionada
+    // por cada uno de los 715 cursos — eso reagregaba competency_grades y
+    // attendance cientos de veces (con hasta 11 cursos por sección
+    // recalculando la MISMA asistencia de esa sección una y otra vez).
     const courses = await query<CourseRow>(
-      `SELECT
+      `WITH section_totals AS (
+         SELECT grade, section, COUNT(*)::int AS total
+         FROM students WHERE status = 'activo'
+         GROUP BY grade, section
+       ),
+       course_avg AS (
+         SELECT course_id, ROUND(AVG(score)::numeric, 2) AS avg_grade
+         FROM v_area_grades
+         WHERE course_id IS NOT NULL AND graded = expected AND year = $${params.length + 1}
+         GROUP BY course_id
+       ),
+       section_attendance AS (
+         SELECT s.grade, s.section,
+           ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0)) AS attendance_rate
+         FROM attendance a
+         JOIN students s ON s.id = a.student_id
+         GROUP BY s.grade, s.section
+       )
+       SELECT
          c.id,
          c.name AS subject,
          c.grade,
@@ -68,38 +99,28 @@ export async function GET(request: NextRequest) {
          u.subject AS teacher_subject,
          c.hours_per_week,
          c.bimester,
-         COALESCE((
-           SELECT COUNT(*) FROM students s
-           WHERE s.grade = c.grade AND s.section = c.section AND s.status = 'activo'
-         ), 0)::int AS students_total,
-         (
-           SELECT ROUND(AVG(g.average)::numeric, 2)
-           FROM grades g
-           WHERE g.course_id = c.id AND g.n3 IS NOT NULL
-         )::float AS avg_grade,
-         (
-           SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
-           FROM attendance a
-           JOIN students s3 ON s3.id = a.student_id
-           WHERE s3.grade = c.grade AND s3.section = c.section
-         )::int AS attendance_rate
+         COALESCE(st.total, 0) AS students_total,
+         ca.avg_grade::float AS avg_grade,
+         sat.attendance_rate::int AS attendance_rate
        FROM courses c
        LEFT JOIN users u ON u.id = c.teacher_id
+       LEFT JOIN section_totals st ON st.grade = c.grade AND st.section = c.section
+       LEFT JOIN course_avg ca ON ca.course_id = c.id
+       LEFT JOIN section_attendance sat ON sat.grade = c.grade AND sat.section = c.section
        ${whereClause}
        ORDER BY c.grade, c.section, c.name`,
-      params,
+      [...params, SCHOOL_YEAR],
     );
 
     const stats = await query<BimesterRow>(
-      `SELECT g.course_id,
-              g.bimester,
-              COUNT(*)::int AS entries,
-              COUNT(g.n3)::int AS complete,
-              ROUND(AVG(g.average) FILTER (WHERE g.n3 IS NOT NULL)::numeric, 2)::float AS avg,
-              COUNT(*) FILTER (WHERE g.n3 IS NOT NULL AND g.average >= 11)::int AS approved,
-              COUNT(*) FILTER (WHERE g.n3 IS NOT NULL AND g.average < 11)::int AS failed
-       FROM grades g
-       GROUP BY g.course_id, g.bimester`,
+      `SELECT course_id, bimester, entries, complete, avg, approved, failed
+       FROM v_course_bimester_stats
+       WHERE year = $1`,
+      [SCHOOL_YEAR],
+    );
+
+    const sections = await query<{ grade: string; section: string }>(
+      `SELECT DISTINCT grade, section FROM students WHERE status = 'activo' ORDER BY grade, section`,
     );
 
     const statsByCourse: Record<string, Record<string, unknown>> = {};
@@ -134,6 +155,7 @@ export async function GET(request: NextRequest) {
         attendanceRate: c.attendance_rate,
         bimesters: statsByCourse[c.id] ?? {},
       })),
+      sections: sections.rows,
     });
   } catch (err) {
     console.error("[admin/courses GET] Error:", err);

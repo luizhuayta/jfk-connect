@@ -5,11 +5,15 @@
  *   node scripts/seed-full.mjs            → idempotente (ON CONFLICT DO NOTHING)
  *   node scripts/seed-full.mjs --clean    → borra datos demo explícitos primero
  *
- * Genera:
- *   - 130 docentes (10 asignaturas × 11 + 2 × 10) con subject + shift_preference
+ * Genera (catálogo leído en vivo de curricular_areas/competencies — migración
+ * 00000000000008_competencias.sql, requiere haber corrido `docker:reset` al
+ * menos una vez sobre un volumen que la incluya):
+ *   - 130 docentes (11 áreas curriculares, repartidos proporcional a horas) + subject/area_id + shift_preference
  *   - ~2,000 alumnos (65 secciones × 25-39) con enrollment_code único
- *   - ~780 cursos (65 secciones × 12 asignaturas) con teacher_id asignado
- *   - ~48,000 notas (B1 completo + B2 en curso)
+ *   - 715 cursos (65 secciones × 11 áreas) con teacher_id asignado
+ *   - 65 tutores de sección (el docente de DPCC de cada sección)
+ *   - ~127,000 notas por competencia (competency_grades: 29 de área + 2
+ *     transversales × 2 bimestres por alumno activo)
  *   - ~130,000 asistencias (marzo-mayo 2026)
  *   - ~2,000 matrículas con docs/tutor/classroom
  *   - ~2,275 entradas de horario (65 secciones × 35 slots)
@@ -58,19 +62,17 @@ async function insertMany(client, table, cols, rows, chunkSize = 1000) {
 }
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
-const SUBJECTS = [
-  "Matemáticas", "Comunicación", "Ciencia y Tecnología", "Cívica",
-  "Religión", "Arte", "Educación Física", "EPT",
-  "Tutoría", "Inglés", "HGE", "DPCC",
-];
-const SUBJECT_ABBR = {
-  "Matemáticas": "mat", "Comunicación": "com", "Ciencia y Tecnología": "cta",
-  "Cívica": "civ", "Religión": "rel", "Arte": "art",
-  "Educación Física": "edf", "EPT": "ept", "Tutoría": "tut",
-  "Inglés": "ing", "HGE": "hge", "DPCC": "dpcc",
+// El catálogo de áreas/competencias YA NO vive aquí — se lee en vivo de
+// curricular_areas/competencies (migración 008), fuente de verdad única
+// compartida con la app. Solo queda el reparto de docentes por área
+// (decisión de producto, no dato del catálogo): proporcional a horas
+// semanales, sumando exactamente los 130 docentes de siempre.
+const TEACHER_COUNTS_BY_CODE = {
+  MAT: 22, COM: 22, CYT: 16,
+  CCSS: 11, DPCC: 11, ING: 11,
+  EDF: 8, ART: 8,
+  REL: 7, EPT: 7, CSL: 7,
 };
-// 10 materias con 11 docentes, 2 materas con 10 = 130
-const SUBJECT_COUNTS = SUBJECTS.map(s => (s === "HGE" || s === "DPCC") ? 10 : 11);
 
 const GRADES = [
   { label: "1ro", num: 1 }, { label: "2do", num: 2 },
@@ -89,19 +91,10 @@ const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 // min + un recreo de 20 min tras el 3er bloque).
 const PERIODS_MAÑANA = ["7:45 - 8:30","8:30 - 9:15","9:15 - 10:00","10:20 - 11:05","11:05 - 11:50","11:50 - 12:35","12:35 - 13:20"];
 const PERIODS_TARDE  = ["13:30 - 14:15","14:15 - 15:00","15:00 - 15:45","16:05 - 16:50","16:50 - 17:35","17:35 - 18:20","18:20 - 19:05"];
-const PERIODS = PERIODS_MAÑANA; // alias: se usa donde el turno ya no importa (ids, conteos)
 const RECESS_TIME = { Mañana: "10:00 – 10:20", Tarde: "15:45 – 16:05" };
 function periodsForShift(shift) {
   return shift === "Tarde" ? PERIODS_TARDE : PERIODS_MAÑANA;
 }
-
-// Distribución de slots por asignatura (suma = 35 = 5 días × 7 períodos)
-const SLOTS_PER_SUBJECT = {
-  "Matemáticas": 5, "Comunicación": 5, "Ciencia y Tecnología": 4,
-  "Inglés": 3, "HGE": 3, "Tutoría": 3,
-  "Cívica": 2, "Religión": 2, "Arte": 2,
-  "Educación Física": 2, "EPT": 2, "DPCC": 2,
-};
 
 const DOC_LABELS = [
   "DNI del alumno", "Partida de nacimiento", "Libreta de notas anterior",
@@ -126,7 +119,25 @@ const LAST_NAMES = [
   "Soto","Zamora",
 ];
 
-// Emails demo a borrar en --clean (lista EXPLÍCITA, no NOT IN)
+// Frases de conclusión descriptiva por competencia (1 de cada 4 notas la
+// lleva — el resto queda solo con el nivel, como en la libreta real).
+const CONCLUSIONS = [
+  "Demuestra un manejo sólido de la competencia.",
+  "Evidencia avances constantes en su desempeño.",
+  "Necesita reforzar aspectos clave de esta competencia.",
+  "Participa activamente y muestra iniciativa.",
+  "Requiere acompañamiento más cercano.",
+  "Logra los aprendizajes esperados con autonomía.",
+  "Se encuentra en proceso de consolidar la competencia.",
+  "Destaca por su compromiso y dedicación.",
+  "Debe fortalecer la práctica constante.",
+  "Alcanza un desempeño satisfactorio.",
+  "Presenta dificultades que requieren refuerzo.",
+  "Sobresale con un desempeño destacado.",
+];
+
+// Emails demo a borrar en --clean (lista EXPLÍCITA, no NOT IN) — de un seed
+// demo anterior más pequeño, distinto al de este script.
 const DEMO_EMAILS = [
   "mgonzalez@ijfk.edu.pe","ccaceres@ijfk.edu.pe","lquispe@ijfk.edu.pe",
   "jtorres@ijfk.edu.pe","sflores@ijfk.edu.pe","psalas@ijfk.edu.pe",
@@ -174,8 +185,8 @@ function detRandom(seed, ...mods) {
   return r;
 }
 
-function genScore(studentIdx, courseIdx, noteNum) {
-  const r = detRandom(studentIdx + 1, courseIdx + 1, noteNum);
+function genScore(studentIdx, competencyId, bimester) {
+  const r = detRandom(studentIdx + 1, competencyId, bimester);
   // Distribución centrada en 13-14, rango 5-20
   const base = 13 + ((r % 100) - 50) / 10;
   return Math.max(0, Math.min(20, Math.round(base * 2) / 2));
@@ -214,6 +225,38 @@ async function main() {
   await client.connect();
   console.log(`[seed-full] Conectado. Modo: ${CLEAN ? "--clean" : "idempotente"}`);
 
+  // ── Preflight: el catálogo (migración 008) debe existir ANTES de tocar
+  // nada — las migraciones solo corren en un volumen nuevo, así que si
+  // alguien reusa un volumen viejo esto fallaría a mitad de transacción con
+  // un error de FK poco claro. Se aborta con un mensaje accionable.
+  const areasR = await client.query(
+    "SELECT id, code, name, is_transversal, hours_per_week FROM curricular_areas WHERE active ORDER BY display_order",
+  );
+  if (areasR.rows.length === 0) {
+    console.error(
+      "[seed-full] ✘ El catálogo (curricular_areas) está vacío. Falta la migración 008.\n" +
+      "  Ejecuta `npm run docker:reset` (las migraciones solo corren en un volumen nuevo) y vuelve a intentar.",
+    );
+    await client.end();
+    process.exitCode = 1;
+    return;
+  }
+  const compR = await client.query(
+    "SELECT id, area_id, code, name FROM competencies WHERE active ORDER BY area_id, display_order",
+  );
+
+  const areas = areasR.rows;
+  const realAreas = areas.filter((a) => !a.is_transversal);
+  const transversalCompetencies = compR.rows.filter(
+    (c) => areas.find((a) => a.id === c.area_id)?.is_transversal,
+  );
+  const competenciesByArea = new Map();
+  for (const c of compR.rows) {
+    const list = competenciesByArea.get(c.area_id) ?? [];
+    list.push(c);
+    competenciesByArea.set(c.area_id, list);
+  }
+
   const passwordHash = hashPassword(DEMO_PASSWORD);
 
   try {
@@ -222,7 +265,19 @@ async function main() {
     // ── Limpieza (solo --clean) ──────────────────────────────────────────
     if (CLEAN) {
       console.log("[seed-full] Borrando datos demo...");
-      await client.query("DELETE FROM grades");
+      await client.query("DELETE FROM competency_grades");
+      await client.query("DELETE FROM section_tutors");
+      // `grades` puede ya no existir (migración 009 la renombra a
+      // grades_legacy) — este seed nunca la escribe, así que basta con no
+      // tocarla si sigue ahí sobre un volumen que aún no tiene la 009.
+      await client.query(`
+        DO $do$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'grades' AND relkind = 'r') THEN
+            EXECUTE 'DELETE FROM grades';
+          END IF;
+        END $do$;
+      `);
       await client.query("DELETE FROM attendance");
       await client.query("DELETE FROM enrollments");
       await client.query("DELETE FROM schedule_entries");
@@ -234,6 +289,11 @@ async function main() {
       for (const email of DEMO_EMAILS) {
         await client.query("DELETE FROM users WHERE email = $1", [email]);
       }
+      // Docentes generados por este script (cualquier catálogo, viejo o
+      // nuevo): siguen el patrón d<código-área><NN>@ijfk.edu.pe.
+      await client.query(
+        "DELETE FROM users WHERE role = 'docente' AND email ~ '^d[a-z]+[0-9]{2}@ijfk\\.edu\\.pe$'",
+      );
       // Asegurar que los 2 admins tengan password scrypt
       await client.query(
         "UPDATE users SET password_hash = $1 WHERE role = 'admin' AND password_hash IS NULL",
@@ -242,17 +302,16 @@ async function main() {
       console.log("[seed-full] Limpieza completada.");
     }
 
-    // ── 1. Docentes (130) ────────────────────────────────────────────────
+    // ── 1. Docentes (130, repartidos por área) ───────────────────────────
     console.log("[seed-full] Generando 130 docentes...");
     const teacherRows = [];
     let teacherN = 201;
-    const teachersBySubject = {}; // subject → [teacherId, ...]
+    const teachersByArea = {}; // area.id → [{id, name, email, shiftPref}, ...]
 
-    for (let si = 0; si < SUBJECTS.length; si++) {
-      const subject = SUBJECTS[si];
-      const count = SUBJECT_COUNTS[si];
-      const abbr = SUBJECT_ABBR[subject];
-      teachersBySubject[subject] = [];
+    for (const area of realAreas) {
+      const count = TEACHER_COUNTS_BY_CODE[area.code] ?? 0;
+      const abbr = area.code.toLowerCase();
+      teachersByArea[area.id] = [];
 
       for (let i = 0; i < count; i++) {
         const tid = id(teacherN);
@@ -264,14 +323,14 @@ async function main() {
         const shiftR = detRandom(teacherN, 99) % 10;
         const shiftPref = shiftR < 6 ? "Ambos" : shiftR < 8 ? "Mañana" : "Tarde";
 
-        teacherRows.push([tid, email, fullName, "docente", null, true, passwordHash, subject, shiftPref]);
-        teachersBySubject[subject].push({ id: tid, name: fullName, email, shiftPref });
+        teacherRows.push([tid, email, fullName, "docente", null, true, passwordHash, area.name, area.id, shiftPref]);
+        teachersByArea[area.id].push({ id: tid, name: fullName, email, shiftPref });
         teacherN++;
       }
     }
 
     await insertMany(client, "users",
-      ["id","email","full_name","role","phone","is_active","password_hash","subject","shift_preference"],
+      ["id","email","full_name","role","phone","is_active","password_hash","subject","area_id","shift_preference"],
       teacherRows, 200);
     console.log(`[seed-full]   ${teacherRows.length} docentes insertados`);
 
@@ -320,24 +379,20 @@ async function main() {
       studentRows, 500);
     console.log(`[seed-full]   ${studentRows.length} alumnos insertados`);
 
-    // ── 3. Cursos (~780) ─────────────────────────────────────────────────
+    // ── 3. Cursos (715 = 65 secciones × 11 áreas) ─────────────────────────
     console.log("[seed-full] Generando cursos...");
     const courseRows = [];
     let courseN = 50001;
-    const coursesBySection = {}; // "grade|section" → [{id, subject, teacherId, teacherName}]
-    // Rotación de docente POR ASIGNATURA Y TURNO, continua a través de las
+    const coursesBySection = {}; // "grade|section" → [{id, name, areaId, teacherId, teacherName, hours}]
+    // Rotación de docente POR ÁREA Y TURNO, continua a través de las
     // secciones de ese turno (en vez de reiniciarse en cada grado, y
     // respetando `shift_preference`). Antes rotaba sin mirar el turno: un
     // docente "Mañana" o "Tarde" podía terminar dictando en el turno
-    // contrario. Cada sección solo elige entre los docentes de esa
-    // asignatura cuyo shift_preference es "Ambos" o coincide con el turno
-    // de la sección. Además, con `secI % teachers.length` (13 secciones, 11
-    // docentes) las secciones A y L caían siempre en el mismo docente en
-    // los 5 grados, dándole 10 secciones — con asignaturas de 5 horas/semana
-    // (Matemáticas, Comunicación) eso exige 50 slots en una semana de solo
-    // 35, imposible de armar sin cruces. Repartiendo parejo (round-robin
-    // continuo dentro del pool elegible) el máximo queda holgado.
-    const teacherRotation = {}; // "asignatura|turno" → próximo índice a repartir
+    // contrario. Cada sección solo elige entre los docentes de esa área
+    // cuyo shift_preference es "Ambos" o coincide con el turno de la
+    // sección. Reparto parejo (round-robin continuo dentro del pool
+    // elegible) mantiene la carga máxima holgada frente a los 35 slots.
+    const teacherRotation = {}; // "areaId|turno" → próximo índice a repartir
 
     for (const grade of GRADES) {
       for (let secI = 0; secI < SECTIONS.length; secI++) {
@@ -347,26 +402,23 @@ async function main() {
         const room = `Aula ${sectionRoom(grade.num, secI)}`;
         coursesBySection[key] = [];
 
-        for (let subjI = 0; subjI < SUBJECTS.length; subjI++) {
-          const subject = SUBJECTS[subjI];
+        for (const area of realAreas) {
           const cid = id(courseN);
-          // Asignar docente: rotar entre los docentes de esta asignatura
-          // que pueden dictar en este turno, repartiendo parejo.
-          const allTeachers = teachersBySubject[subject];
+          const allTeachers = teachersByArea[area.id];
           const eligible = allTeachers.filter((t) => t.shiftPref === "Ambos" || t.shiftPref === shift);
           const pool = eligible.length > 0 ? eligible : allTeachers; // resguardo, no debería activarse
-          const rotKey = `${subject}|${shift}`;
+          const rotKey = `${area.id}|${shift}`;
           const rotIdx = teacherRotation[rotKey] ?? 0;
           const teacher = pool[rotIdx % pool.length];
           teacherRotation[rotKey] = rotIdx + 1;
-          const hours = SLOTS_PER_SUBJECT[subject];
+          const hours = area.hours_per_week;
 
           courseRows.push([
-            cid, subject, grade.label, section, 2026, shift, room,
-            teacher.id, 1, hours, 0,
+            cid, area.name, grade.label, section, 2026, shift, room,
+            teacher.id, 1, hours, 0, area.id,
           ]);
           coursesBySection[key].push({
-            id: cid, subject, teacherId: teacher.id, teacherName: teacher.name, hours,
+            id: cid, name: area.name, areaId: area.id, teacherId: teacher.id, teacherName: teacher.name, hours,
           });
           courseN++;
         }
@@ -374,57 +426,96 @@ async function main() {
     }
 
     await insertMany(client, "courses",
-      ["id","name","grade","section","year","shift","classroom","teacher_id","bimester","hours_per_week","students_total"],
+      ["id","name","grade","section","year","shift","classroom","teacher_id","bimester","hours_per_week","students_total","area_id"],
       courseRows, 500);
     console.log(`[seed-full]   ${courseRows.length} cursos insertados`);
 
-    // ── 4. Notas (~48,000) ───────────────────────────────────────────────
-    console.log("[seed-full] Generando notas (B1 + B2)...");
-    const gradeRows = [];
-    let gradeN = 100001;
-    const OBSERVATIONS = [
-      "Excelente desempeño", "Buen trabajo", "Sigue mejorando", "Necesita refuerzo",
-      "Participación activa", "Puede mejorar", "Sobresaliente", "En proceso",
-      "Buen esfuerzo", "Regular", "Destacado", "Requiere apoyo",
-    ];
+    // ── 4. Tutores de sección (65 — el docente de DPCC de cada sección) ──
+    // Quién califica las competencias transversales (sin curso propio) y de
+    // dónde sale enrollments.tutor ahora que "Tutoría" ya no es un curso.
+    console.log("[seed-full] Asignando tutores de sección...");
+    const DPCC_AREA_ID = areas.find((a) => a.code === "DPCC")?.id;
+    const sectionTutorRows = [];
+    const sectionTutor = {}; // "grade|section" → {id, name}
+    let tutorN = 700001;
 
     for (const grade of GRADES) {
       for (let secI = 0; secI < SECTIONS.length; secI++) {
         const section = SECTIONS[secI];
         const key = `${grade.label}|${section}`;
-        const students = sectionStudents[key];
-        const courses = coursesBySection[key];
-
-        for (const course of courses) {
-          for (const student of students) {
-            if (student.idx % 50 === 49) continue; // retirado, sin notas
-
-            // B1: completo (n1, n2, n3)
-            const n1b1 = genScore(student.idx, gradeN, 1);
-            const n2b1 = genScore(student.idx, gradeN, 2);
-            const n3b1 = genScore(student.idx, gradeN, 3);
-            const obsB1 = OBSERVATIONS[detRandom(student.idx, gradeN) % OBSERVATIONS.length];
-            gradeRows.push([
-              id(gradeN++), student.id, course.id, 1, n1b1, n2b1, n3b1, obsB1, course.teacherId,
-            ]);
-
-            // B2: en curso (n1, n2, n3=NULL)
-            const n1b2 = genScore(student.idx, gradeN + 1, 1);
-            const n2b2 = genScore(student.idx, gradeN + 1, 2);
-            gradeRows.push([
-              id(gradeN++), student.id, course.id, 2, n1b2, n2b2, null, "Pendiente examen", course.teacherId,
-            ]);
-          }
-        }
+        const dpccCourse = coursesBySection[key]?.find((c) => c.areaId === DPCC_AREA_ID);
+        if (!dpccCourse) continue;
+        sectionTutor[key] = { id: dpccCourse.teacherId, name: dpccCourse.teacherName };
+        sectionTutorRows.push([id(tutorN++), grade.label, section, 2026, dpccCourse.teacherId]);
       }
     }
 
-    await insertMany(client, "grades",
-      ["id","student_id","course_id","bimester","n1","n2","n3","observation","registered_by"],
-      gradeRows, 500);
-    console.log(`[seed-full]   ${gradeRows.length} notas insertadas`);
+    await insertMany(client, "section_tutors", ["id","grade","section","year","teacher_id"], sectionTutorRows, 500);
+    console.log(`[seed-full]   ${sectionTutorRows.length} tutores de sección asignados`);
 
-    // ── 5. Asistencia (~130,000) ─────────────────────────────────────────
+    // ── 5. Notas por competencia (~127,000) ───────────────────────────────
+    // Flush por grado (no por sección, no acumulado hasta el final): con
+    // ~2,000 alumnos activos × 31 competencias × 2 bimestres (B1 completo +
+    // B2 en curso) el total ronda 127k filas — acumular todo en memoria
+    // antes de insertar es innecesario cuando se puede volcar cada grado
+    // (≈25k filas) y soltar el array.
+    console.log("[seed-full] Generando notas por competencia (B1 + B2)...");
+    let cgN = 100001;
+    let cgTotal = 0;
+
+    for (const grade of GRADES) {
+      const gradeRows = [];
+
+      for (let secI = 0; secI < SECTIONS.length; secI++) {
+        const section = SECTIONS[secI];
+        const key = `${grade.label}|${section}`;
+        const students = sectionStudents[key];
+        const courses = coursesBySection[key];
+        const tutor = sectionTutor[key];
+
+        for (const student of students) {
+          if (student.idx % 50 === 49) continue; // retirado, sin notas
+
+          // Competencias de área (una por curso de la sección).
+          for (const course of courses) {
+            const comps = competenciesByArea.get(course.areaId) ?? [];
+            for (const comp of comps) {
+              for (const bimester of [1, 2]) {
+                const score = genScore(student.idx, comp.id, bimester);
+                const withConclusion = detRandom(student.idx, comp.id, bimester) % 4 === 0;
+                const conclusion = withConclusion
+                  ? CONCLUSIONS[detRandom(student.idx, comp.id) % CONCLUSIONS.length]
+                  : null;
+                gradeRows.push([id(cgN++), student.id, comp.id, course.id, bimester, 2026, score, conclusion, course.teacherId]);
+              }
+            }
+          }
+
+          // Competencias transversales: sin curso propio, las califica el
+          // tutor de la sección (o quedan sin registered_by si aún no hay
+          // tutor asignado, lo cual no debería pasar tras el paso 4).
+          for (const comp of transversalCompetencies) {
+            for (const bimester of [1, 2]) {
+              const score = genScore(student.idx, comp.id, bimester);
+              const withConclusion = detRandom(student.idx, comp.id, bimester) % 4 === 0;
+              const conclusion = withConclusion
+                ? CONCLUSIONS[detRandom(student.idx, comp.id) % CONCLUSIONS.length]
+                : null;
+              gradeRows.push([id(cgN++), student.id, comp.id, null, bimester, 2026, score, conclusion, tutor?.id ?? null]);
+            }
+          }
+        }
+      }
+
+      await insertMany(client, "competency_grades",
+        ["id","student_id","competency_id","course_id","bimester","year","score","conclusion","registered_by"],
+        gradeRows, 1500);
+      cgTotal += gradeRows.length;
+      console.log(`[seed-full]   ${grade.label}: ${gradeRows.length} notas de competencia`);
+    }
+    console.log(`[seed-full]   ${cgTotal} notas de competencia insertadas en total`);
+
+    // ── 6. Asistencia (~130,000) ─────────────────────────────────────────
     console.log("[seed-full] Generando asistencia (marzo-mayo)...");
     const attRows = [];
     let attN = 200001;
@@ -433,21 +524,19 @@ async function main() {
       ...schoolDays(2026, 4),
       ...schoolDays(2026, 5),
     ];
-    let attInserted = 0;
 
     for (const grade of GRADES) {
       for (let secI = 0; secI < SECTIONS.length; secI++) {
         const key = `${grade.label}|${SECTIONS[secI]}`;
         const students = sectionStudents[key];
-        // Tomar el primer docente de la sección para registered_by
-        const tutor = coursesBySection[key]?.[0]?.teacherId;
+        // El tutor de la sección registra la asistencia.
+        const registeredBy = sectionTutor[key]?.id ?? coursesBySection[key]?.[0]?.teacherId;
 
         for (let di = 0; di < attDates.length; di++) {
           for (const student of students) {
             if (student.idx % 50 === 49) continue; // retirado
             const status = genAttendanceStatus(student.idx, di);
-            attRows.push([id(attN++), student.id, attDates[di], status, tutor]);
-            attInserted++;
+            attRows.push([id(attN++), student.id, attDates[di], status, registeredBy]);
           }
         }
       }
@@ -458,7 +547,7 @@ async function main() {
       attRows, 2000);
     console.log(`[seed-full]   ${attRows.length} registros de asistencia insertados`);
 
-    // ── 6. Matrículas (~2,000) ───────────────────────────────────────────
+    // ── 7. Matrículas (~2,000) ───────────────────────────────────────────
     console.log("[seed-full] Generando matrículas...");
     const enrRows = [];
     let enrN = 300001;
@@ -469,9 +558,7 @@ async function main() {
         const key = `${grade.label}|${section}`;
         const students = sectionStudents[key];
         const classroom = `Aula ${sectionRoom(grade.num, secI)}`;
-        // Tutor = el docente de "Tutoría" en esta sección
-        const tutorCourse = coursesBySection[key]?.find((c) => c.subject === "Tutoría");
-        const tutorName = tutorCourse?.teacherName ?? "Por asignar";
+        const tutorName = sectionTutor[key]?.name ?? "Por asignar";
 
         for (const student of students) {
           const enr = detRandom(student.idx, 777) % 100;
@@ -497,13 +584,13 @@ async function main() {
       enrRows, 500);
     console.log(`[seed-full]   ${enrRows.length} matrículas insertadas`);
 
-    // ── 7. Horarios (~2,275) ─────────────────────────────────────────────
+    // ── 8. Horarios (~2,275) ─────────────────────────────────────────────
     // Se arma sección por sección, pero respetando un solo requisito extra:
     // un docente no puede quedar en dos secciones distintas al mismo
     // (día, período) — un profesor no puede estar en dos aulas a la vez.
     // `teacherBusy` acumula, en todo el barrido de las 65 secciones, qué
     // slots ya tiene ocupados cada docente; al llenar cada sección se busca,
-    // para cada slot, el primer curso pendiente cuyo docente siga libre ahí.
+        // para cada slot, el primer curso pendiente cuyo docente siga libre ahí.
     console.log("[seed-full] Generando horarios...");
     let schN = 400001;
     const ALL_SLOTS = []; // estructural: el texto de hora depende del turno de cada sección
@@ -528,10 +615,10 @@ async function main() {
         const room = `Aula ${sectionRoom(grade.num, secI)}`;
 
         // Cola de cursos pendientes por colocar (uno por hora semanal, según
-        // SLOTS_PER_SUBJECT), mezclada deterministamente.
+        // area.hours_per_week), mezclada deterministamente.
         const pending = [];
         for (const course of courses) {
-          const count = SLOTS_PER_SUBJECT[course.subject] || 1;
+          const count = course.hours || 1;
           for (let s = 0; s < count; s++) pending.push(course);
         }
         for (let i = pending.length - 1; i > 0; i--) {
@@ -635,7 +722,7 @@ async function main() {
     }
 
     const schRows = scheduleRows.map((r) => [
-      id(schN++), r.grade, r.section, r.day, r.period, r.time, r.course.subject, r.course.teacherName, r.room, r.course.teacherId,
+      id(schN++), r.grade, r.section, r.day, r.period, r.time, r.course.name, r.course.teacherName, r.room, r.course.teacherId,
     ]);
 
     if (scheduleConflicts > 0) {
@@ -647,17 +734,23 @@ async function main() {
       schRows, 500);
     console.log(`[seed-full]   ${schRows.length} entradas de horario insertadas`);
 
-    // ── 8. Avisos (11) ───────────────────────────────────────────────────
+    // ── 9. Avisos (11) ───────────────────────────────────────────────────
     await insertMany(client, "announcements",
       ["id","category","title","body","sender","audience","is_read","published_at"],
       ANNOUNCEMENTS.map((a) => [id(a.n), a.category, a.title, a.body, a.sender, a.audience, a.read, a.date]), 100);
     console.log(`[seed-full]   ${ANNOUNCEMENTS.length} avisos insertados`);
 
-    // ── 9. Actualizar contadores derivados ───────────────────────────────
+    // ── 10. Actualizar contadores derivados ──────────────────────────────
+    // Cachés denormalizadas en students/courses — la app ya no las lee en
+    // la mayoría de rutas (calcula en vivo desde v_area_grades), pero se
+    // mantienen actualizadas por si algún camino aún las usa como fallback.
     console.log("[seed-full] Actualizando contadores...");
     await client.query(`
       UPDATE students s SET
-        avg_grade = COALESCE((SELECT ROUND(AVG(g.average)::numeric, 2) FROM grades g WHERE g.student_id = s.id), 0),
+        avg_grade = COALESCE((
+          SELECT ROUND(AVG(v.score)::numeric, 2) FROM v_area_grades v
+          WHERE v.student_id = s.id AND v.graded = v.expected AND v.year = 2026
+        ), 0),
         attendance_rate = COALESCE((
           SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
           FROM attendance a WHERE a.student_id = s.id
@@ -665,20 +758,26 @@ async function main() {
     `);
     await client.query(`
       UPDATE courses c SET students_total = sub.total,
-        avg_grade = COALESCE(sub.avg_g, 0),
         attendance_rate = COALESCE(sub.att_r, 100)
       FROM (
         SELECT s.grade, s.section,
           COUNT(*) FILTER (WHERE s.status='activo')::int AS total,
-          ROUND(AVG(g.average)::numeric, 2) AS avg_g,
           ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(a.*), 0)) AS att_r
         FROM students s
-        LEFT JOIN grades g ON g.student_id = s.id
         LEFT JOIN attendance a ON a.student_id = s.id
         WHERE s.status = 'activo'
         GROUP BY s.grade, s.section
       ) sub
       WHERE c.grade = sub.grade AND c.section = sub.section
+    `);
+    await client.query(`
+      UPDATE courses c SET avg_grade = sub.avg_g
+      FROM (
+        SELECT course_id, ROUND(AVG(score) FILTER (WHERE graded = expected)::numeric, 2) AS avg_g
+        FROM v_area_grades WHERE course_id IS NOT NULL AND year = 2026
+        GROUP BY course_id
+      ) sub
+      WHERE c.id = sub.course_id
     `);
 
     await client.query("COMMIT");
@@ -686,14 +785,15 @@ async function main() {
     // ── Resumen ──────────────────────────────────────────────────────────
     console.log("");
     console.log("[seed-full] ✔ Seed completado:");
-    console.log(`  Docentes:    ${teacherRows.length}`);
-    console.log(`  Alumnos:     ${studentRows.length}`);
-    console.log(`  Cursos:      ${courseRows.length}`);
-    console.log(`  Notas:       ${gradeRows.length}`);
-    console.log(`  Asistencia:  ${attRows.length}`);
-    console.log(`  Matrículas:  ${enrRows.length}`);
-    console.log(`  Horarios:    ${schRows.length}`);
-    console.log(`  Avisos:      ${ANNOUNCEMENTS.length}`);
+    console.log(`  Docentes:         ${teacherRows.length}`);
+    console.log(`  Alumnos:          ${studentRows.length}`);
+    console.log(`  Cursos:           ${courseRows.length}`);
+    console.log(`  Tutores sección:  ${sectionTutorRows.length}`);
+    console.log(`  Notas competencia:${cgTotal}`);
+    console.log(`  Asistencia:       ${attRows.length}`);
+    console.log(`  Matrículas:       ${enrRows.length}`);
+    console.log(`  Horarios:         ${schRows.length}`);
+    console.log(`  Avisos:           ${ANNOUNCEMENTS.length}`);
     console.log("");
     console.log(`[seed-full] Credenciales: todos los docentes con "Demo2026!"`);
     console.log(`[seed-full] Email ejemplo: dmat01@ijfk.edu.pe`);

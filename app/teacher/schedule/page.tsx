@@ -6,6 +6,7 @@ import { MapPin, Users, Clock } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
+import { areaColor } from "@/lib/curriculum/colors";
 
 type TeacherSlot = {
   time: string;
@@ -28,23 +29,6 @@ function periodsForShift(shift: string) {
 }
 type ShiftName = "Mañana" | "Tarde";
 const SHIFTS: ShiftName[] = ["Mañana", "Tarde"];
-
-// Mismo catálogo de materias/colores que app/teacher/courses/page.tsx (SUBJECT_DOT),
-// expandido a bg/text/border para las celdas del horario.
-const SUBJECT_STYLES: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  "Matemáticas":          { bg: "bg-blue-50",    text: "text-blue-800",    border: "border-blue-200",    dot: "bg-blue-500" },
-  "Comunicación":         { bg: "bg-purple-50",  text: "text-purple-800",  border: "border-purple-200",  dot: "bg-purple-500" },
-  "Ciencia y Tecnología": { bg: "bg-cyan-50",    text: "text-cyan-800",    border: "border-cyan-200",    dot: "bg-cyan-500" },
-  "Cívica":               { bg: "bg-rose-50",    text: "text-rose-800",    border: "border-rose-200",    dot: "bg-rose-500" },
-  "Religión":             { bg: "bg-violet-50",  text: "text-violet-800",  border: "border-violet-200",  dot: "bg-violet-500" },
-  "Arte":                 { bg: "bg-pink-50",    text: "text-pink-800",    border: "border-pink-200",    dot: "bg-pink-500" },
-  "Educación Física":     { bg: "bg-lime-50",    text: "text-lime-800",    border: "border-lime-200",    dot: "bg-lime-500" },
-  "EPT":                  { bg: "bg-orange-50",  text: "text-orange-800",  border: "border-orange-200",  dot: "bg-orange-500" },
-  "Tutoría":              { bg: "bg-slate-50",   text: "text-slate-800",   border: "border-slate-200",   dot: "bg-slate-500" },
-  "Inglés":               { bg: "bg-emerald-50", text: "text-emerald-800", border: "border-emerald-200", dot: "bg-emerald-500" },
-  "HGE":                  { bg: "bg-amber-50",   text: "text-amber-800",   border: "border-amber-200",   dot: "bg-amber-500" },
-  "DPCC":                 { bg: "bg-teal-50",    text: "text-teal-800",    border: "border-teal-200",    dot: "bg-teal-500" },
-};
 
 const DAY_SHORT: Record<string, string> = {
   "Lunes": "Lun", "Martes": "Mar", "Miércoles": "Mié",
@@ -161,7 +145,7 @@ export default function SchedulePage() {
           <div className="flex gap-3 flex-wrap">
             {todaySlots.map((slot, i) => {
               if (!slot) return null;
-              const style = SUBJECT_STYLES[slot.subject] ?? { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", dot: "bg-gray-400" };
+              const style = areaColor(slot.subject);
               return (
                 <div
                   key={i}
@@ -242,7 +226,7 @@ export default function SchedulePage() {
                       const slot = schedule[shift]?.[day]?.[pi] ?? null;
                       const isToday = day === todayCapitalized;
                       const style = slot
-                        ? (SUBJECT_STYLES[slot.subject] ?? { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200" })
+                        ? areaColor(slot.subject)
                         : null;
 
                       return (
@@ -291,7 +275,7 @@ export default function SchedulePage() {
         </p>
         <div className="flex flex-wrap gap-2">
           {courses.map((c) => {
-            const style = SUBJECT_STYLES[c.subject] ?? { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", dot: "bg-gray-400" };
+            const style = areaColor(c.subject);
             return (
               <div
                 key={c.id}

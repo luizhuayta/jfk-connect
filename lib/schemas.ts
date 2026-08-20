@@ -124,25 +124,25 @@ export const updateAnnouncementSchema = z.object({
   audience: z.string().trim().min(1).optional(),
 });
 
-/** /api/teacher/courses/[courseId]/grades (PUT) */
-const noteField = z
-  .number({ message: "La nota debe ser un número." })
-  .min(0, "La nota no puede ser negativa.")
-  .max(20, "La nota no puede superar 20.")
-  .nullable()
-  .optional();
-
-export const gradeEntrySchema = z.object({
+/** /api/grades (PUT) — notas por competencia, compartido docente + admin */
+export const competencyGradeEntrySchema = z.object({
   studentId: z.string().min(1),
-  n1: noteField,
-  n2: noteField,
-  n3: noteField,
-  observation: z.string().optional(),
+  competencyId: z.number().int().positive(),
+  score: z
+    .number({ message: "La nota debe ser un número." })
+    .min(0, "La nota no puede ser negativa.")
+    .max(20, "La nota no puede superar 20.")
+    .nullable(),
+  conclusion: z.string().trim().max(500).optional(),
 });
 
-export const saveGradesSchema = z.object({
+export const saveCompetencyGradesSchema = z.object({
   bimester: z.number().int().min(1).max(4),
-  entries: z.array(gradeEntrySchema),
+  courseId: z.string().min(1).optional(),
+  grade: z.string().min(1).optional(),
+  section: z.string().min(1).optional(),
+  transversal: z.boolean().optional(),
+  entries: z.array(competencyGradeEntrySchema).min(1).max(2000),
 });
 
 /** /api/teacher/courses/[courseId]/attendance (POST) */

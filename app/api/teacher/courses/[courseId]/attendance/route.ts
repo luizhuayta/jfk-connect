@@ -11,9 +11,8 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { query, queryOne, withTransaction } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { courseBelongsToTeacher } from "@/lib/guards";
+import { query, withTransaction } from "@/lib/db";
+import { requireOwnedCourse } from "@/lib/guards";
 import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { saveAttendanceSchema } from "@/lib/schemas";
@@ -23,39 +22,18 @@ export const dynamic = "force-dynamic";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STATUSES = new Set(["A", "F", "T", "J"]);
 
-async function getCourse(courseId: string) {
-  return queryOne<{ grade: string; section: string }>(
-    "SELECT grade, section FROM courses WHERE id = $1",
-    [courseId],
-  );
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
-  // Admin puede leer cualquier curso (solo lectura); docente solo los suyos
-  const [user, denied] = await requireRole(request, ["docente", "admin"]);
-  if (denied) return denied;
-
   const { courseId } = await params;
 
-  if (user.role !== "admin" && !(await courseBelongsToTeacher(courseId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este curso no está asignado a tu cuenta." },
-      { status: 403 },
-    );
-  }
+  // Admin puede leer cualquier curso (solo lectura); docente solo los suyos
+  const [ctx, denied] = await requireOwnedCourse(request, courseId);
+  if (denied) return denied;
+  const { course } = ctx;
 
   try {
-    const course = await getCourse(courseId);
-    if (!course) {
-      return NextResponse.json(
-        { ok: false, error: "Curso no encontrado." },
-        { status: 404 },
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
 
@@ -121,17 +99,11 @@ export async function POST(
   const blocked = assertSameOrigin(request);
   if (blocked) return blocked;
 
-  const [user, denied] = await requireRole(request, ["docente"]);
-  if (denied) return denied;
-
   const { courseId } = await params;
 
-  if (!(await courseBelongsToTeacher(courseId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este curso no está asignado a tu cuenta." },
-      { status: 403 },
-    );
-  }
+  const [ctx, denied] = await requireOwnedCourse(request, courseId, { allowAdmin: false });
+  if (denied) return denied;
+  const { user, course } = ctx;
 
   try {
     const [parsed, validationError] = await parseBody(request, saveAttendanceSchema);
@@ -142,14 +114,6 @@ export async function POST(
       return NextResponse.json(
         { ok: false, error: "No hay registros para guardar." },
         { status: 400 },
-      );
-    }
-
-    const course = await getCourse(courseId);
-    if (!course) {
-      return NextResponse.json(
-        { ok: false, error: "Curso no encontrado." },
-        { status: 404 },
       );
     }
 

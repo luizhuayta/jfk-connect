@@ -13,8 +13,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { queryOne, withTransaction } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { courseBelongsToTeacher } from "@/lib/guards";
+import { requireOwnedCourse } from "@/lib/guards";
 import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { reviewJustificationSchema } from "@/lib/schemas";
@@ -29,17 +28,11 @@ export async function PATCH(
   const blocked = assertSameOrigin(request);
   if (blocked) return blocked;
 
-  const [user, denied] = await requireRole(request, ["docente", "admin"]);
-  if (denied) return denied;
-
   const { courseId, justificationId } = await params;
 
-  if (user.role !== "admin" && !(await courseBelongsToTeacher(courseId, user.id))) {
-    return NextResponse.json(
-      { ok: false, error: "Este curso no está asignado a tu cuenta." },
-      { status: 403 },
-    );
-  }
+  const [ctx, denied] = await requireOwnedCourse(request, courseId);
+  if (denied) return denied;
+  const { user } = ctx;
 
   try {
     const [parsed, validationError] = await parseBody(request, reviewJustificationSchema);

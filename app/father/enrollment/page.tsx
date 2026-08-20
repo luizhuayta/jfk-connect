@@ -25,7 +25,7 @@ import ErrorState from "@/components/common/ErrorState";
 import { getInitials, formatDate } from "@/lib/format";
 import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
 import { toast } from "sonner";
-import { downloadConstancia } from "@/lib/report-pdf";
+import { downloadConstancia } from "@/lib/report";
 
 type EnrollmentDoc = { label: string; submitted: boolean };
 

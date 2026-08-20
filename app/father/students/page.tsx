@@ -13,14 +13,12 @@ import StatCard from "@/components/father/StatCard";
 import BimesterTiles from "@/components/father/BimesterSelector";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
-import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
+import { levelBadgeClass, levelTextClass, dominantLevel, type Level } from "@/lib/grades/scale";
 import { getInitials } from "@/lib/format";
 import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
 import { useFatherStudents, type FatherStudent } from "@/components/father/useFatherStudents";
-
-type GradeRow = { bimester: number; note: number };
-
-const BIMESTERS = ["1", "2", "3", "4"];
+import { BIMESTERS } from "@/lib/grades/bimesters";
+import type { LibretaData, BimesterKey } from "@/lib/grades/libreta";
 
 /** Máximo de hijos que un padre puede vincular (límite del claim). */
 const MAX_CHILDREN = 5;
@@ -32,33 +30,27 @@ const STUDENT_STATUS: Record<string, { label: string; bg: string }> = {
   trasladado: { label: "Trasladado",  bg: "bg-amber-100 text-amber-700 hover:bg-amber-100" },
 };
 
-// Color de texto por letra canónica (A/B/C/D) — evita `color.split(" ")[1]`.
-const LETTER_TEXT: Record<string, string> = {
-  A: "text-emerald-600",
-  B: "text-blue-600",
-  C: "text-amber-600",
-  D: "text-red-500",
-};
-
 export default function StudentsPage() {
   const { students, loading, error, reload, selectStudent } = useFatherStudents();
-  const [gradesMap, setGradesMap] = useState<Record<string, Record<string, GradeRow[]>>>({});
+  const [libretaMap, setLibretaMap] = useState<Record<string, LibretaData>>({});
   const [showClaimModal, setShowClaimModal] = useState(false);
 
-  // Cargar notas de todos los hijos en paralelo (para promedios) al llegar la lista.
-  const loadAllGrades = useCallback(async (list: FatherStudent[]) => {
+  // Cargar la libreta de todos los hijos en paralelo (para el resumen por
+  // nivel) al llegar la lista. Mismo endpoint que /father/grades — un solo
+  // origen de verdad para lo que el padre ve de sus hijos.
+  const loadAllLibretas = useCallback(async (list: FatherStudent[]) => {
     const results = await Promise.all(
       list.map(async (s) => {
         try {
-          const gr = await fetch(`/api/father/grades?studentId=${s.id}`);
-          const gd = await gr.json();
-          return [s.id, gd.ok ? gd.grades : {}] as const;
+          const r = await fetch(`/api/libreta?studentId=${s.id}`);
+          const d = await r.json();
+          return [s.id, d.ok ? (d.libreta as LibretaData) : null] as const;
         } catch {
-          return [s.id, {}] as const;
+          return [s.id, null] as const;
         }
       }),
     );
-    setGradesMap(Object.fromEntries(results));
+    setLibretaMap(Object.fromEntries(results.filter(([, v]) => v !== null)) as Record<string, LibretaData>);
   }, []);
 
   // Guard por conjunto de hijos: recarga solo cuando cambia la lista (p. ej.
@@ -69,14 +61,24 @@ export default function StudentsPage() {
     const key = students.map((s) => s.id).join(",");
     if (students.length > 0 && loadedStudentsKey.current !== key) {
       loadedStudentsKey.current = key;
-      loadAllGrades(students);
+      loadAllLibretas(students);
     }
-  }, [students, loadAllGrades]);
+  }, [students, loadAllLibretas]);
 
-  const getAnnualAverage = (studentId: string): number | null => {
-    const allNotes = Object.values(gradesMap[studentId] ?? {}).flat();
-    if (!allNotes.length) return null;
-    return allNotes.reduce((sum, n) => sum + n.note, 0) / allNotes.length;
+  /** Nivel predominante entre todas las competencias/bimestres calificados del año. */
+  const getAnnualLevel = (studentId: string): Level | null => {
+    const libreta = libretaMap[studentId];
+    if (!libreta) return null;
+    const levels = libreta.areas.flatMap((a) => a.competencies.flatMap((c) => Object.values(c.bimesters).map((b) => b.level)));
+    return dominantLevel(levels);
+  };
+
+  /** Nivel predominante de un bimestre puntual, entre todas las áreas. */
+  const getBimesterLevel = (studentId: string, bimester: BimesterKey): Level | null => {
+    const libreta = libretaMap[studentId];
+    if (!libreta) return null;
+    const levels = libreta.areas.flatMap((a) => a.competencies.map((c) => c.bimesters[bimester].level));
+    return dominantLevel(levels);
   };
 
   const canAddMore = students.length < MAX_CHILDREN;
@@ -152,32 +154,13 @@ export default function StudentsPage() {
           {/* Student Cards */}
           <div className="grid gap-6 sm:grid-cols-2">
             {students.map((student) => {
-              const annualAvg = getAnnualAverage(student.id);
+              const annualLevel = getAnnualLevel(student.id);
               const statusCfg = STUDENT_STATUS[student.status ?? "activo"] ?? STUDENT_STATUS.activo;
-              const avgTextColor =
-                annualAvg == null
-                  ? "text-muted-foreground"
-                  : annualAvg >= 17
-                  ? "text-emerald-600"
-                  : annualAvg >= 14
-                  ? "text-blue-600"
-                  : "text-amber-600";
-              const avgBg =
-                annualAvg == null
-                  ? "bg-gray-50"
-                  : annualAvg >= 17
-                  ? "bg-emerald-50"
-                  : annualAvg >= 14
-                  ? "bg-blue-50"
-                  : "bg-amber-50";
 
-              const bimesterAverages = BIMESTERS.map((b) => {
-                const notes = gradesMap[student.id]?.[b] ?? [];
-                const avg = notes.length
-                  ? notes.reduce((s, n) => s + n.note, 0) / notes.length
-                  : null;
-                return { label: b, avg };
-              });
+              const bimesterLevels = BIMESTERS.map((b) => ({
+                label: b,
+                level: getBimesterLevel(student.id, Number(b) as BimesterKey),
+              }));
 
               return (
                 <Card
@@ -203,11 +186,11 @@ export default function StudentsPage() {
                           <Badge className={`${statusCfg.bg} text-[11px]`}>{statusCfg.label}</Badge>
                         </div>
                       </div>
-                      {letterGrade(annualAvg) && (
+                      {annualLevel && (
                         <div
-                          className={`h-12 w-12 rounded-xl border-2 flex items-center justify-center font-bold text-lg shrink-0 ${letterGradeColor(letterGrade(annualAvg))}`}
+                          className={`h-12 w-12 rounded-xl border-2 flex items-center justify-center font-bold text-lg shrink-0 ${levelBadgeClass(annualLevel)}`}
                         >
-                          {letterGrade(annualAvg)}
+                          {annualLevel}
                         </div>
                       )}
                     </div>
@@ -221,27 +204,17 @@ export default function StudentsPage() {
                     )}
 
                     {/* Stats grid */}
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className={`rounded-xl ${avgBg} p-2.5 text-center`}>
-                        <p className={`text-lg font-bold leading-tight ${avgTextColor}`}>
-                          {annualAvg != null ? annualAvg.toFixed(1) : "—"}
-                        </p>
-                        <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mt-0.5">
-                          Promedio
-                        </p>
-                      </div>
+                    <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-xl bg-gray-50 p-2.5 text-center">
                         <p
                           className={`text-lg font-bold leading-tight ${
-                            letterGrade(annualAvg)
-                              ? LETTER_TEXT[letterGrade(annualAvg)!]
-                              : "text-muted-foreground"
+                            annualLevel ? levelTextClass(annualLevel) : "text-muted-foreground"
                           }`}
                         >
-                          {letterGrade(annualAvg) ?? "—"}
+                          {annualLevel ?? "—"}
                         </p>
                         <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mt-0.5">
-                          Nivel
+                          Nivel general
                         </p>
                       </div>
                       <div className="rounded-xl bg-gray-50 p-2.5 text-center">
@@ -259,7 +232,7 @@ export default function StudentsPage() {
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Promedio por Bimestre
                       </p>
-                      <BimesterTiles averages={bimesterAverages} compact />
+                      <BimesterTiles averages={bimesterLevels} compact />
                     </div>
 
                     {/* Acciones: seleccionan al hijo antes de navegar, así la

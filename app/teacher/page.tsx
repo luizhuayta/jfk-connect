@@ -8,7 +8,7 @@ import {
   Loader2, AlertCircle, GraduationCap, Info,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { letterGrade, letterGradeColor } from "@/lib/letter-grade";
+import { levelFromScore, levelBadgeClass } from "@/lib/grades/scale";
 import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
 
 type ScheduleSlot = {
@@ -97,7 +97,7 @@ export default function TeacherPage() {
   const attendance = coursesWithAttendance.length
     ? Math.round(coursesWithAttendance.reduce((s, c) => s + c.attendanceRate, 0) / coursesWithAttendance.length)
     : null;
-  const avgLetter = letterGrade(avgGrade);
+  const avgLetter = levelFromScore(avgGrade);
 
   // ─── Pendientes de hoy (derivados de los datos ya cargados) ────────────────
   // Cursos con notas pendientes del bimestre actual (inProgress = true)
@@ -193,7 +193,7 @@ export default function TeacherPage() {
               <div className="flex items-baseline gap-2">
                 <p className="text-3xl font-bold text-[#0F172A]">{avgGrade !== null ? avgGrade.toFixed(1) : "—"}</p>
                 {avgLetter && (
-                  <Badge className={`text-xs font-bold ${letterGradeColor(avgLetter)}`}>
+                  <Badge className={`text-xs font-bold ${levelBadgeClass(avgLetter)}`}>
                     {avgLetter}
                   </Badge>
                 )}

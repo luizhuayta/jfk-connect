@@ -7,8 +7,9 @@ import {
   BarChart3,
   FileText,
   Bell,
-  TrendingUp,
+  GraduationCap,
 } from "lucide-react";
+import LibretaSectionDownload from "@/components/reports/LibretaSectionDownload";
 
 const reportCards = [
   {
@@ -83,21 +84,24 @@ export default function AdminReportsPage() {
       </div>
 
       <Card className="border-none shadow-sm rounded-xl">
-        <CardContent className="p-6">
+        <CardContent className="p-6 space-y-4">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1E2A5E]/10">
-              <TrendingUp className="h-5 w-5 text-[#1E2A5E]" />
+              <GraduationCap className="h-5 w-5 text-[#1E2A5E]" />
             </div>
             <div>
               <h2 className="text-sm font-bold text-[#0F172A]">
-                Próximamente
+                Libretas de notas por sección
               </h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Estamos preparando reportes descargables en PDF y Excel.
-                Mientras tanto puedes consultar los paneles anteriores.
+                Descarga en PDF la libreta oficial (informe de progreso de
+                competencias) de todos los alumnos de una sección, uno por
+                uno. Útil cuando el tutor no está disponible para
+                entregarlas.
               </p>
             </div>
           </div>
+          <LibretaSectionDownload />
         </CardContent>
       </Card>
     </div>

@@ -10,10 +10,10 @@ import {
 } from "recharts";
 
 const DEFAULT_DATA = [
-  { name: "A (18-20)", value: 35 },
-  { name: "B (15-17)", value: 42 },
-  { name: "C (12-14)", value: 18 },
-  { name: "D (0-11)", value: 5 },
+  { name: "AD (18-20)", value: 20 },
+  { name: "A (16-17)", value: 30 },
+  { name: "B (11-15)", value: 40 },
+  { name: "C (0-10)", value: 10 },
 ];
 
 const COLORS = ["#1E2A5E", "#2C3A7A", "#F4C15C", "#94a3b8"];

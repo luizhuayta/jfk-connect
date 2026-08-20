@@ -14,6 +14,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
+import { SCHOOL_YEAR } from "@/lib/school-year";
+import { LEVELS, LEVEL_RANGE, type Level } from "@/lib/grades/scale";
 
 export const dynamic = "force-dynamic";
 
@@ -55,28 +57,28 @@ export async function GET(request: NextRequest) {
       value: r.pct,
     }));
 
-    // Distribución de calificaciones (porcentaje por rango)
-    const dist = await query<{ range: string; pct: number }>(
-      `SELECT range, ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER (), 0))::int AS pct
-       FROM (
-         SELECT CASE
-                  WHEN average >= 18 THEN 'A (18-20)'
-                  WHEN average >= 15 THEN 'B (15-17)'
-                  WHEN average >= 12 THEN 'C (12-14)'
-                  ELSE 'D (0-11)'
-                END AS range
-         FROM grades
-         WHERE n3 IS NOT NULL
-       ) t
-       GROUP BY range`,
+    // Distribución de calificaciones por nivel de logro (AD/A/B/C). Antes
+    // agrupaba por rangos hardcodeados de `average` con un corte en 12,
+    // incoherente con la escala real (11) usada en el resto de la app —
+    // ahora agrupa directo por `competency_grades.level`, la misma columna
+    // que ve el docente y el padre.
+    const dist = await query<{ level: Level; n: number }>(
+      `SELECT level::text AS level, COUNT(*)::int AS n
+       FROM competency_grades
+       WHERE year = $1 AND score IS NOT NULL
+       GROUP BY level`,
+      [SCHOOL_YEAR],
     );
-    const RANGES = ["A (18-20)", "B (15-17)", "C (12-14)", "D (0-11)"];
-    const gradeDistribution = RANGES.map((name) => ({
-      name,
-      value: dist.rows.find((r) => r.range === name)?.pct ?? 0,
+    const totalGraded = dist.rows.reduce((sum, r) => sum + r.n, 0);
+    const gradeDistribution = LEVELS.map((level) => ({
+      name: `${level} (${LEVEL_RANGE[level]})`,
+      value: totalGraded > 0
+        ? Math.round((100 * (dist.rows.find((r) => r.level === level)?.n ?? 0)) / totalGraded)
+        : 0,
     }));
 
-    // Últimas notas registradas
+    // Últimas notas registradas (área curricular, no la competencia
+    // puntual — más legible en una lista corta del dashboard).
     const notes = await query<{
       student: string;
       subject: string;
@@ -84,13 +86,15 @@ export async function GET(request: NextRequest) {
       date: string;
     }>(
       `SELECT s.full_name AS student,
-              c.name AS subject,
-              ROUND(g.average::numeric, 1)::float AS grade,
-              to_char(g.registered_at, 'YYYY-MM-DD') AS date
-       FROM grades g
-       JOIN students s ON s.id = g.student_id
-       JOIN courses c ON c.id = g.course_id
-       ORDER BY g.registered_at DESC
+              ca.name AS subject,
+              cg.score::float AS grade,
+              to_char(cg.registered_at, 'YYYY-MM-DD') AS date
+       FROM competency_grades cg
+       JOIN students s ON s.id = cg.student_id
+       JOIN competencies comp ON comp.id = cg.competency_id
+       JOIN curricular_areas ca ON ca.id = comp.area_id
+       WHERE cg.score IS NOT NULL
+       ORDER BY cg.registered_at DESC
        LIMIT 4`,
     );
 

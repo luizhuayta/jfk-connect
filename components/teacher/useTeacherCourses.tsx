@@ -29,13 +29,18 @@ export type TeacherCourse = {
   studentsTotal: number;
   hoursPerWeek: number;
   currentBimester: number;
+  areaId: number | null;
   avgGrade: number | null;
   attendanceRate: number | null;
   bimesters: Record<string, BimesterStat>;
 };
 
+export type TutoredSection = { grade: string; section: string };
+
 type TeacherCoursesValue = {
   courses: TeacherCourse[];
+  /** Secciones donde el docente es tutor — puede calificar sus competencias transversales. */
+  tutoredSections: TutoredSection[];
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
@@ -57,6 +62,7 @@ export function TeacherCoursesProvider({
   children: React.ReactNode;
 }) {
   const [courses, setCourses] = useState<TeacherCourse[]>([]);
+  const [tutoredSections, setTutoredSections] = useState<TutoredSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const active = useRef(true);
@@ -68,6 +74,7 @@ export function TeacherCoursesProvider({
       if (!active.current) return;
       if (!data.ok) throw new Error(data.error ?? "Error cargando cursos");
       setCourses(data.courses);
+      setTutoredSections(data.tutoredSections ?? []);
       setError(null);
     } catch (err) {
       if (!active.current) return;
@@ -94,8 +101,8 @@ export function TeacherCoursesProvider({
   }, [fetchCourses]);
 
   const value = useMemo<TeacherCoursesValue>(
-    () => ({ courses, loading, error, reload }),
-    [courses, loading, error, reload],
+    () => ({ courses, tutoredSections, loading, error, reload }),
+    [courses, tutoredSections, loading, error, reload],
   );
 
   return (
