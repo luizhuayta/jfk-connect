@@ -19,6 +19,17 @@ const nextConfig: NextConfig = {
   // Build standalone optimizado para contenedor (genera un .next/standalone)
   output: "standalone",
 
+  // El type-check y lint de "next build" duplican `npm run typecheck` /
+  // `npm run lint` (que ya se corren aparte) y son el paso más pesado en
+  // memoria del build. Se desactivan aquí para evitar OOM en hosts con
+  // poca RAM (p. ej. el plan gratuito de Seenode, 512MB).
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Turbopack config (en v16 está al top-level, no en experimental)
   turbopack: {
     root: process.cwd(),
