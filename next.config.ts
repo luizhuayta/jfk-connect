@@ -26,9 +26,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
 
   // Turbopack config (en v16 está al top-level, no en experimental)
   turbopack: {
