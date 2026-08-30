@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       // El rate limiting por IP también aplica a requests mal formados para
       // reducir el ruido (no revela que la validación falló).
       const ip = getClientIp(request);
-      rateLimit(`login:ip:${ip}`, IP_LIMIT);
+      if (ip) rateLimit(`login:ip:${ip}`, IP_LIMIT);
       return validationError;
     }
     const { email, password } = parsed;
@@ -67,7 +67,9 @@ export async function POST(request: NextRequest) {
     // (más abajo), de modo que un intento correcto tras varios fallidos pueda
     // entrar sin bloquearse.
     const ip = getClientIp(request);
-    const ipResult = rateLimit(`login:ip:${ip}`, IP_LIMIT);
+    const ipResult = ip
+      ? rateLimit(`login:ip:${ip}`, IP_LIMIT)
+      : { ok: true as const, remaining: IP_LIMIT.maxAttempts, retryAfterSec: 0, limit: IP_LIMIT.maxAttempts };
     if (!ipResult.ok) {
       return NextResponse.json(
         {

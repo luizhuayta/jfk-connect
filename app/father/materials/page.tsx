@@ -10,23 +10,7 @@ import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
 import { formatShortDate } from "@/lib/format";
 import { paperCardClass } from "@/components/father/chrome";
 import { cn } from "@/lib/utils";
-
-type MaterialType = "pdf" | "pptx" | "docx" | "xlsx" | "img";
-
-type Material = {
-  id: string;
-  title: string;
-  type: MaterialType;
-  size: string;
-  topic: string;
-  uploadedAt: string;
-};
-
-type CourseMaterials = {
-  id: string;
-  subject: string;
-  materials: Material[];
-};
+import type { CourseMaterials, MaterialType } from "@/lib/father/types";
 
 const TYPE_LABEL: Record<MaterialType, string> = {
   pdf: "PDF",
@@ -51,6 +35,7 @@ export default function MaterialsPage() {
     data: courses,
     error,
     handleRetry,
+    loading: materialsLoading,
   } = useCachedFatherResource<CourseMaterials[]>({
     activeStudentId,
     studentsError,
@@ -78,6 +63,10 @@ export default function MaterialsPage() {
       </div>
 
       <ChildSelector />
+
+      {students.length > 0 && materialsLoading && courses.length === 0 && (
+        <p className="text-sm text-on-surface-variant">Cargando materiales…</p>
+      )}
 
       {students.length > 0 && (
         <>
@@ -114,7 +103,7 @@ export default function MaterialsPage() {
                             {m.title}
                           </p>
                           <p className="mt-1 text-xs text-on-surface-variant">
-                            {TYPE_LABEL[m.type]}
+                            {TYPE_LABEL[m.type as MaterialType] ?? m.type}
                             {m.topic ? ` · ${m.topic}` : ""}
                             {m.size ? ` · ${m.size}` : ""}
                           </p>

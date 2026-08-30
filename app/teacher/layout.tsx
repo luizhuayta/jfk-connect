@@ -25,7 +25,7 @@ export default function TeacherLayout({
           >
             {children}
           </TeacherSidebar>
-          <AssistantLauncher />
+          <AssistantLauncher variant="docente" />
         </div>
       </TeacherCoursesProvider>
     </CurriculumProvider>

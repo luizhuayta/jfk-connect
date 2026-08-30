@@ -13,24 +13,7 @@ import { toast } from "sonner";
 import { downloadConstancia } from "@/lib/report";
 import { honorLinkClass, paperCardClass } from "@/components/father/chrome";
 import { cn } from "@/lib/utils";
-
-type EnrollmentDoc = { label: string; submitted: boolean };
-
-type Enrollment = {
-  studentId: string;
-  code: string;
-  year: number;
-  grade: string;
-  section: string;
-  shift: string;
-  classroom: string;
-  enrolledAt: string;
-  status: "regular" | "condicional" | "pendiente";
-  docs: EnrollmentDoc[];
-  docsTotal: number;
-  docsSubmitted: number;
-  tutor: string;
-};
+import type { Enrollment, EnrollmentDoc } from "@/lib/father/types";
 
 const STATUS_WORD: Record<Enrollment["status"], { label: string; className: string }> = {
   regular: { label: "Matriculado", className: "text-emerald-800" },
@@ -51,6 +34,7 @@ export default function EnrollmentPage() {
     data: enrollment,
     error,
     handleRetry,
+    loading: enrollmentLoading,
   } = useCachedFatherResource<Enrollment | null>({
     activeStudentId,
     studentsError,
@@ -106,7 +90,9 @@ export default function EnrollmentPage() {
       <ChildSelector />
 
       {students.length > 0 &&
-        (enrollment ? (
+        (enrollmentLoading && !enrollment ? (
+          <p className="text-sm text-on-surface-variant">Cargando matrícula…</p>
+        ) : enrollment ? (
           <section className={cn(paperCardClass, "p-5 sm:p-8")}>
             <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-outline-variant pb-5">
               <div>

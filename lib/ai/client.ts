@@ -9,6 +9,7 @@
 
 import { getAiConfig } from "@/lib/ai/config";
 import { AiError } from "@/lib/ai/errors";
+import { scrubChatRequest } from "@/lib/ai/redact";
 import type { ChatCompletionRequest, ChatCompletionResponse } from "@/lib/ai/types";
 
 function sleep(ms: number): Promise<void> {
@@ -54,7 +55,7 @@ export async function chatCompletion(
           "Content-Type": "application/json",
           ...cfg.extraHeaders,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(scrubChatRequest(body)),
         signal: combinedSignal,
       });
     } catch (err) {

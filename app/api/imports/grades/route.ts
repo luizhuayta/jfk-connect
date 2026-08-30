@@ -52,7 +52,10 @@ export async function POST(request: NextRequest) {
   const [user, denied] = await requireRole(request, ["docente", "admin"]);
   if (denied) return denied;
 
-  const ipLimit = rateLimit(`imports:upload:ip:${getClientIp(request)}`, UPLOAD_LIMIT);
+  const ip = getClientIp(request);
+  const ipLimit = ip
+    ? rateLimit(`imports:upload:ip:${ip}`, UPLOAD_LIMIT)
+    : { ok: true as const };
   const userLimit = rateLimit(`imports:upload:user:${user.id}`, UPLOAD_LIMIT);
   if (!ipLimit.ok || !userLimit.ok) {
     return NextResponse.json(

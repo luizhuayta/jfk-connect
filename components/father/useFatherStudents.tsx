@@ -9,20 +9,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { readApiJson } from "@/lib/client/api";
+import type { FatherStudent } from "@/lib/father/types";
 
-export type FatherStudent = {
-  id: string;
-  name: string;
-  grade: string;
-  section: string;
-  status?: string;
-  /** Número de grado (1-6); lo devuelve `/api/father/students`. */
-  grade_num?: number;
-  shift?: string;
-  courses_count?: number;
-  avg_grade?: number | null;
-  attendance_rate?: number | null;
-};
+export type { FatherStudent };
 
 type FatherStudentsValue = {
   students: FatherStudent[];
@@ -89,10 +79,9 @@ export function FatherStudentsProvider({
   const fetchStudents = useCallback(async () => {
     try {
       const r = await fetch("/api/father/students");
-      const data = await r.json();
+      const data = await readApiJson(r);
       if (!active.current) return;
-      if (!data.ok) throw new Error(data.error ?? "Error cargando datos");
-      setStudents(data.students);
+      setStudents(data.students as FatherStudent[]);
       setError(null);
     } catch (err) {
       if (!active.current) return;

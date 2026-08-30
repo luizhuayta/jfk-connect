@@ -213,6 +213,32 @@ export const justifyAttendanceSchema = z.object({
   reason: nonEmpty("El motivo").max(500, "El motivo no puede superar 500 caracteres."),
 });
 
+const isoDateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida (YYYY-MM-DD).");
+
+export const schoolYearSchema = z.coerce
+  .number({ message: "Año no válido." })
+  .int()
+  .min(2000, "Año no válido.")
+  .max(2100, "Año no válido.");
+
+/** GET /api/father/attendance — query params from/to/year */
+export const fatherAttendanceQuerySchema = z
+  .object({
+    year: schoolYearSchema.optional(),
+    from: isoDateField.optional(),
+    to: isoDateField.optional(),
+  })
+  .refine((v) => !(v.from && !v.to) && !(v.to && !v.from), {
+    message: "Indica ambas fechas (from y to) o ninguna.",
+  })
+  .refine((v) => !v.from || !v.to || v.from <= v.to, {
+    message: "La fecha inicial no puede ser posterior a la final.",
+  });
+
+export const uuidParamSchema = z.string().uuid("Identificador no válido.");
+
 /** /api/teacher/courses/[courseId]/justifications/[id] (PATCH) */
 export const reviewJustificationSchema = z.object({
   decision: z.enum(["aprobar", "rechazar"], { message: "Decisión no válida." }),

@@ -11,7 +11,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db";
 import { sendEmail } from "@/lib/mail";
-import { rateLimit, getClientIp, rateLimitHeaders } from "@/lib/rate-limit";
+import { rateLimit, getClientIp, rateLimitHeaders, rateLimitByIp } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { parseBody } from "@/lib/validate";
 import { forgotPasswordSchema } from "@/lib/schemas";
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Rate limiting por IP + por email destino (anti bombardeo de email).
     const ip = getClientIp(request);
-    const ipResult = rateLimit(`forgot:ip:${ip}`, IP_LIMIT);
+    const ipResult = rateLimitByIp("forgot:ip", ip, IP_LIMIT);
     const emailResult = rateLimit(`forgot:email:${email}`, EMAIL_LIMIT);
     if (!ipResult.ok || !emailResult.ok) {
       const result = !ipResult.ok ? ipResult : emailResult;

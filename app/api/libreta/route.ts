@@ -24,17 +24,32 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireStudentAccess } from "@/lib/guards";
 import { buildLibreta } from "@/lib/grades/libreta";
 import { SCHOOL_YEAR } from "@/lib/school-year";
+import { schoolYearSchema, uuidParamSchema } from "@/lib/schemas";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const studentId = searchParams.get("studentId");
-  if (!studentId) {
+  const studentIdRaw = searchParams.get("studentId");
+  if (!studentIdRaw) {
     return NextResponse.json({ ok: false, error: "Falta el parámetro studentId." }, { status: 400 });
   }
+  const studentParsed = uuidParamSchema.safeParse(studentIdRaw);
+  if (!studentParsed.success) {
+    return NextResponse.json({ ok: false, error: "Identificador no válido." }, { status: 400 });
+  }
+  const studentId = studentParsed.data;
+
   const yearRaw = searchParams.get("year");
-  const year = yearRaw ? Number(yearRaw) : SCHOOL_YEAR;
+  let year = SCHOOL_YEAR;
+  if (yearRaw) {
+    const yearParsed = schoolYearSchema.safeParse(yearRaw);
+    if (!yearParsed.success) {
+      return NextResponse.json({ ok: false, error: "Año no válido." }, { status: 400 });
+    }
+    year = yearParsed.data;
+  }
 
   const [, denied] = await requireStudentAccess(request, studentId, { allowTutor: true });
   if (denied) return denied;
@@ -46,7 +61,7 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ ok: true, libreta });
   } catch (err) {
-    console.error("[libreta GET] Error:", err);
+    logger.error({ err, route: "libreta GET" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

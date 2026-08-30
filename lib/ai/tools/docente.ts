@@ -1,51 +1,70 @@
 /**
  * Herramientas del rol `docente` — IJFK.
  *
- * A diferencia de las de `padre` (que usan un índice), estas sí aceptan un
- * `courseId` — pero cada una lo valida contra `courseBelongsToTeacher`
- * (lib/guards.ts, predicado booleano puro, mismo guard que usan las rutas
- * REST de cursos) antes de tocar ningún dato. Si el curso no es del
- * docente que pregunta, la herramienta devuelve un error de acceso, nunca
- * los datos.
+ * Núcleo de seguridad: NINGUNA herramienta de aquí acepta un `courseId`.
+ * Reciben `curso: número` — un ÍNDICE dentro de `ctx.allowedCourseIds`,
+ * resuelto en el servidor ANTES de invocar al modelo (ver
+ * app/api/assistant/messages/route.ts). `courseBelongsToTeacher` queda como
+ * defensa en profundidad sobre el UUID ya resuelto.
  */
 
 import { z } from "zod";
 import { query, queryOne } from "@/lib/db";
-import { defineTool } from "@/lib/ai/tools/registry";
+import { defineTool, type ToolContext } from "@/lib/ai/tools/registry";
 import { courseBelongsToTeacher } from "@/lib/guards";
 import { SCHOOL_YEAR } from "@/lib/school-year";
 import { LEVEL_LABEL, type Level } from "@/lib/grades/scale";
 import { wrapUserText } from "@/lib/ai/tools/sanitize";
+import { firstNameOnly } from "@/lib/ai/redact";
 
-const courseParam = z.object({ courseId: z.string().min(1) });
+const cursoParam = z.object({ curso: z.number().int().min(1).max(50) });
 const ACCESS_DENIED = { error: "No tienes acceso a ese curso." };
+const NO_COURSE = { error: "No tienes un curso con ese índice." };
+
+function resolveCourseId(ctx: ToolContext, curso: number): string | null {
+  return ctx.allowedCourseIds[curso - 1] ?? null;
+}
+
+async function resolveOwnedCourse(ctx: ToolContext, curso: number): Promise<string | { error: string }> {
+  const courseId = resolveCourseId(ctx, curso);
+  if (!courseId) return NO_COURSE;
+  if (!(await courseBelongsToTeacher(courseId, ctx.user.id))) return ACCESS_DENIED;
+  return courseId;
+}
 
 export const listarMisCursos = defineTool({
   name: "listar_mis_cursos",
-  description: "Lista los cursos/secciones asignados al docente.",
+  description: "Lista los cursos/secciones asignados al docente, con un índice numérico para usar en las demás herramientas.",
   params: z.object({}),
   roles: ["docente"],
   run: async (_args, ctx) => {
     if (ctx.allowedCourseIds.length === 0) return { cursos: [] };
     const r = await query<{ id: string; name: string; grade: string; section: string }>(
-      `SELECT id, name, grade, section FROM courses WHERE id = ANY($1::uuid[]) ORDER BY grade, section`,
+      `SELECT id, name, grade, section FROM courses WHERE id = ANY($1::uuid[])`,
       [ctx.allowedCourseIds],
     );
-    return { cursos: r.rows.map((c) => ({ courseId: c.id, curso: c.name, grado: c.grade, seccion: c.section })) };
+    const byId = new Map(r.rows.map((c) => [c.id, c]));
+    return {
+      cursos: ctx.allowedCourseIds.map((id, i) => {
+        const c = byId.get(id);
+        return { indice: i + 1, curso: c?.name, grado: c?.grade, seccion: c?.section };
+      }),
+    };
   },
 });
 
 export const resumenNotasCurso = defineTool({
   name: "resumen_notas_curso",
-  description: "Resumen de notas de un curso en un bimestre: promedio, aprobados y desaprobados.",
-  params: courseParam.extend({ bimestre: z.number().int().min(1).max(4) }),
+  description: "Resumen de notas de un curso en un bimestre: promedio, aprobados y desaprobados. Usa el índice de listar_mis_cursos.",
+  params: cursoParam.extend({ bimestre: z.number().int().min(1).max(4) }),
   roles: ["docente"],
   run: async (args, ctx) => {
-    if (!(await courseBelongsToTeacher(args.courseId, ctx.user.id))) return ACCESS_DENIED;
+    const resolved = await resolveOwnedCourse(ctx, args.curso);
+    if (typeof resolved !== "string") return resolved;
 
     const stats = await queryOne<{ entries: number; complete: number; avg: number | null; approved: number; failed: number }>(
       `SELECT entries, complete, avg, approved, failed FROM v_course_bimester_stats WHERE course_id = $1 AND bimester = $2 AND year = $3`,
-      [args.courseId, args.bimestre, SCHOOL_YEAR],
+      [resolved, args.bimestre, SCHOOL_YEAR],
     );
     if (!stats) return { mensaje: "Aún no hay notas registradas para este curso en ese bimestre." };
     return {
@@ -61,34 +80,36 @@ export const resumenNotasCurso = defineTool({
 export const alumnosEnRiesgo = defineTool({
   name: "alumnos_en_riesgo",
   description: "Lista alumnos con nivel de logro C (en inicio) en un curso y bimestre — candidatos a reforzamiento.",
-  params: courseParam.extend({ bimestre: z.number().int().min(1).max(4) }),
+  params: cursoParam.extend({ bimestre: z.number().int().min(1).max(4) }),
   roles: ["docente"],
   run: async (args, ctx) => {
-    if (!(await courseBelongsToTeacher(args.courseId, ctx.user.id))) return ACCESS_DENIED;
+    const resolved = await resolveOwnedCourse(ctx, args.curso);
+    if (typeof resolved !== "string") return resolved;
 
     const r = await query<{ full_name: string; level: Level }>(
       `SELECT s.full_name, v.level
        FROM v_area_grades v JOIN students s ON s.id = v.student_id
-       WHERE v.course_id = $1 AND v.bimester = $2 AND v.level = 'C'
+       WHERE v.course_id = $1 AND v.bimester = $2 AND v.year = $3 AND v.level = 'C'
        ORDER BY s.full_name LIMIT 20`,
-      [args.courseId, args.bimestre],
+      [resolved, args.bimestre, SCHOOL_YEAR],
     );
-    return { alumnos: r.rows.map((s) => ({ nombre: wrapUserText(s.full_name.split(" ")[0]), nivel: LEVEL_LABEL[s.level] })) };
+    return { alumnos: r.rows.map((s) => ({ nombre: wrapUserText(firstNameOnly(s.full_name)), nivel: LEVEL_LABEL[s.level] })) };
   },
 });
 
 export const asistenciaSeccion = defineTool({
   name: "asistencia_seccion",
   description: "Resumen de asistencia de la sección de un curso en un rango de fechas.",
-  params: courseParam.extend({
+  params: cursoParam.extend({
     desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   }),
   roles: ["docente"],
   run: async (args, ctx) => {
-    if (!(await courseBelongsToTeacher(args.courseId, ctx.user.id))) return ACCESS_DENIED;
+    const resolved = await resolveOwnedCourse(ctx, args.curso);
+    if (typeof resolved !== "string") return resolved;
 
-    const course = await queryOne<{ grade: string; section: string }>(`SELECT grade, section FROM courses WHERE id = $1`, [args.courseId]);
+    const course = await queryOne<{ grade: string; section: string }>(`SELECT grade, section FROM courses WHERE id = $1`, [resolved]);
     if (!course) return { error: "Curso no encontrado." };
 
     const r = await query<{ status: string; count: string }>(

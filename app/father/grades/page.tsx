@@ -51,7 +51,7 @@ function GradesPageInner() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
-  const { data: libreta, error, handleRetry } = useCachedFatherResource<LibretaData | null>({
+  const { data: libreta, error, handleRetry, loading: libretaLoading } = useCachedFatherResource<LibretaData | null>({
     activeStudentId,
     studentsError,
     reload,
@@ -88,6 +88,10 @@ function GradesPageInner() {
       </div>
 
       <ChildSelector />
+
+      {students.length > 0 && libretaLoading && !libreta && (
+        <p className="text-sm text-on-surface-variant">Cargando la libreta…</p>
+      )}
 
       {students.length > 0 && libreta && (
         <>

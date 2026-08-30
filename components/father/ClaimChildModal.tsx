@@ -5,13 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Modal, { ModalCloseButton } from "@/components/ui/modal";
 import { GraduationCap, Hash, Loader2, CheckCircle2, Plus } from "lucide-react";
-
-type ClaimedStudent = {
-  id: string;
-  name: string;
-  grade: string;
-  section: string;
-};
+import { readApiJson } from "@/lib/client/api";
+import type { ClaimedStudent } from "@/lib/father/claim-student";
 
 export default function ClaimChildModal({
   open,
@@ -45,11 +40,10 @@ export default function ClaimChildModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enrollmentCode: code.trim() }),
       });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setSuccess(data.student);
+      const data = await readApiJson(r);
+      setSuccess(data.student as ClaimedStudent);
       setCode("");
-      onClaimed(data.student);
+      onClaimed(data.student as ClaimedStudent);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al vincular");
     } finally {

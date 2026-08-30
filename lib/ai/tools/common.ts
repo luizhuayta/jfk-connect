@@ -6,6 +6,7 @@ import { z } from "zod";
 import { query } from "@/lib/db";
 import { defineTool } from "@/lib/ai/tools/registry";
 import { wrapUserText } from "@/lib/ai/tools/sanitize";
+import { firstNameOnly } from "@/lib/ai/redact";
 
 const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 
@@ -57,7 +58,7 @@ export const listarAvisos = defineTool({
       categoria: a.category,
       titulo: wrapUserText(a.title),
       resumen: wrapUserText(a.body.slice(0, 200)),
-      remitente: a.sender,
+      remitente: wrapUserText(firstNameOnly(a.sender)),
       fecha: a.published_at,
     }));
   },

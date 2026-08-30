@@ -23,7 +23,7 @@ import { queryOne, withTransaction } from "@/lib/db";
 import { parseBody } from "@/lib/validate";
 import { assertSameOrigin } from "@/lib/csrf";
 import { verifySchema } from "@/lib/schemas";
-import { getClientIp, rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { getClientIp, rateLimit, rateLimitHeaders, rateLimitByIp } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import crypto from "node:crypto";
 
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     // Rate limiting por IP + por email antes de tocar la BD.
     const ip = getClientIp(request);
-    const ipResult = rateLimit(`verify:ip:${ip}`, IP_LIMIT);
+    const ipResult = rateLimitByIp("verify:ip", ip, IP_LIMIT);
     const emailResult = rateLimit(`verify:email:${email}`, EMAIL_LIMIT);
     if (!ipResult.ok || !emailResult.ok) {
       const result = !ipResult.ok ? ipResult : emailResult;

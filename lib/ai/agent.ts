@@ -19,9 +19,11 @@ import { chatCompletion } from "@/lib/ai/client";
 import { AiError } from "@/lib/ai/errors";
 import { toOpenAiTools, type AssistantTool, type ToolContext } from "@/lib/ai/tools/registry";
 import { sanitizeToolResult } from "@/lib/ai/tools/sanitize";
+import { logger } from "@/lib/logger";
 import type { ChatMessage, TokenUsage } from "@/lib/ai/types";
 
 const DEFAULT_MAX_STEPS = 4;
+const MAX_TOOL_CALLS_PER_STEP = 6;
 
 export interface ToolStep {
   tool: string;
@@ -85,14 +87,35 @@ export async function runToolLoop(args: RunToolLoopArgs): Promise<RunToolLoopRes
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length === 0) {
       const reply = typeof message.content === "string" ? message.content : "";
-      return { reply: reply || "No pude generar una respuesta. Intenta reformular tu pregunta.", steps, usage, model: lastModel };
+      const truncated =
+        choice.finish_reason === "length"
+          ? `${reply || ""}\n\n(La respuesta se truncó. Intenta una pregunta más concreta.)`.trim()
+          : reply;
+      return {
+        reply: truncated || "No pude generar una respuesta. Intenta reformular tu pregunta.",
+        steps,
+        usage,
+        model: lastModel,
+      };
     }
+
+    const accepted = toolCalls.slice(0, MAX_TOOL_CALLS_PER_STEP);
+    const overflow = toolCalls.slice(MAX_TOOL_CALLS_PER_STEP);
 
     // El mensaje del asistente con tool_calls debe entrar en la historia
     // antes de los tool_results correspondientes (contrato del protocolo).
     history.push({ role: "assistant", content: message.content ?? null, tool_calls: toolCalls });
 
-    for (const call of toolCalls) {
+    for (const call of overflow) {
+      steps.push({ tool: call.function.name, args: undefined, ok: false });
+      history.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify({ datos: { error: "Demasiadas herramientas en un paso." } }),
+      });
+    }
+
+    for (const call of accepted) {
       const tool = toolByName.get(call.function.name);
       let resultPayload: unknown;
       let ok = false;
@@ -117,7 +140,8 @@ export async function runToolLoop(args: RunToolLoopArgs): Promise<RunToolLoopRes
             resultPayload = sanitizeToolResult(raw);
             ok = true;
           } catch (err) {
-            resultPayload = { error: err instanceof Error ? err.message : "Error al ejecutar la herramienta." };
+            logger.error({ err, tool: call.function.name }, "error ejecutando herramienta del asistente");
+            resultPayload = { error: "Error al ejecutar la herramienta." };
           }
         }
       }

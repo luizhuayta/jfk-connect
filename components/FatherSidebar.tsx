@@ -8,12 +8,14 @@ import {
   Bell,
   BookOpen,
   FolderOpen,
+  Users,
 } from "lucide-react";
 import AppSidebar, { type SidebarItem } from "@/components/layout/AppSidebar";
 import { useAnnouncements } from "@/components/father/AnnouncementsProvider";
 
 const HOY: SidebarItem[] = [
   { href: "/father", label: "Inicio", icon: LayoutDashboard, exact: true },
+  { href: "/father/students", label: "Mis hijos", icon: Users, exact: false },
   { href: "/father/announcements", label: "Avisos", icon: Bell, exact: false },
 ];
 
@@ -29,8 +31,8 @@ const COLEGIO: SidebarItem[] = [
 ];
 
 /**
- * Tres grupos de noche: Hoy (jornada + avisos), Libreta (notas + asistencia),
- * Colegio (horario, materiales, matrícula). Vincular hijos vive en Inicio.
+ * Tres grupos de noche: Hoy (jornada, hijos y avisos), Libreta (notas + asistencia),
+ * Colegio (horario, materiales, matrícula).
  */
 export default function FatherSidebar({
   children,

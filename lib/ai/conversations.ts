@@ -13,6 +13,7 @@
 
 import { query, queryOne, withTransaction } from "@/lib/db";
 import type { AuthUser } from "@/lib/auth";
+import { scrubOutbound } from "@/lib/ai/redact";
 
 export interface ConversationRow {
   id: string;
@@ -69,7 +70,7 @@ export async function fetchRecentMessages(conversationId: string, limit = CONTEX
      ORDER BY seq DESC LIMIT $2`,
     [conversationId, limit],
   );
-  return r.rows.reverse();
+  return r.rows.reverse().map((m) => ({ ...m, content: scrubOutbound(m.content) }));
 }
 
 export async function fetchAllMessages(conversationId: string): Promise<MessageRow[]> {
@@ -88,19 +89,22 @@ export async function appendTurn(
   totalTokens: number,
 ): Promise<void> {
   await withTransaction(async (client) => {
+    await client.query(`SELECT id FROM ai_conversations WHERE id = $1 FOR UPDATE`, [conversationId]);
     const nextSeqRow = await client.query<{ next: number }>(
       `SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM ai_messages WHERE conversation_id = $1`,
       [conversationId],
     );
     const seqStart = nextSeqRow.rows[0].next;
+    const safeUser = scrubOutbound(userText);
+    const safeAssistant = scrubOutbound(assistantText);
 
     await client.query(
       `INSERT INTO ai_messages (conversation_id, seq, role, content) VALUES ($1, $2, 'user', $3)`,
-      [conversationId, seqStart, userText],
+      [conversationId, seqStart, safeUser],
     );
     await client.query(
       `INSERT INTO ai_messages (conversation_id, seq, role, content, total_tokens) VALUES ($1, $2, 'assistant', $3, $4)`,
-      [conversationId, seqStart + 1, assistantText, totalTokens],
+      [conversationId, seqStart + 1, safeAssistant, totalTokens],
     );
 
     await client.query(
@@ -108,7 +112,7 @@ export async function appendTurn(
        SET message_count = message_count + 2, last_message_at = now(),
            title = COALESCE(title, LEFT($2, 60))
        WHERE id = $1`,
-      [conversationId, userText],
+      [conversationId, safeUser],
     );
   });
 }

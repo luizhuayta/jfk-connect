@@ -30,7 +30,6 @@ const envSchema = z.object({
   AI_SUPPORTS_VISION: z.string().optional(),
   AI_EXTRA_HEADERS: z.string().optional(),
   AI_DAILY_TOKEN_BUDGET: z.string().optional(),
-  AI_LOG_PROMPTS: z.string().optional(),
 });
 
 export interface AiConfig {
@@ -47,7 +46,6 @@ export interface AiConfig {
   supportsVision: boolean;
   extraHeaders: Record<string, string>;
   dailyTokenBudget: number;
-  logPrompts: boolean;
 }
 
 function bool(raw: string | undefined, fallback: boolean): boolean {
@@ -97,7 +95,6 @@ export function getAiConfig(): AiConfig {
     supportsVision: bool(env.AI_SUPPORTS_VISION, true),
     extraHeaders,
     dailyTokenBudget: num(env.AI_DAILY_TOKEN_BUDGET, 2_000_000),
-    logPrompts: bool(env.AI_LOG_PROMPTS, false),
   };
   return cached;
 }

@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { readApiJson } from "@/lib/client/api";
 
 export type AnnouncementCategory =
   | "urgente"
@@ -66,10 +67,9 @@ export function AnnouncementsProvider({
   const fetchAnnouncements = useCallback(async () => {
     try {
       const r = await fetch("/api/announcements");
-      const data = await r.json();
+      const data = await readApiJson(r);
       if (!active.current) return;
-      if (!data.ok) throw new Error(data.error ?? "Error cargando avisos");
-      setAnnouncements(data.announcements);
+      setAnnouncements(data.announcements as Announcement[]);
       setError(null);
     } catch (err) {
       if (!active.current) return;
@@ -101,7 +101,9 @@ export function AnnouncementsProvider({
     );
     // Persistencia fire-and-forget: si falla, el badge se recalcula en la
     // siguiente carga desde announcement_reads.
-    fetch(`/api/announcements/${id}/read`, { method: "PATCH" }).catch(() => {});
+    fetch(`/api/announcements/${id}/read`, { method: "PATCH" }).catch((err) => {
+      console.debug("[announcements] no se pudo persistir la lectura", err);
+    });
   }, []);
 
   const requestOpen = useCallback(

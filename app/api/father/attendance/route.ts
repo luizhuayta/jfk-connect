@@ -1,65 +1,40 @@
 /**
- * GET /api/father/attendance?studentId=<uuid>
+ * GET /api/father/attendance?studentId=<uuid>&year=2026
+ *     &from=YYYY-MM-DD&to=YYYY-MM-DD
  *
- * Registro de asistencia de un hijo del padre autenticado.
- * Respuesta:
- *   { ok, records: [{
- *     id, date: "YYYY-MM-DD", status: "A"|"F"|"T"|"J",
- *     justification: { status: "pendiente"|"aprobada"|"rechazada", reason, adminResponse } | null
- *   }] }
+ * Registro de asistencia de un hijo, acotado al año lectivo (o a from/to).
+ * Respuesta: { ok, records, counts }
  *
  * Seguridad: solo rol 'padre' y solo si el estudiante es su hijo.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { query } from "@/lib/db";
 import { requireOwnedStudent } from "@/lib/guards";
 import { logger } from "@/lib/logger";
+import { fatherAttendanceQuerySchema } from "@/lib/schemas";
+import { getAttendance, resolveAttendanceRange } from "@/lib/father/queries";
 
 export const dynamic = "force-dynamic";
-
-interface AttendanceRow {
-  id: string;
-  date: string;
-  status: "A" | "F" | "T" | "J";
-  j_status: "pendiente" | "aprobada" | "rechazada" | null;
-  j_reason: string | null;
-  j_response: string | null;
-}
 
 export async function GET(request: NextRequest) {
   const [studentId, denied] = await requireOwnedStudent(request);
   if (denied) return denied;
 
+  const { searchParams } = new URL(request.url);
+  const parsed = fatherAttendanceQuerySchema.safeParse({
+    year: searchParams.get("year") ?? undefined,
+    from: searchParams.get("from") ?? undefined,
+    to: searchParams.get("to") ?? undefined,
+  });
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message ?? "Parámetros no válidos.";
+    return NextResponse.json({ ok: false, error: msg }, { status: 400 });
+  }
+
   try {
-    const r = await query<AttendanceRow>(
-      `SELECT a.id,
-              to_char(a.date, 'YYYY-MM-DD') AS date,
-              a.status::text AS status,
-              aj.status::text AS j_status,
-              aj.reason AS j_reason,
-              aj.admin_response AS j_response
-       FROM attendance a
-       LEFT JOIN attendance_justifications aj ON aj.attendance_id = a.id
-       WHERE a.student_id = $1
-       ORDER BY a.date`,
-      [studentId],
-    );
-
-    const records = r.rows.map((row) => ({
-      id: row.id,
-      date: row.date,
-      status: row.status,
-      justification: row.j_status
-        ? {
-            status: row.j_status,
-            reason: row.j_reason,
-            adminResponse: row.j_response,
-          }
-        : null,
-    }));
-
-    return NextResponse.json({ ok: true, records });
+    const range = resolveAttendanceRange(parsed.data);
+    const { records, counts } = await getAttendance(studentId, range);
+    return NextResponse.json({ ok: true, records, counts });
   } catch (err) {
     logger.error({ err, route: "father/attendance" }, "error inesperado");
     return NextResponse.json(

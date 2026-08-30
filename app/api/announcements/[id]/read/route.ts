@@ -7,7 +7,8 @@
  * El sidebar y la página de avisos llaman a este endpoint al abrir un aviso,
  * de modo que el estado persiste entre recargas.
  *
- * Seguridad: cualquier usuario autenticado puede marcar sus propios avisos.
+ * Seguridad: solo se marca si el aviso es visible para el usuario (misma
+ * regla de audiencia que GET /api/announcements). Si no, 404.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -15,6 +16,8 @@ import { query, isForeignKeyViolation } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
 import { logger } from "@/lib/logger";
+import { isAnnouncementVisibleToUser } from "@/lib/announcements/visibility";
+import { uuidParamSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +31,16 @@ export async function PATCH(
   const [user, denied] = await requireUser(request);
   if (denied) return denied;
 
-  const { id } = await params;
+  const { id: idRaw } = await params;
+  const idParsed = uuidParamSchema.safeParse(idRaw);
+  if (!idParsed.success) {
+    return NextResponse.json({ ok: false, error: "Aviso no encontrado." }, { status: 404 });
+  }
+  const id = idParsed.data;
+
+  if (!(await isAnnouncementVisibleToUser(user, id))) {
+    return NextResponse.json({ ok: false, error: "Aviso no encontrado." }, { status: 404 });
+  }
 
   try {
     // Upsert idempotente: marcar de nuevo no duplica filas.

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -15,35 +15,18 @@ import { areaColor } from "@/lib/curriculum/colors";
 import { paperCardClass, honorLinkClass } from "@/components/father/chrome";
 import { cn } from "@/lib/utils";
 import { downloadHorario } from "@/lib/report";
-
-type ScheduleSlot = {
-  time: string;
-  subject: string;
-  teacher: string;
-  room: string;
-};
-
-const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
-// Turno Mañana y Tarde son bloques de reloj distintos — Tarde arranca a las
-// 13:30, 10 min después de que termina Mañana (no el mismo horario
-// reetiquetado). Cada alumno pertenece a una sola sección, así que solo
-// necesita el bloque de SU turno.
-const PERIODS_MAÑANA = ["7:45 - 8:30", "8:30 - 9:15", "9:15 - 10:00", "10:20 - 11:05", "11:05 - 11:50", "11:50 - 12:35", "12:35 - 13:20"];
-const PERIODS_TARDE = ["13:30 - 14:15", "14:15 - 15:00", "15:00 - 15:45", "16:05 - 16:50", "16:50 - 17:35", "17:35 - 18:20", "18:20 - 19:05"];
-const RECESS_TIME: Record<string, string> = { Mañana: "10:00 – 10:20", Tarde: "15:45 – 16:05" };
-function periodsForShift(shift: string | undefined) {
-  return shift === "Tarde" ? PERIODS_TARDE : PERIODS_MAÑANA;
-}
+import type { ScheduleSlot } from "@/lib/father/types";
+import {
+  SCHEDULE_DAYS,
+  DAY_SHORT,
+  RECESS_TIME,
+  periodsForShift,
+} from "@/lib/schedule/periods";
 
 function subjectStyle(subject: string) {
   const c = areaColor(subject);
   return `${c.bg} ${c.text} ${c.border}`;
 }
-
-const DAY_SHORT: Record<string, string> = {
-  "Lunes": "Lun", "Martes": "Mar", "Miércoles": "Mié",
-  "Jueves": "Jue", "Viernes": "Vie",
-};
 
 const EMPTY_SCHEDULE: Record<string, (ScheduleSlot | null)[]> = {};
 
@@ -71,6 +54,7 @@ export default function SchedulePage() {
     data: schedule,
     error,
     handleRetry,
+    loading: scheduleLoading,
   } = useCachedFatherResource<Record<string, (ScheduleSlot | null)[]>>({
     activeStudentId,
     studentsError,
@@ -81,15 +65,18 @@ export default function SchedulePage() {
     errorMessage: "Error cargando horario",
   });
 
-  // Build unique subjects for the legend
-  const subjects = Array.from(
-    new Set(
-      Object.values(schedule)
-        .flat()
-        .filter((s): s is ScheduleSlot => s !== null)
-        .map((p) => p.subject),
-    ),
-  ).sort();
+  const subjects = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          Object.values(schedule)
+            .flat()
+            .filter((s): s is ScheduleSlot => s !== null)
+            .map((p) => p.subject),
+        ),
+      ).sort(),
+    [schedule],
+  );
 
   const periods = periodsForShift(student?.shift);
   const dayRange = `${periods[0].split(" - ")[0]} – ${periods[periods.length - 1].split(" - ")[1]}`;
@@ -106,7 +93,7 @@ export default function SchedulePage() {
           section: student.section,
         },
         shift: student.shift ?? "",
-        periods,
+        periods: [...periods],
         recessLabel: RECESS_TIME[student.shift ?? "Mañana"] ?? RECESS_TIME.Mañana,
         schedule,
       });
@@ -157,9 +144,13 @@ export default function SchedulePage() {
       {/* Selector de hijo (selección compartida con el resto del panel) */}
       <ChildSelector />
 
+      {students.length > 0 && scheduleLoading && Object.keys(schedule).length === 0 && (
+        <p className="text-sm text-on-surface-variant">Cargando horario…</p>
+      )}
+
       {students.length > 0 && (
         <>
-          {todayName && DAYS.includes(todayName) && (
+          {todayName && SCHEDULE_DAYS.includes(todayName as (typeof SCHEDULE_DAYS)[number]) && (
             <section className={cn(paperCardClass, "p-5")}>
               <h2 className="text-lg font-bold tracking-tight text-on-surface">
                 Hoy, {todayName}
@@ -190,7 +181,7 @@ export default function SchedulePage() {
               </ol>
             </section>
           )}
-          {todayName && !DAYS.includes(todayName) && (
+          {todayName && !SCHEDULE_DAYS.includes(todayName as (typeof SCHEDULE_DAYS)[number]) && (
             <p className="text-sm text-on-surface-variant">
               Hoy no hay clase. El horario de la semana:
             </p>
@@ -205,7 +196,7 @@ export default function SchedulePage() {
                   <div className="p-3 text-xs font-semibold text-white/80 flex items-center justify-center">
                     Período
                   </div>
-                  {DAYS.map((day) => {
+                  {SCHEDULE_DAYS.map((day) => {
                     const isToday = day === todayName;
                     return (
                       <div
@@ -248,7 +239,7 @@ export default function SchedulePage() {
                       </div>
 
                       {/* Cells per day */}
-                      {DAYS.map((day) => {
+                      {SCHEDULE_DAYS.map((day) => {
                         const slot = schedule[day]?.[pi];
                         const isToday = day === todayName;
                         return (

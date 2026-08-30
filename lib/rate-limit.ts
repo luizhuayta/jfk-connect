@@ -19,8 +19,12 @@
  *
  * Uso desde una route:
  *   const ip = getClientIp(request);
- *   const ipRes = rateLimit(`login:ip:${ip}`, { maxAttempts: 10, windowMs: 15*60*1000 });
- *   if (!ipRes.ok) return tooManyRequests(ipRes);
+ *   if (ip) {
+ *     const ipRes = rateLimit(`login:ip:${ip}`, { maxAttempts: 10, windowMs: 15*60*1000 });
+ *     if (!ipRes.ok) return tooManyRequests(ipRes);
+ *   }
+ * En rutas autenticadas, si no hay IP, usa la identidad del usuario
+ * (`claim:user:${user.id}`) — nunca la clave literal "unknown".
  */
 
 import type { NextRequest } from "next/server";
@@ -99,29 +103,58 @@ export function resetRateLimit(key: string): void {
   store.delete(key);
 }
 
+/** Vacía el almacén en memoria. Solo para tests. */
+export function clearRateLimitStore(): void {
+  store.clear();
+}
+
 /**
  * Obtiene la IP del cliente desde headers estándar de proxy.
  *
  * SOLO se confía en X-Forwarded-For / X-Real-IP cuando TRUST_PROXY=1 está
  * explícitamente configurado (p. ej. detrás de Nginx/Traefik/Vercel). Sin un
  * proxy de confianza, un atacante puede enviar ese header y rotar IPs para
- * evadir los rate limits, así que caemos a `request.ip`.
+ * evadir los rate limits.
+ *
+ * Next.js 16 no expone `NextRequest.ip`. Si no hay IP fiable, devolvemos
+ * `null` — NUNCA la cadena "unknown", que colapsaría todos los límites por
+ * IP en un único cubo global. El llamador debe saltarse el límite por IP
+ * o usar la identidad del usuario autenticado.
  */
-export function getClientIp(request: NextRequest): string {
-  if (process.env.TRUST_PROXY === "1") {
-    const xff = request.headers.get("x-forwarded-for");
-    if (xff) {
-      const ip = xff.split(",")[0]?.trim();
-      if (ip) return ip;
-    }
-    const xri = request.headers.get("x-real-ip");
-    if (xri) return xri.trim();
-  }
+export function getClientIp(request: NextRequest): string | null {
+  if (process.env.TRUST_PROXY !== "1") return null;
 
-  // request.ip está disponible en Node Runtime (no en Edge). Lo accedemos de
-  // forma segura para el type system.
-  const ip = (request as unknown as { ip?: string }).ip;
-  return ip ?? "unknown";
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) {
+    const ip = xff.split(",")[0]?.trim();
+    if (ip) return ip;
+  }
+  const xri = request.headers.get("x-real-ip");
+  if (xri) {
+    const trimmed = xri.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+/**
+ * Aplica rate-limit por IP si hay una IP fiable. Sin IP, no-op (`ok: true`)
+ * para no crear un cubo global compartido.
+ */
+export function rateLimitByIp(
+  prefix: string,
+  ip: string | null,
+  config: RateLimitConfig,
+): RateLimitResult {
+  if (!ip) {
+    return {
+      ok: true,
+      remaining: config.maxAttempts,
+      retryAfterSec: 0,
+      limit: config.maxAttempts,
+    };
+  }
+  return rateLimit(`${prefix}:${ip}`, config);
 }
 
 /** Headers estándar de rate limiting para adjuntar a la respuesta 429. */

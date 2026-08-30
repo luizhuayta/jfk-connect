@@ -74,6 +74,8 @@ services:
       # Pon TRUST_PROXY=1 SOLO si la app va detrás de un reverse proxy de
       # confianza (Nginx/Traefik/Vercel) que sobrescribe X-Forwarded-For.
       # Sin proxy, dejar en 0 para que los rate limits no sean evadibles.
+      # Sin TRUST_PROXY=1 los límites por IP NO se aplican (Next 16 no
+      # expone request.ip); las rutas autenticadas caen al user id.
       TRUST_PROXY: ${TRUST_PROXY:-0}
       # --- Sentry (SaaS - free tier en sentry.io) ---
       # Para activar el monitoreo:
@@ -109,7 +111,6 @@ services:
       AI_SUPPORTS_VISION: ${AI_SUPPORTS_VISION:-1}
       AI_EXTRA_HEADERS: ${AI_EXTRA_HEADERS:-}
       AI_DAILY_TOKEN_BUDGET: ${AI_DAILY_TOKEN_BUDGET:-2000000}
-      AI_LOG_PROMPTS: ${AI_LOG_PROMPTS:-0}
       # --- Archivos subidos (importador de notas) ---
       UPLOADS_DIR: ${UPLOADS_DIR:-/app/uploads}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}

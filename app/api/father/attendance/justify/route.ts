@@ -36,15 +36,16 @@ export async function POST(request: NextRequest) {
   const [parsed, validationError] = await parseBody(request, justifyAttendanceSchema);
   if (validationError) return validationError;
 
-  // Rate limiting por IP (spam de peticiones desde una máquina).
-  const ipLimit = rateLimit(`justify:ip:${getClientIp(request)}`, {
-    maxAttempts: 30,
-    windowMs: 15 * 60 * 1000,
-  });
+  // Rate limiting por IP (si hay) o por usuario autenticado.
+  const JUSTIFY_LIMIT = { maxAttempts: 30, windowMs: 15 * 60 * 1000 };
+  const ip = getClientIp(request);
+  const ipLimit = ip
+    ? rateLimit(`justify:ip:${ip}`, JUSTIFY_LIMIT)
+    : rateLimit(`justify:user:${user.id}`, JUSTIFY_LIMIT);
   if (!ipLimit.ok) {
     return NextResponse.json(
       { ok: false, error: "Demasiados intentos. Espera unos minutos y vuelve a intentar." },
-      { status: 429, headers: rateLimitHeaders(ipLimit, { maxAttempts: 30, windowMs: 15 * 60 * 1000 }) },
+      { status: 429, headers: rateLimitHeaders(ipLimit, JUSTIFY_LIMIT) },
     );
   }
 

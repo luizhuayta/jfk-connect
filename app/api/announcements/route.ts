@@ -14,6 +14,7 @@ import { requireRole, requireUser } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
 import { assertSameOrigin } from "@/lib/csrf";
 import { createAnnouncementSchema } from "@/lib/schemas";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ ok: true, announcements });
   } catch (err) {
-    console.error("[announcements GET] Error:", err);
+    logger.error({ err, route: "announcements GET" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[announcements POST] Error:", err);
+    logger.error({ err, route: "announcements POST" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

@@ -63,7 +63,9 @@ export async function POST(request: NextRequest) {
     // actual, que antes no tenía ningún freno).
     const ip = getClientIp(request);
     const userResult = rateLimit(`changepw:user:${user.id}`, USER_LIMIT);
-    const ipResult = rateLimit(`changepw:ip:${ip}`, IP_LIMIT);
+    const ipResult = ip
+      ? rateLimit(`changepw:ip:${ip}`, IP_LIMIT)
+      : { ok: true as const, remaining: IP_LIMIT.maxAttempts, retryAfterSec: 0, limit: IP_LIMIT.maxAttempts };
     if (!userResult.ok || !ipResult.ok) {
       const result = !userResult.ok ? userResult : ipResult;
       const cfg = !userResult.ok ? USER_LIMIT : IP_LIMIT;

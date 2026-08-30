@@ -46,8 +46,11 @@ export async function POST(request: NextRequest) {
 
     const ip = getClientIp(request);
 
-    // Rate limiting por IP antes de cualquier trabajo.
-    const res = rateLimit(`register:ip:${ip}`, IP_LIMIT);
+    // Rate limiting por IP antes de cualquier trabajo. Sin IP fiable se omite
+    // (no se crea un cubo global "unknown").
+    const res = ip
+      ? rateLimit(`register:ip:${ip}`, IP_LIMIT)
+      : { ok: true as const, remaining: IP_LIMIT.maxAttempts, retryAfterSec: 0, limit: IP_LIMIT.maxAttempts };
     if (!res.ok) {
       return NextResponse.json(
         {

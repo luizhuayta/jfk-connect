@@ -1,13 +1,10 @@
 /**
  * Registro tipado de herramientas del asistente conversacional — IJFK.
  *
- * El núcleo de seguridad vive en `ToolContext`: para el rol `padre`,
- * `allowedStudentIds` se resuelve en el servidor (SELECT ... WHERE
- * parent_id = $1) ANTES de invocar al modelo. Las herramientas de padre
- * nunca reciben un `studentId` como parámetro — reciben un ÍNDICE dentro de
- * `allowedStudentIds`, así que el modelo no tiene vocabulario para pedir
- * datos de un alumno que no sea hijo de quien pregunta. Ver
- * lib/ai/tools/padre.ts (fase P5).
+ * El núcleo de seguridad vive en `ToolContext`: para `padre` y `docente`,
+ * `allowedStudentIds` / `allowedCourseIds` se resuelven en el servidor
+ * ANTES de invocar al modelo. Las herramientas de esos roles nunca reciben
+ * un UUID como parámetro — reciben un ÍNDICE dentro de esas listas.
  *
  * Las herramientas concretas por rol viven en padre.ts / docente.ts /
  * admin.ts / common.ts (fase P5) — este archivo solo define el contrato.

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bell, AlertTriangle, Info, Megaphone, ChevronDown } from "lucide-react";
+import { Bell, ChevronDown } from "lucide-react";
 import { formatDate, daysSince } from "@/lib/format";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
@@ -11,23 +11,10 @@ import {
   useAnnouncements,
   type AnnouncementCategory,
 } from "@/components/father/AnnouncementsProvider";
-
-const CATEGORY_CONFIG: Record<
-  AnnouncementCategory,
-  { label: string; bg: string; text: string; border: string; icon: React.ElementType }
-> = {
-  urgente:     { label: "Urgente",     bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200",    icon: AlertTriangle },
-  importante:  { label: "Importante",  bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  icon: Bell },
-  general:     { label: "General",     bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   icon: Megaphone },
-  informativo: { label: "Informativo", bg: "bg-gray-50",   text: "text-gray-600",   border: "border-gray-200",   icon: Info },
-};
-
-const CATEGORIES: AnnouncementCategory[] = [
-  "urgente",
-  "importante",
-  "general",
-  "informativo",
-];
+import {
+  ANNOUNCEMENT_CATEGORIES,
+  ANNOUNCEMENT_CATEGORY_VISUAL,
+} from "@/lib/announcements/categories";
 
 export default function AnnouncementsPage() {
   const {
@@ -90,11 +77,11 @@ export default function AnnouncementsPage() {
           className="h-11 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 text-sm font-semibold text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <option value="all">Todos ({announcements.length})</option>
-          {CATEGORIES.map((cat) => {
+          {ANNOUNCEMENT_CATEGORIES.map((cat) => {
             const count = announcements.filter((a) => a.category === cat).length;
             return (
               <option key={cat} value={cat}>
-                {CATEGORY_CONFIG[cat].label} ({count})
+                {ANNOUNCEMENT_CATEGORY_VISUAL[cat].label} ({count})
               </option>
             );
           })}
@@ -117,7 +104,7 @@ export default function AnnouncementsPage() {
         )}
 
         {filtered.map((aviso) => {
-          const cfg = CATEGORY_CONFIG[aviso.category];
+          const cfg = ANNOUNCEMENT_CATEGORY_VISUAL[aviso.category];
           const Icon = cfg.icon;
           const isExpanded = expanded === aviso.id;
 

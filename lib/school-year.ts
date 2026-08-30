@@ -16,9 +16,20 @@ export const SCHOOL_YEAR_LABEL = `Año Lectivo ${SCHOOL_YEAR}`;
  * mayo, así que B3/B4 saldrán en cero en el entorno demo — es correcto,
  * no un bug.
  */
-export const BIMESTER_RANGES: Record<1 | 2 | 3 | 4, { start: string; end: string }> = {
-  1: { start: `${SCHOOL_YEAR}-03-01`, end: `${SCHOOL_YEAR}-04-30` },
-  2: { start: `${SCHOOL_YEAR}-05-01`, end: `${SCHOOL_YEAR}-06-30` },
-  3: { start: `${SCHOOL_YEAR}-07-01`, end: `${SCHOOL_YEAR}-09-15` },
-  4: { start: `${SCHOOL_YEAR}-09-16`, end: `${SCHOOL_YEAR}-12-15` },
-};
+export function bimesterRangesForYear(
+  year: number,
+): Record<1 | 2 | 3 | 4, { start: string; end: string }> {
+  return {
+    1: { start: `${year}-03-01`, end: `${year}-04-30` },
+    2: { start: `${year}-05-01`, end: `${year}-06-30` },
+    3: { start: `${year}-07-01`, end: `${year}-09-15` },
+    4: { start: `${year}-09-16`, end: `${year}-12-15` },
+  };
+}
+
+export const BIMESTER_RANGES = bimesterRangesForYear(SCHOOL_YEAR);
+
+/** Rango calendario del año lectivo (1 ene – 31 dic del año). */
+export function calendarYearRange(year: number): { from: string; to: string } {
+  return { from: `${year}-01-01`, to: `${year}-12-31` };
+}

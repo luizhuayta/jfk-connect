@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { queryOne } from "@/lib/db";
 import { requireRole, requireUser, type AuthUser } from "@/lib/auth";
 import { SCHOOL_YEAR } from "@/lib/school-year";
+import { uuidParamSchema } from "@/lib/schemas";
 
 /**
  * Devuelve true si el estudiante pertenece al padre indicado.
@@ -37,8 +38,8 @@ export async function requireOwnedStudent(
   if (denied) return [null, denied];
 
   const { searchParams } = new URL(request.url);
-  const studentId = searchParams.get("studentId");
-  if (!studentId) {
+  const studentIdRaw = searchParams.get("studentId");
+  if (!studentIdRaw) {
     return [
       null,
       NextResponse.json(
@@ -47,6 +48,18 @@ export async function requireOwnedStudent(
       ),
     ];
   }
+
+  const parsedId = uuidParamSchema.safeParse(studentIdRaw);
+  if (!parsedId.success) {
+    return [
+      null,
+      NextResponse.json(
+        { ok: false, error: "Identificador no válido." },
+        { status: 400 },
+      ),
+    ];
+  }
+  const studentId = parsedId.data;
 
   if (!(await studentBelongsToParent(studentId, user.id))) {
     return [

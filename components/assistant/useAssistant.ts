@@ -1,11 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { extractEnrollmentCode } from "@/lib/father/enrollment-code";
+import { readApiJson } from "@/lib/client/api";
+
+export type AssistantVariant = "padre" | "docente" | "admin";
 
 export interface AssistantMessage {
+  id: string;
   role: "user" | "assistant";
   content: string;
   steps?: { tool: string; ok: boolean }[];
+}
+
+export interface ClaimedChild {
+  id: string;
+  name: string;
+  grade: string;
+  section: string;
 }
 
 const STEP_LABELS: Record<string, string> = {
@@ -36,17 +48,21 @@ export function stepLabel(tool: string): string {
 /**
  * Toda la capa de transporte del asistente aislada aquí — sin streaming en
  * v1 (ver lib/ai/agent.ts), así que "enviando" es un solo fetch que
- * resuelve con la respuesta completa. Aislarlo en un hook propio es lo que
- * permite migrar a streaming después tocando solo este archivo + el
- * componente de mensajes, sin tocar el resto de la UI.
+ * resuelve con la respuesta completa.
  */
-export function useAssistant() {
+export function useAssistant(opts?: {
+  variant?: AssistantVariant;
+  onClaimed?: (student: ClaimedChild) => void;
+}) {
   const [available, setAvailable] = useState(false);
   const [open, setOpen] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const onClaimedRef = useRef(opts?.onClaimed);
+  onClaimedRef.current = opts?.onClaimed;
 
   useEffect(() => {
     let active = true;
@@ -69,8 +85,9 @@ export function useAssistant() {
       const trimmed = text.trim();
       if (!trimmed || sending) return;
 
-      setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: trimmed }]);
       setSending(true);
+      setLinking(opts?.variant === "padre" && Boolean(extractEnrollmentCode(trimmed)));
       setError(null);
 
       try {
@@ -79,27 +96,38 @@ export function useAssistant() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ conversationId: conversationId ?? undefined, message: trimmed }),
         });
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error ?? "Error al consultar al asistente");
-
-        setConversationId(data.conversationId);
-        setMessages((prev) => [...prev, { role: "assistant", content: data.reply, steps: data.steps }]);
+        const data = await readApiJson(r);
+        setConversationId(data.conversationId as string);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: String(data.reply ?? ""),
+            steps: data.steps as AssistantMessage["steps"],
+          },
+        ]);
+        if (data.claimed) {
+          onClaimedRef.current?.(data.claimed as ClaimedChild);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Error al consultar al asistente";
         setError(message);
-        setMessages((prev) => [...prev, { role: "assistant", content: message }]);
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: message }]);
       } finally {
         setSending(false);
+        setLinking(false);
       }
     },
-    [conversationId, sending],
+    [conversationId, sending, opts?.variant],
   );
 
   const reset = useCallback(() => {
     setConversationId(null);
     setMessages([]);
     setError(null);
+    setLinking(false);
   }, []);
 
-  return { available, open, setOpen, messages, sending, error, send, reset };
+  return { available, open, setOpen, messages, sending, linking, error, send, reset };
 }

@@ -1,7 +1,8 @@
 /**
  * Herramientas del rol `admin` — IJFK. Solo agregados y búsquedas
  * administrativas; `buscar_alumno` es la única que expone datos de un
- * alumno concreto, y es exclusiva de este rol.
+ * alumno concreto (primer nombre + inicial, nunca DNI ni apellido completo),
+ * y es exclusiva de este rol.
  */
 
 import { z } from "zod";
@@ -9,6 +10,7 @@ import { query, queryOne } from "@/lib/db";
 import { defineTool } from "@/lib/ai/tools/registry";
 import { SCHOOL_YEAR } from "@/lib/school-year";
 import { wrapUserText } from "@/lib/ai/tools/sanitize";
+import { firstNameAndLastInitial } from "@/lib/ai/redact";
 
 export const estadisticasGenerales = defineTool({
   name: "estadisticas_generales",
@@ -76,26 +78,26 @@ export const seccionesConNotasPendientes = defineTool({
 
 export const buscarAlumno = defineTool({
   name: "buscar_alumno",
-  description: "Busca un alumno por DNI o parte del nombre. Exclusivo de administración.",
-  params: z.object({ dni: z.string().optional(), nombre: z.string().optional() }),
+  description:
+    "Busca un alumno por parte del nombre. Exclusivo de administración. No acepta DNI: si te pasan un número, pide el nombre.",
+  params: z.object({ nombre: z.string().min(2).max(80) }),
   roles: ["admin"],
   run: async (args) => {
-    if (!args.dni && !args.nombre) return { error: "Indica DNI o nombre." };
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    if (args.dni) {
-      params.push(args.dni);
-      conditions.push(`dni = $${params.length}`);
-    }
-    if (args.nombre) {
-      params.push(`%${args.nombre}%`);
-      conditions.push(`full_name ILIKE $${params.length}`);
+    if (/^\d{8}$/.test(args.nombre.trim())) {
+      return { error: "Busca por nombre, no por DNI." };
     }
     const r = await query<{ full_name: string; grade: string; section: string; status: string }>(
-      `SELECT full_name, grade, section, status FROM students WHERE ${conditions.join(" OR ")} LIMIT 10`,
-      params,
+      `SELECT full_name, grade, section, status FROM students WHERE full_name ILIKE $1 LIMIT 10`,
+      [`%${args.nombre.trim()}%`],
     );
-    return { alumnos: r.rows.map((s) => ({ nombre: wrapUserText(s.full_name), grado: s.grade, seccion: s.section, estado: s.status })) };
+    return {
+      alumnos: r.rows.map((s) => ({
+        nombre: wrapUserText(firstNameAndLastInitial(s.full_name)),
+        grado: s.grade,
+        seccion: s.section,
+        estado: s.status,
+      })),
+    };
   },
 });
 

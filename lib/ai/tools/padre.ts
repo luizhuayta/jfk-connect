@@ -8,20 +8,33 @@
  * modelo literalmente no tiene vocabulario para pedir el alumno de otro
  * padre — no hay una política que pueda fallar, es estructuralmente
  * imposible con este esquema de parámetros.
+ *
+ * Las lecturas pasan por `lib/father/queries.ts` y `buildLibreta`, las
+ * mismas que el panel REST, para no divergir en filtros (turno, año).
  */
 
 import { z } from "zod";
-import { query, queryOne } from "@/lib/db";
-import { defineTool, type ToolContext } from "@/lib/ai/tools/registry";
-import { LEVEL_LABEL, type Level } from "@/lib/grades/scale";
-import { sectionShift } from "@/lib/section-shift";
+import { defineTool } from "@/lib/ai/tools/registry";
+import { LEVEL_LABEL } from "@/lib/grades/scale";
+import { CURRENT_BIMESTER } from "@/lib/grades/bimesters";
+import { SCHOOL_YEAR, BIMESTER_RANGES } from "@/lib/school-year";
 import { wrapUserText } from "@/lib/ai/tools/sanitize";
+import { firstNameOnly } from "@/lib/ai/redact";
+import { MAX_CHILDREN } from "@/lib/father/claim-student";
+import { resolveStudentId } from "@/lib/ai/tools/resolve-student";
+import { buildLibreta } from "@/lib/grades/libreta";
+import {
+  getAttendance,
+  getEnrollment,
+  getMaterials,
+  getSchedule,
+  listChildren,
+  resolveAttendanceRange,
+} from "@/lib/father/queries";
 
-const hijoParam = z.object({ hijo: z.number().int().min(1).max(10) });
+const hijoParam = z.object({ hijo: z.number().int().min(1).max(MAX_CHILDREN) });
 
-function resolveStudentId(ctx: ToolContext, hijo: number): string | null {
-  return ctx.allowedStudentIds[hijo - 1] ?? null;
-}
+const NO_CHILD = { error: "No tienes un hijo con ese índice." };
 
 export const listarMisHijos = defineTool({
   name: "listar_mis_hijos",
@@ -30,68 +43,110 @@ export const listarMisHijos = defineTool({
   roles: ["padre"],
   run: async (_args, ctx) => {
     if (ctx.allowedStudentIds.length === 0) return { hijos: [] };
-    const r = await query<{ id: string; full_name: string; grade: string; section: string }>(
-      `SELECT id, full_name, grade, section FROM students WHERE id = ANY($1::uuid[])`,
-      [ctx.allowedStudentIds],
-    );
-    const byId = new Map(r.rows.map((s) => [s.id, s]));
+    const hijos = await listChildren(ctx.user.id);
+    const byId = new Map(hijos.map((s) => [s.id, s]));
     return {
       hijos: ctx.allowedStudentIds.map((id, i) => {
         const s = byId.get(id);
-        return { indice: i + 1, nombre: s ? wrapUserText(s.full_name.split(" ")[0]) : "?", grado: s?.grade, seccion: s?.section };
+        return {
+          indice: i + 1,
+          nombre: s ? wrapUserText(firstNameOnly(s.name)) : "?",
+          grado: s?.grade,
+          seccion: s?.section,
+        };
       }),
     };
   },
 });
 
+const CONCLUSION_MAX = 120;
+const PAYLOAD_SOFT_LIMIT = 3500;
+
 export const notasDeHijo = defineTool({
   name: "notas_de_hijo",
-  description: "Notas por área curricular (nivel de logro AD/A/B/C) de un hijo en un bimestre.",
-  params: hijoParam.extend({ bimestre: z.number().int().min(1).max(4) }),
-  roles: ["padre"],
-  run: async (args, ctx) => {
-    const studentId = resolveStudentId(ctx, args.hijo);
-    if (!studentId) return { error: "No tienes un hijo con ese índice." };
-
-    const r = await query<{ area_name: string; level: Level | null; graded: number; expected: number }>(
-      `SELECT ca.name AS area_name, v.level, v.graded, v.expected
-       FROM v_area_grades v
-       JOIN curricular_areas ca ON ca.id = v.area_id
-       WHERE v.student_id = $1 AND v.bimester = $2
-       ORDER BY ca.display_order`,
-      [studentId, args.bimestre],
-    );
-    if (r.rows.length === 0) return { mensaje: "Aún no hay notas registradas para ese bimestre." };
-    return {
-      areas: r.rows.map((a) => ({
-        area: a.area_name,
-        nivel: a.level ? LEVEL_LABEL[a.level] : "Sin calificar",
-        completo: a.graded >= a.expected,
-      })),
-    };
-  },
-});
-
-export const asistenciaDeHijo = defineTool({
-  name: "asistencia_de_hijo",
-  description: "Resumen de asistencia (asistió/faltó/tardanza/justificado) de un hijo en un rango de fechas.",
+  description:
+    "Notas SIAGIE (nivel de logro AD/A/B/C por competencia, sin puntaje 0-20) de un hijo. Si omites bimestre, se usa el bimestre lectivo actual.",
   params: hijoParam.extend({
-    desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    bimestre: z.number().int().min(1).max(4).optional(),
   }),
   roles: ["padre"],
   run: async (args, ctx) => {
     const studentId = resolveStudentId(ctx, args.hijo);
-    if (!studentId) return { error: "No tienes un hijo con ese índice." };
+    if (!studentId) return NO_CHILD;
 
-    const r = await query<{ status: string; count: string }>(
-      `SELECT status::text AS status, count(*) AS count
-       FROM attendance WHERE student_id = $1 AND date BETWEEN $2 AND $3
-       GROUP BY status`,
-      [studentId, args.desde, args.hasta],
+    const bimester = (args.bimestre ?? CURRENT_BIMESTER) as 1 | 2 | 3 | 4;
+    const libreta = await buildLibreta(studentId, SCHOOL_YEAR);
+    if (!libreta) return { error: "Alumno no encontrado." };
+
+    const areas = libreta.areas.map((area) => ({
+      area: area.name,
+      completo: area.competencies.every((c) => c.bimesters[bimester].level !== null),
+      competencias: area.competencies.map((c) => {
+        const cell = c.bimesters[bimester];
+        const entry: { competencia: string; nivel: string; conclusion?: string } = {
+          competencia: c.name,
+          nivel: cell.level && LEVEL_LABEL[cell.level] ? LEVEL_LABEL[cell.level] : "Sin calificar",
+        };
+        if (cell.conclusion?.trim()) {
+          entry.conclusion = wrapUserText(cell.conclusion.trim().slice(0, CONCLUSION_MAX));
+        }
+        return entry;
+      }),
+    }));
+
+    const anyGraded = areas.some((a) => a.competencias.some((c) => c.nivel !== "Sin calificar"));
+    if (!anyGraded) {
+      return { mensaje: "Aún no hay notas registradas para ese bimestre.", bimestre: bimester, anio: SCHOOL_YEAR };
+    }
+
+    let payload: unknown = { bimestre: bimester, anio: SCHOOL_YEAR, areas };
+    if (JSON.stringify(payload).length > PAYLOAD_SOFT_LIMIT) {
+      payload = {
+        bimestre: bimester,
+        anio: SCHOOL_YEAR,
+        areas: areas.map((a) => ({
+          area: a.area,
+          completo: a.completo,
+          competencias: a.competencias.map(({ competencia, nivel }) => ({ competencia, nivel })),
+        })),
+      };
+    }
+    return payload;
+  },
+});
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export const asistenciaDeHijo = defineTool({
+  name: "asistencia_de_hijo",
+  description:
+    "Resumen de asistencia (asistió/faltó/tardanza/justificado) de un hijo. Si omites fechas, se usa el rango del bimestre lectivo actual.",
+  params: hijoParam.extend({
+    desde: z.string().regex(DATE_RE).optional(),
+    hasta: z.string().regex(DATE_RE).optional(),
+  }),
+  roles: ["padre"],
+  run: async (args, ctx) => {
+    const studentId = resolveStudentId(ctx, args.hijo);
+    if (!studentId) return NO_CHILD;
+
+    const range = BIMESTER_RANGES[CURRENT_BIMESTER];
+    const { records, counts } = await getAttendance(
+      studentId,
+      resolveAttendanceRange({
+        from: args.desde ?? range.start,
+        to: args.hasta ?? range.end,
+      }),
     );
     const labels: Record<string, string> = { A: "asistió", F: "faltó", T: "tardanza", J: "justificado" };
-    return { resumen: r.rows.map((row) => ({ estado: labels[row.status] ?? row.status, dias: Number(row.count) })) };
+    return {
+      desde: args.desde ?? range.start,
+      hasta: args.hasta ?? range.end,
+      resumen: (Object.keys(counts) as Array<keyof typeof counts>)
+        .filter((status) => counts[status] > 0)
+        .map((status) => ({ estado: labels[status] ?? status, dias: counts[status] })),
+      registros: records.length,
+    };
   },
 });
 
@@ -104,20 +159,20 @@ export const horarioDeHijo = defineTool({
   roles: ["padre"],
   run: async (args, ctx) => {
     const studentId = resolveStudentId(ctx, args.hijo);
-    if (!studentId) return { error: "No tienes un hijo con ese índice." };
+    if (!studentId) return NO_CHILD;
 
-    const student = await queryOne<{ grade: string; section: string }>(`SELECT grade, section FROM students WHERE id = $1`, [studentId]);
-    if (!student) return { error: "Alumno no encontrado." };
+    const data = await getSchedule(studentId);
+    if (!data) return { error: "Alumno no encontrado." };
 
-    const where = args.dia ? `AND day = $3` : "";
-    const params = args.dia ? [student.grade, student.section, args.dia] : [student.grade, student.section];
-    const r = await query<{ day: string; period: number; time: string; subject: string }>(
-      `SELECT day, period, time, subject FROM schedule_entries
-       WHERE grade = $1 AND section = $2 ${where}
-       ORDER BY day, period`,
-      params,
-    );
-    return { turno: sectionShift(student.section), clases: r.rows.map((c) => ({ dia: c.day, hora: c.time, curso: c.subject })) };
+    const days = args.dia ? [args.dia] : data.days;
+    const clases: { dia: string; hora: string; curso: string }[] = [];
+    for (const day of days) {
+      const slots = data.schedule[day] ?? [];
+      for (const slot of slots) {
+        if (slot) clases.push({ dia: day, hora: slot.time, curso: slot.subject });
+      }
+    }
+    return { clases };
   },
 });
 
@@ -128,19 +183,20 @@ export const materialesDeHijo = defineTool({
   roles: ["padre"],
   run: async (args, ctx) => {
     const studentId = resolveStudentId(ctx, args.hijo);
-    if (!studentId) return { error: "No tienes un hijo con ese índice." };
+    if (!studentId) return NO_CHILD;
 
-    const student = await queryOne<{ grade: string; section: string }>(`SELECT grade, section FROM students WHERE id = $1`, [studentId]);
-    if (!student) return { error: "Alumno no encontrado." };
-
-    const r = await query<{ title: string; type: string; topic: string | null; uploaded_at: string }>(
-      `SELECT m.title, m.type, m.topic, to_char(m.uploaded_at, 'YYYY-MM-DD') AS uploaded_at
-       FROM materials m JOIN courses c ON c.id = m.course_id
-       WHERE c.grade = $1 AND c.section = $2
-       ORDER BY m.uploaded_at DESC LIMIT 10`,
-      [student.grade, student.section],
-    );
-    return { materiales: r.rows.map((m) => ({ titulo: wrapUserText(m.title), tipo: m.type, tema: m.topic ? wrapUserText(m.topic) : null, fecha: m.uploaded_at })) };
+    const courses = await getMaterials(studentId);
+    const materiales = courses
+      .flatMap((c) => c.materials.map((m) => ({ ...m, curso: c.subject })))
+      .slice(0, 10)
+      .map((m) => ({
+        titulo: wrapUserText(m.title),
+        tipo: m.type,
+        tema: m.topic ? wrapUserText(m.topic) : null,
+        fecha: m.uploadedAt,
+        curso: m.curso,
+      }));
+    return { materiales };
   },
 });
 
@@ -151,25 +207,16 @@ export const estadoMatricula = defineTool({
   roles: ["padre"],
   run: async (args, ctx) => {
     const studentId = resolveStudentId(ctx, args.hijo);
-    if (!studentId) return { error: "No tienes un hijo con ese índice." };
+    if (!studentId) return NO_CHILD;
 
-    const r = await queryOne<{
-      status: string;
-      docs_submitted: number;
-      docs_total: number;
-      apafa_paid: boolean;
-      actividades_paid: boolean;
-    }>(
-      `SELECT status::text AS status, docs_submitted, docs_total, apafa_paid, actividades_paid
-       FROM enrollments WHERE student_id = $1 ORDER BY year DESC LIMIT 1`,
-      [studentId],
-    );
-    if (!r) return { mensaje: "No hay matrícula registrada para este año." };
+    const enrollment = await getEnrollment(studentId);
+    if (!enrollment) return { mensaje: "No hay matrícula registrada para este año." };
     return {
-      estado: r.status,
-      documentosEntregados: `${r.docs_submitted}/${r.docs_total}`,
-      apafaPagado: r.apafa_paid,
-      actividadesPagado: r.actividades_paid,
+      estado: enrollment.status,
+      documentosEntregados: `${enrollment.docsSubmitted}/${enrollment.docsTotal}`,
+      tutor: enrollment.tutor,
+      grado: enrollment.grade,
+      seccion: enrollment.section,
     };
   },
 });

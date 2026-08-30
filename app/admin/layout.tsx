@@ -20,7 +20,7 @@ export default function AdminLayout({
         <AdminSidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)}>
           {children}
         </AdminSidebar>
-        <AssistantLauncher />
+        <AssistantLauncher variant="admin" />
       </div>
     </CurriculumProvider>
   );

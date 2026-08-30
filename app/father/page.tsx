@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Info, Megaphone, Bell, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import ClaimChildModal from "@/components/father/ClaimChildModal";
 import NoChildrenState from "@/components/father/NoChildrenState";
 import ChildSelector from "@/components/father/ChildSelector";
@@ -12,44 +12,22 @@ import ErrorState from "@/components/common/ErrorState";
 import { CURRENT_BIMESTER } from "@/lib/grades/bimesters";
 import LevelBadge from "@/components/grades/LevelBadge";
 import { useFatherStudents } from "@/components/father/useFatherStudents";
-import {
-  useAnnouncements,
-  type AnnouncementCategory,
-} from "@/components/father/AnnouncementsProvider";
+import { useCachedFatherResource } from "@/components/father/useCachedFatherResource";
+import { useAnnouncements } from "@/components/father/AnnouncementsProvider";
 import { cn } from "@/lib/utils";
 import { toLocalISODate } from "@/lib/format";
-import { useIsClient } from "@/lib/useIsClient";
 import type { LibretaData, BimesterKey } from "@/lib/grades/libreta";
-import { type AttendanceStatus } from "@/lib/attendance/labels";
-import { jornadaHeading, weekdayCapitalized } from "@/lib/attendance/jornada";
+import { jornadaHeading } from "@/lib/attendance/jornada";
+import { useJornadaHoy } from "@/lib/attendance/useJornadaHoy";
 import WeekStrip from "@/components/father/WeekStrip";
 import { honorLinkClass, paperShadow } from "@/components/father/chrome";
+import { ANNOUNCEMENT_CATEGORY_VISUAL } from "@/lib/announcements/categories";
+import { MAX_CHILDREN } from "@/lib/father/claim-student";
+import { SCHOOL_YEAR } from "@/lib/school-year";
+import type { AttendanceRecord } from "@/lib/father/types";
 
-type AttendanceRecord = {
-  id: string;
-  date: string;
-  status: AttendanceStatus;
-};
-
-const MAX_CHILDREN = 5;
-
-const CATEGORY_ICON: Record<AnnouncementCategory, React.ElementType> = {
-  urgente: AlertTriangle,
-  importante: Bell,
-  general: Megaphone,
-  informativo: Info,
-};
-
-const CATEGORY_TINT: Record<
-  AnnouncementCategory,
-  { bg: string; text: string; ring: string }
-> = {
-  urgente: { bg: "bg-red-100", text: "text-red-700", ring: "ring-red-200" },
-  importante: { bg: "bg-amber-100", text: "text-amber-700", ring: "ring-amber-200" },
-  general: { bg: "bg-blue-100", text: "text-blue-700", ring: "ring-blue-200" },
-  informativo: { bg: "bg-slate-100", text: "text-slate-600", ring: "ring-slate-200" },
-};
-
+const EMPTY_LIBRETA: LibretaData | null = null;
+const EMPTY_RECORDS: AttendanceRecord[] = [];
 
 export default function FatherDashboard() {
   const {
@@ -62,92 +40,48 @@ export default function FatherDashboard() {
     selectStudent,
   } = useFatherStudents();
   const { announcements, requestOpen } = useAnnouncements();
-
-  const [dataError, setDataError] = useState<string | null>(null);
-  const [libretaLoading, setLibretaLoading] = useState(false);
-  const [libretaCache, setLibretaCache] = useState<Record<string, LibretaData>>({});
-  const loadedIds = useRef(new Set<string>());
   const [showClaimModal, setShowClaimModal] = useState(false);
 
-  const [weeklyAttendance, setWeeklyAttendance] = useState<AttendanceRecord[]>([]);
-  const [attendanceError, setAttendanceError] = useState<string | null>(null);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const loadedAttendanceFor = useRef<string | null>(null);
+  const {
+    data: activeLibreta,
+    error: dataError,
+    handleRetry: retryGrades,
+    loading: libretaLoading,
+  } = useCachedFatherResource<LibretaData | null>({
+    activeStudentId,
+    studentsError,
+    reload,
+    endpoint: "/api/libreta",
+    field: "libreta",
+    fallback: EMPTY_LIBRETA,
+    errorMessage: "No se pudieron cargar las notas. Intente de nuevo.",
+  });
 
-  const loadGrades = useCallback(async (studentId: string) => {
-    setLibretaLoading(true);
-    try {
-      const r = await fetch(`/api/libreta?studentId=${studentId}`);
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setLibretaCache((prev) => ({ ...prev, [studentId]: data.libreta as LibretaData }));
-      setDataError(null);
-    } catch {
-      setDataError("No se pudieron cargar las notas. Intente de nuevo.");
-    } finally {
-      setLibretaLoading(false);
-    }
-  }, []);
+  const {
+    data: weeklyAttendance,
+    error: attendanceError,
+    handleRetry: retryAttendance,
+    loading: attendanceLoading,
+  } = useCachedFatherResource<AttendanceRecord[]>({
+    activeStudentId,
+    studentsError,
+    reload,
+    endpoint: "/api/father/attendance",
+    field: "records",
+    fallback: EMPTY_RECORDS,
+    errorMessage: "No se pudo cargar la asistencia. Intente de nuevo.",
+    extraParams: { year: String(SCHOOL_YEAR) },
+  });
 
-  const loadAttendance = useCallback(async (studentId: string) => {
-    setAttendanceLoading(true);
-    setAttendanceError(null);
-    try {
-      const r = await fetch(`/api/father/attendance?studentId=${studentId}`);
-      const data = await r.json();
-      if (!data.ok || !Array.isArray(data.records)) {
-        throw new Error("bad");
-      }
-      setWeeklyAttendance(data.records as AttendanceRecord[]);
-    } catch {
-      setAttendanceError("No se pudo cargar la asistencia. Intente de nuevo.");
-    } finally {
-      setAttendanceLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (activeStudentId && !loadedIds.current.has(activeStudentId)) {
-      loadedIds.current.add(activeStudentId);
-      loadGrades(activeStudentId);
-    }
-  }, [activeStudentId, loadGrades]);
-
-  useEffect(() => {
-    if (activeStudentId && loadedAttendanceFor.current !== activeStudentId) {
-      loadedAttendanceFor.current = activeStudentId;
-      setWeeklyAttendance([]);
-      loadAttendance(activeStudentId);
-    }
-  }, [activeStudentId, loadAttendance]);
-
-  const isClient = useIsClient();
-  const now = isClient ? new Date() : null;
-  const weekdayCap = now ? weekdayCapitalized(now) : "";
-  const isSchoolDay = now ? now.getDay() >= 1 && now.getDay() <= 5 : false;
+  const { isClient, weekdayCap, isSchoolDay } = useJornadaHoy();
 
   const handleRetry = () => {
-    setDataError(null);
-    setAttendanceError(null);
-    loadedIds.current.clear();
-    loadedAttendanceFor.current = null;
-    if (studentsError) {
-      reload();
-    } else if (activeStudentId) {
-      loadedIds.current.add(activeStudentId);
-      loadGrades(activeStudentId);
-      loadedAttendanceFor.current = activeStudentId;
-      loadAttendance(activeStudentId);
-    }
-  };
-
-  const handleCloseClaimModal = () => {
-    setShowClaimModal(false);
+    retryGrades();
+    retryAttendance();
   };
 
   const canAddMore = students.length < MAX_CHILDREN;
 
-  const activeLibreta = activeStudentId ? libretaCache[activeStudentId] : null;
   const bimesterNum = CURRENT_BIMESTER as BimesterKey;
   const currentCompetencies = (activeLibreta?.areas ?? []).flatMap((area) =>
     area.competencies
@@ -232,11 +166,7 @@ export default function FatherDashboard() {
             {attendanceError && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
                 <p>{attendanceError}</p>
-                <Button
-                  variant="outline"
-                  className="h-8"
-                  onClick={() => activeStudentId && loadAttendance(activeStudentId)}
-                >
+                <Button variant="outline" className="h-8" onClick={retryAttendance}>
                   Reintentar
                 </Button>
               </div>
@@ -245,11 +175,7 @@ export default function FatherDashboard() {
             {dataError && (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
                 <p>{dataError}</p>
-                <Button
-                  variant="outline"
-                  className="h-8"
-                  onClick={() => activeStudentId && loadGrades(activeStudentId)}
-                >
+                <Button variant="outline" className="h-8" onClick={retryGrades}>
                   Reintentar notas
                 </Button>
               </div>
@@ -292,16 +218,16 @@ export default function FatherDashboard() {
                 className="mt-5 flex items-start gap-3 rounded-xl bg-surface-container-low/70 p-3 transition-colors hover:bg-surface-container-low"
               >
                 {(() => {
-                  const Icon = CATEGORY_ICON[latestAnnouncement.category];
-                  const tint = CATEGORY_TINT[latestAnnouncement.category];
+                  const visual = ANNOUNCEMENT_CATEGORY_VISUAL[latestAnnouncement.category];
+                  const Icon = visual.icon;
                   return (
                     <>
                       <div
                         className={cn(
                           "flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1",
-                          tint.bg,
-                          tint.text,
-                          tint.ring,
+                          visual.bg,
+                          visual.text,
+                          visual.ring,
                         )}
                       >
                         <Icon className="h-4 w-4" aria-hidden />
@@ -357,7 +283,7 @@ export default function FatherDashboard() {
 
       <ClaimChildModal
         open={showClaimModal}
-        onClose={handleCloseClaimModal}
+        onClose={() => setShowClaimModal(false)}
         onClaimed={(student) => {
           selectStudent(student.id);
           reload();
