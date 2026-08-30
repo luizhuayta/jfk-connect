@@ -16,6 +16,16 @@ export async function register() {
   // El runtime determina qué archivo de config de Sentry cargar
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
+
+    // Aplica supabase/migrations/*.sql si faltan (Postgres administrados como
+    // Seenode no tienen docker-entrypoint-initdb.d). No-op si ya están todas
+    // aplicadas (ver lib/db.ts:applyMigrations).
+    if (process.env.NODE_ENV === "production") {
+      const { applyMigrations } = await import("./lib/db");
+      await applyMigrations().catch((err) => {
+        console.error("[instrumentation] error aplicando migraciones:", err);
+      });
+    }
   }
 
   if (process.env.NEXT_RUNTIME === "edge") {
