@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { MapPin, Users, Clock } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
 import { areaColor } from "@/lib/curriculum/colors";
+import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
+import { apiGet } from "@/lib/client/api";
 
 type TeacherSlot = {
   time: string;
@@ -35,8 +37,10 @@ const DAY_SHORT: Record<string, string> = {
   "Jueves": "Jue", "Viernes": "Vie",
 };
 
-const todayName = new Date().toLocaleDateString("es-PE", { weekday: "long" });
-const todayCapitalized = todayName.charAt(0).toUpperCase() + todayName.slice(1);
+function todayLabel() {
+  const name = new Date().toLocaleDateString("es-PE", { weekday: "long" });
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
 
 export default function SchedulePage() {
   const { courses, loading: coursesLoading, error: coursesError, reload } = useTeacherCourses();
@@ -51,10 +55,8 @@ export default function SchedulePage() {
     setLoading(true);
     setError(null);
     try {
-      const schRes = await fetch("/api/teacher/schedule");
-      const sch = await schRes.json();
-      if (!sch.ok) throw new Error(sch.error);
-      setSchedule(sch.schedule);
+      const sch = await apiGet("/api/teacher/schedule");
+      setSchedule(sch.schedule as Record<ShiftName, Record<string, (TeacherSlot | null)[]>>);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando horario");
     } finally {
@@ -67,6 +69,8 @@ export default function SchedulePage() {
       await load();
     })();
   }, []);
+
+  const todayCapitalized = useMemo(() => todayLabel(), []);
 
   // Turnos en los que el docente realmente tiene clases (normalmente uno
   // solo; "Ambos" preference puede tener los dos).
@@ -111,7 +115,7 @@ export default function SchedulePage() {
           {shiftsToShow.length > 1
             ? `Turno mañana y tarde · ${PERIODS_MAÑANA[0].split(" - ")[0]} – ${PERIODS_TARDE[PERIODS_TARDE.length - 1].split(" - ")[1]}`
             : `Turno ${shiftsToShow[0].toLowerCase()} · ${periodsForShift(shiftsToShow[0])[0].split(" - ")[0]} – ${periodsForShift(shiftsToShow[0])[periodsForShift(shiftsToShow[0]).length - 1].split(" - ")[1]}`}
-          {" "}· Año Lectivo 2026
+          {" "}· {SCHOOL_YEAR_LABEL}
         </p>
       </div>
 

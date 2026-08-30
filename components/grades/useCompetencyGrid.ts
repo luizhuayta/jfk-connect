@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { apiGet, apiSend } from "@/lib/client/api";
 import type { Competency } from "@/lib/curriculum/types";
 import type { ScopeValue } from "@/lib/grades/scopeValue";
 import type { GridStudent, EntryValue } from "./CompetencyGradeTable";
@@ -57,14 +58,12 @@ export function useCompetencyGrid(scope: ScopeValue | null, bimester: number) {
         params.set("section", scope.section);
         params.set("transversal", "1");
       }
-      const r = await fetch(`/api/grades?${params}`);
-      const data = await r.json();
+      const data = await apiGet(`/api/grades?${params}`);
       if (!active.current) return;
-      if (!data.ok) throw new Error(data.error ?? "Error cargando notas");
 
-      setScopeInfo(data.scope);
-      setCompetencies(data.competencies);
-      setStudents(data.students);
+      setScopeInfo(data.scope as GradeScopeInfo);
+      setCompetencies(data.competencies as Competency[]);
+      setStudents(data.students as GridStudent[]);
       const map = new Map<string, EntryValue>();
       for (const e of data.entries as { studentId: string; competencyId: number; score: number | null; conclusion: string | null }[]) {
         map.set(entryKey(e.studentId, e.competencyId), { score: e.score, conclusion: e.conclusion ?? "" });
@@ -166,13 +165,7 @@ export function useCompetencyGrid(scope: ScopeValue | null, bimester: number) {
           ? { bimester, courseId: scope.courseId, entries }
           : { bimester, grade: scope.grade, section: scope.section, transversal: true, entries };
 
-      const r = await fetch("/api/grades", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error ?? "Error al guardar las notas");
+      await apiSend("/api/grades", "PUT", body);
       setDirty(new Set());
       toast.success("Notas guardadas");
     } catch (err) {

@@ -8,6 +8,19 @@ import { defineTool } from "@/lib/ai/tools/registry";
 import { wrapUserText } from "@/lib/ai/tools/sanitize";
 import { firstNameOnly } from "@/lib/ai/redact";
 
+/** Códigos de asistencia SIAGIE → etiqueta en español. */
+export const ATTENDANCE_STATUS_LABEL: Record<string, string> = {
+  A: "asistió",
+  F: "faltó",
+  T: "tardanza",
+  J: "justificado",
+};
+
+/** Fecha ISO YYYY-MM-DD compartida por las herramientas de asistencia. */
+export const isoDateParam = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida (YYYY-MM-DD).");
+
 const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 
 export const obtenerFechaActual = defineTool({

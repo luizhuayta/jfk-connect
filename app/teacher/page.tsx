@@ -10,6 +10,9 @@ import {
 import { useRouter } from "next/navigation";
 import { levelFromScore, levelBadgeClass } from "@/lib/grades/scale";
 import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
+import { ICON_COLORS, rateBorderColor, gradeBorderColor } from "@/lib/teacher/theme";
+import { coursesWithPendingGrades } from "@/lib/teacher/pending-grades";
+import { apiGet } from "@/lib/client/api";
 
 type ScheduleSlot = {
   time: string;
@@ -27,30 +30,6 @@ function slotRange(time: string): { start: number; end: number } | null {
     start: Number(m[1]) * 60 + Number(m[2]),
     end: Number(m[3]) * 60 + Number(m[4]),
   };
-}
-
-// ─── Paleta de colores de íconos (criterio unificado) ────────────────────────
-// académico = azul, social/personas = morado, progreso = verde, logros = dorado
-const ICON_COLORS = {
-  academic: { bg: "bg-[#1E2A5E]/10", text: "text-[#1E2A5E]" },    // azul institucional
-  people:   { bg: "bg-purple-50",    text: "text-purple-600" },   // morado
-  progress: { bg: "bg-emerald-50",   text: "text-emerald-600" },  // verde
-  gold:     { bg: "bg-amber-50",     text: "text-amber-600" },    // dorado
-  info:     { bg: "bg-blue-50",      text: "text-blue-600" },     // azul claro
-};
-
-// ─── Indicador de color condicional para bordes ──────────────────────────────
-function rateBorderColor(rate: number | null): string {
-  if (rate === null) return "border-l-gray-300";
-  if (rate >= 90) return "border-l-emerald-500";
-  if (rate >= 75) return "border-l-amber-500";
-  return "border-l-red-500";
-}
-function gradeBorderColor(grade: number | null): string {
-  if (grade === null) return "border-l-gray-300";
-  if (grade >= 15) return "border-l-emerald-500";
-  if (grade >= 11) return "border-l-amber-500";
-  return "border-l-red-500";
 }
 
 function getGreeting(): string {
@@ -71,15 +50,10 @@ export default function TeacherPage() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch("/api/teacher/schedule");
-        const data = await r.json();
-        if (data.ok) {
-          const dayName = new Date().toLocaleDateString("es-PE", { weekday: "long" });
-          const cap = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-          setTodaySlots(data.schedule?.[cap] ?? []);
-        } else {
-          setError((prev) => prev ?? data.error ?? "Error cargando horario");
-        }
+        const data = await apiGet("/api/teacher/schedule");
+        const dayName = new Date().toLocaleDateString("es-PE", { weekday: "long" });
+        const cap = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+        setTodaySlots((data.schedule as Record<string, (ScheduleSlot | null)[]>)?.[cap] ?? []);
       } catch (err) {
         setError((prev) => prev ?? (err instanceof Error ? err.message : "Error cargando horario"));
       } finally {
@@ -101,10 +75,7 @@ export default function TeacherPage() {
 
   // ─── Pendientes de hoy (derivados de los datos ya cargados) ────────────────
   // Cursos con notas pendientes del bimestre actual (inProgress = true)
-  const coursesWithPendingGrades = courses.filter((c) => {
-    const b = c.bimesters?.[String(c.currentBimester)];
-    return b?.inProgress && !b?.hasData;
-  });
+  const coursesWithPendingGradesList = coursesWithPendingGrades(courses);
 
   // ─── Clases de hoy y próxima clase (horario real del docente) ─────────────
   const todayName = new Date().toLocaleDateString("es-PE", { weekday: "long" });
@@ -239,10 +210,10 @@ export default function TeacherPage() {
               <h2 className="text-sm font-bold text-[#0F172A]">Pendientes de hoy</h2>
             </div>
             {/* Notas pendientes del bimestre actual */}
-            {coursesWithPendingGrades.length > 0 ? (
+            {coursesWithPendingGradesList.length > 0 ? (
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold text-muted-foreground uppercase">Notas pendientes (B{courses[0]?.currentBimester ?? 2})</p>
-                {coursesWithPendingGrades.slice(0, 4).map((c) => (
+                {coursesWithPendingGradesList.slice(0, 4).map((c) => (
                   <button
                     key={c.id}
                     onClick={() => router.push("/teacher/grades")}

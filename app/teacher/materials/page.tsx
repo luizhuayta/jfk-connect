@@ -4,10 +4,12 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { FileText, FileImage, Presentation, Sheet, FilePlus2, Search, BookOpen, Filter, Loader2, Trash2, X } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
-import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
+import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
+import { apiGet, apiSend } from "@/lib/client/api";
 
 type Material = {
   id: string;
@@ -46,17 +48,11 @@ export default function MaterialsPage() {
   const [form, setForm] = useState({ courseId: "", title: "", type: "pdf" as Material["type"], size: "", topic: "" });
   const initializedRef = useRef(false);
 
-  const loadMaterials = useCallback(async (courseList: TeacherCourse[]) => {
+  const loadMaterials = useCallback(async () => {
     setMaterialsLoading(true);
     try {
-      const results = await Promise.all(
-        courseList.map(async (c) => {
-          const r = await fetch(`/api/teacher/courses/${c.id}/materials`);
-          const data = await r.json();
-          return data.ok ? (data.materials as Material[]) : [];
-        }),
-      );
-      setMaterials(results.flat());
+      const data = await apiGet("/api/teacher/materials");
+      setMaterials((data.materials as Material[]) ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando materiales");
     } finally {
@@ -72,17 +68,15 @@ export default function MaterialsPage() {
       initializedRef.current = true;
       if (courses.length > 0) {
         setForm((f) => ({ ...f, courseId: courses[0].id }));
-        await loadMaterials(courses);
-      } else {
-        setMaterialsLoading(false);
       }
+      await loadMaterials();
     })();
   }, [courses, loading, loadMaterials]);
 
   const retry = useCallback(async () => {
     setError(null);
-    await reload();
     initializedRef.current = false;
+    await reload();
   }, [reload]);
 
   const filtered = useMemo(() => {
@@ -101,33 +95,27 @@ export default function MaterialsPage() {
     return Array.from(new Set(base.map((m) => m.topic).filter(Boolean)));
   }, [materials, activeCourseId]);
 
-  const totalSize = materials.length;
+  const totalCount = materials.length;
   const byType = (t: Material["type"]) => materials.filter((m) => m.type === t).length;
 
   const handleUpload = async () => {
     if (!form.title || !form.courseId) {
-      alert("Título y curso son obligatorios");
+      toast.error("Título y curso son obligatorios");
       return;
     }
     setActionLoading(true);
     try {
-      const r = await fetch(`/api/teacher/courses/${form.courseId}/materials`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title,
-          type: form.type,
-          size: form.size || null,
-          topic: form.topic || null,
-        }),
+      await apiSend(`/api/teacher/courses/${form.courseId}/materials`, "POST", {
+        title: form.title,
+        type: form.type,
+        size: form.size || null,
+        topic: form.topic || null,
       });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
       setShowUpload(false);
       setForm((f) => ({ ...f, title: "", size: "", topic: "" }));
-      await loadMaterials(courses);
+      await loadMaterials();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al subir");
+      toast.error(err instanceof Error ? err.message : "Error al registrar");
     } finally {
       setActionLoading(false);
     }
@@ -136,12 +124,10 @@ export default function MaterialsPage() {
   const handleDelete = async (m: Material) => {
     if (!confirm(`¿Eliminar "${m.title}"?`)) return;
     try {
-      const r = await fetch(`/api/teacher/courses/${m.courseId}/materials/${m.id}`, { method: "DELETE" });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
+      await apiSend(`/api/teacher/courses/${m.courseId}/materials/${m.id}`, "DELETE");
       setMaterials((prev) => prev.filter((x) => x.id !== m.id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al eliminar");
+      toast.error(err instanceof Error ? err.message : "Error al eliminar");
     }
   };
 
@@ -175,7 +161,7 @@ export default function MaterialsPage() {
       {/* Summary strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Total archivos", value: totalSize, cls: "bg-[#1E2A5E]/5 text-[#1E2A5E]" },
+          { label: "Total archivos", value: totalCount, cls: "bg-[#1E2A5E]/5 text-[#1E2A5E]" },
           { label: "PDFs",  value: byType("pdf"),  cls: "bg-red-50 text-red-600"       },
           { label: "PPTX",  value: byType("pptx"), cls: "bg-orange-50 text-orange-600" },
           { label: "DOCX",  value: byType("docx"), cls: "bg-blue-50 text-blue-600"     },

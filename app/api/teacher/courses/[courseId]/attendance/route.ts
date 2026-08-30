@@ -16,11 +16,11 @@ import { requireOwnedCourse } from "@/lib/guards";
 import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { saveAttendanceSchema } from "@/lib/schemas";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const STATUSES = new Set(["A", "F", "T", "J"]);
 
 export async function GET(
   request: NextRequest,
@@ -84,7 +84,7 @@ export async function GET(
 
     return NextResponse.json({ ok: true, sessions: r.rows });
   } catch (err) {
-    console.error("[teacher/courses/[id]/attendance GET] Error:", err);
+    logger.error({ err, route: "teacher/courses/[id]/attendance GET" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },
@@ -108,38 +108,46 @@ export async function POST(
   try {
     const [parsed, validationError] = await parseBody(request, saveAttendanceSchema);
     if (validationError) return validationError;
-    const date = parsed.date;
-    const records: unknown[] = parsed.records;
-    if (!records.length) {
+    const { date, records } = parsed;
+
+    const studentIds = records.map((r) => r.studentId);
+    const owned = await query<{ id: string }>(
+      `SELECT id FROM students WHERE id = ANY($1::uuid[]) AND grade = $2 AND section = $3`,
+      [studentIds, course.grade, course.section],
+    );
+    const ownedSet = new Set(owned.rows.map((row) => row.id));
+    const rejected = [...new Set(studentIds.filter((id) => !ownedSet.has(id)))];
+    if (rejected.length > 0) {
       return NextResponse.json(
-        { ok: false, error: "No hay registros para guardar." },
+        {
+          ok: false,
+          error: "Algunos alumnos no pertenecen a este curso.",
+          rejected,
+        },
         { status: 400 },
       );
     }
 
     await withTransaction(async (client) => {
-      for (const r of records) {
-        const rec = r as { studentId?: string; status?: string };
-        if (!rec.studentId || !STATUSES.has(rec.status ?? "")) continue;
-        const owns = await client.query(
-          `SELECT 1 FROM students WHERE id = $1 AND grade = $2 AND section = $3`,
-          [rec.studentId, course.grade, course.section],
-        );
-        if (!owns.rowCount) continue;
-
-        await client.query(
-          `INSERT INTO attendance (student_id, date, status, registered_by)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (student_id, date)
-           DO UPDATE SET status = EXCLUDED.status, registered_by = EXCLUDED.registered_by`,
-          [rec.studentId, date, rec.status, user.id],
-        );
-      }
+      await client.query(
+        `INSERT INTO attendance (student_id, date, status, registered_by)
+         SELECT u.student_id, u.date, u.status::attendance_status, u.registered_by
+         FROM UNNEST($1::uuid[], $2::date[], $3::text[], $4::uuid[])
+           AS u(student_id, date, status, registered_by)
+         ON CONFLICT (student_id, date)
+         DO UPDATE SET status = EXCLUDED.status, registered_by = EXCLUDED.registered_by`,
+        [
+          records.map((r) => r.studentId),
+          records.map(() => date),
+          records.map((r) => r.status),
+          records.map(() => user.id),
+        ],
+      );
     });
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[teacher/courses/[id]/attendance POST] Error:", err);
+    logger.error({ err, route: "teacher/courses/[id]/attendance POST" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

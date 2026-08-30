@@ -8,7 +8,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
-import { getImportJob, fetchStagedRows, deleteImportJob } from "@/lib/imports/jobs";
+import { parseUuidParam } from "@/lib/validate";
+import { fetchStagedRows, deleteImportJob } from "@/lib/imports/jobs";
+import { requireOwnedImportJob } from "@/lib/imports/access";
 import { fetchRoster } from "@/lib/imports/roster";
 import { deleteUpload } from "@/lib/storage/files";
 import { logger } from "@/lib/logger";
@@ -19,16 +21,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const [user, denied] = await requireRole(request, ["docente", "admin"]);
   if (denied) return denied;
 
-  const { jobId } = await params;
+  const { jobId: jobIdRaw } = await params;
+  const [jobId, jobIdErr] = parseUuidParam(jobIdRaw);
+  if (jobIdErr) return jobIdErr;
 
   try {
-    const job = await getImportJob(jobId);
-    if (!job) {
-      return NextResponse.json({ ok: false, error: "Trabajo de importación no encontrado." }, { status: 404 });
-    }
-    if (job.created_by !== user.id && user.role !== "admin") {
-      return NextResponse.json({ ok: false, error: "No tienes acceso a este trabajo de importación." }, { status: 403 });
-    }
+    const [job, jobDenied] = await requireOwnedImportJob(jobId, user);
+    if (jobDenied) return jobDenied;
 
     const [rows, roster] = await Promise.all([fetchStagedRows(jobId), fetchRoster(job.grade, job.section)]);
 
@@ -63,16 +62,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const [user, denied] = await requireRole(request, ["docente", "admin"]);
   if (denied) return denied;
 
-  const { jobId } = await params;
+  const { jobId: jobIdRaw } = await params;
+  const [jobId, jobIdErr] = parseUuidParam(jobIdRaw);
+  if (jobIdErr) return jobIdErr;
 
   try {
-    const job = await getImportJob(jobId);
-    if (!job) {
-      return NextResponse.json({ ok: false, error: "Trabajo de importación no encontrado." }, { status: 404 });
-    }
-    if (job.created_by !== user.id && user.role !== "admin") {
-      return NextResponse.json({ ok: false, error: "No tienes acceso a este trabajo de importación." }, { status: 403 });
-    }
+    const [job, jobDenied] = await requireOwnedImportJob(jobId, user);
+    if (jobDenied) return jobDenied;
 
     if (job.file_id) await deleteUpload(job.file_id);
     await deleteImportJob(jobId);

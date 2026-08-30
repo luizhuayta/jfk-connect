@@ -10,27 +10,17 @@
 
 import { z } from "zod";
 import { query, queryOne } from "@/lib/db";
-import { defineTool, type ToolContext } from "@/lib/ai/tools/registry";
-import { courseBelongsToTeacher } from "@/lib/guards";
+import { defineTool } from "@/lib/ai/tools/registry";
 import { SCHOOL_YEAR } from "@/lib/school-year";
 import { LEVEL_LABEL, type Level } from "@/lib/grades/scale";
 import { wrapUserText } from "@/lib/ai/tools/sanitize";
 import { firstNameOnly } from "@/lib/ai/redact";
+import { resolveOwnedCourse } from "@/lib/ai/tools/resolve-course";
+import { ATTENDANCE_STATUS_LABEL, isoDateParam } from "@/lib/ai/tools/common";
 
 const cursoParam = z.object({ curso: z.number().int().min(1).max(50) });
-const ACCESS_DENIED = { error: "No tienes acceso a ese curso." };
-const NO_COURSE = { error: "No tienes un curso con ese índice." };
 
-function resolveCourseId(ctx: ToolContext, curso: number): string | null {
-  return ctx.allowedCourseIds[curso - 1] ?? null;
-}
-
-async function resolveOwnedCourse(ctx: ToolContext, curso: number): Promise<string | { error: string }> {
-  const courseId = resolveCourseId(ctx, curso);
-  if (!courseId) return NO_COURSE;
-  if (!(await courseBelongsToTeacher(courseId, ctx.user.id))) return ACCESS_DENIED;
-  return courseId;
-}
+const MAX_ASISTENCIA_DAYS = 120;
 
 export const listarMisCursos = defineTool({
   name: "listar_mis_cursos",
@@ -99,13 +89,21 @@ export const alumnosEnRiesgo = defineTool({
 
 export const asistenciaSeccion = defineTool({
   name: "asistencia_seccion",
-  description: "Resumen de asistencia de la sección de un curso en un rango de fechas.",
+  description: "Resumen de asistencia de la sección de un curso en un rango de fechas (máximo 120 días, dentro del año lectivo).",
   params: cursoParam.extend({
-    desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    desde: isoDateParam,
+    hasta: isoDateParam,
   }),
   roles: ["docente"],
   run: async (args, ctx) => {
+    if (args.desde > args.hasta) {
+      return { error: "desde debe ser anterior o igual a hasta." };
+    }
+    const days = (Date.parse(args.hasta) - Date.parse(args.desde)) / 86_400_000;
+    if (days > MAX_ASISTENCIA_DAYS) {
+      return { error: `El rango no puede superar ${MAX_ASISTENCIA_DAYS} días.` };
+    }
+
     const resolved = await resolveOwnedCourse(ctx, args.curso);
     if (typeof resolved !== "string") return resolved;
 
@@ -115,12 +113,18 @@ export const asistenciaSeccion = defineTool({
     const r = await query<{ status: string; count: string }>(
       `SELECT a.status::text AS status, count(*) AS count
        FROM attendance a JOIN students s ON s.id = a.student_id
-       WHERE s.grade = $1 AND s.section = $2 AND a.date BETWEEN $3 AND $4
+       WHERE s.grade = $1 AND s.section = $2
+         AND a.date BETWEEN $3 AND $4
+         AND a.date BETWEEN make_date($5, 1, 1) AND make_date($5, 12, 31)
        GROUP BY a.status`,
-      [course.grade, course.section, args.desde, args.hasta],
+      [course.grade, course.section, args.desde, args.hasta, SCHOOL_YEAR],
     );
-    const labels: Record<string, string> = { A: "asistió", F: "faltó", T: "tardanza", J: "justificado" };
-    return { resumen: r.rows.map((row) => ({ estado: labels[row.status] ?? row.status, registros: Number(row.count) })) };
+    return {
+      resumen: r.rows.map((row) => ({
+        estado: ATTENDANCE_STATUS_LABEL[row.status] ?? row.status,
+        registros: Number(row.count),
+      })),
+    };
   },
 });
 

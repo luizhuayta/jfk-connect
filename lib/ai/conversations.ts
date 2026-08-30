@@ -78,7 +78,7 @@ export async function fetchAllMessages(conversationId: string): Promise<MessageR
     `SELECT seq, role, content FROM ai_messages WHERE conversation_id = $1 AND role IN ('user', 'assistant') ORDER BY seq`,
     [conversationId],
   );
-  return r.rows;
+  return r.rows.map((m) => ({ ...m, content: scrubOutbound(m.content) }));
 }
 
 /** Agrega el turno (mensaje del usuario + respuesta del asistente) y actualiza los contadores de la conversación, en una transacción. */

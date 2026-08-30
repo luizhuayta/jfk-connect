@@ -5,8 +5,7 @@ import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
 import ImportWizard from "@/components/imports/ImportWizard";
-import { type ScopeOption } from "@/components/grades/ScopeSelector";
-import { encodeScope } from "@/lib/grades/scopeValue";
+import { buildTeacherScopeOptions } from "@/lib/teacher/scope-options";
 
 /**
  * Importar notas desde Excel/CSV/foto — mismas opciones de scope que
@@ -15,18 +14,8 @@ import { encodeScope } from "@/lib/grades/scopeValue";
 export default function TeacherImportsPage() {
   const { courses, tutoredSections, loading, error } = useTeacherCourses();
 
-  const options: ScopeOption[] = useMemo(
-    () => [
-      ...courses.map((c) => ({
-        value: encodeScope({ type: "course", courseId: c.id }),
-        label: `${c.subject} · ${c.grade} "${c.section}"`,
-      })),
-      ...tutoredSections.map((t) => ({
-        value: encodeScope({ type: "transversal", grade: t.grade, section: t.section }),
-        label: `${t.grade} "${t.section}"`,
-        group: "Competencias transversales",
-      })),
-    ],
+  const options = useMemo(
+    () => buildTeacherScopeOptions(courses, tutoredSections),
     [courses, tutoredSections],
   );
 

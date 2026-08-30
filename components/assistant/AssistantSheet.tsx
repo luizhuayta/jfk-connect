@@ -177,7 +177,7 @@ export default function AssistantSheet({
             disabled={sending}
             className="flex-1"
           />
-          <Button type="submit" disabled={sending || !input.trim()} size="icon" className="bg-[#1E2A5E] hover:bg-[#162043] shrink-0">
+          <Button type="submit" disabled={sending || !input.trim()} size="icon" className="bg-[#1E2A5E] hover:bg-[#162043] shrink-0" aria-label="Enviar">
             <Send className="h-4 w-4" />
           </Button>
         </form>

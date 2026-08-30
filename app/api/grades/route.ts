@@ -3,13 +3,11 @@
  * GET  /api/grades?grade=1ro&section=A&transversal=1&bimester=N
  * PUT  /api/grades
  *
- * Notas por competencia (libreta SIAGIE). Reemplaza el modelo plano de
- * `PUT /api/teacher/courses/[courseId]/grades` (n1/n2/n3 por curso) — ese
- * endpoint solo aceptaba escritura del docente; este acepta docente Y
- * admin (Dirección necesita poder registrar notas cuando el docente no
- * está). Cubre además las competencias transversales, que no tienen
- * `courseId` propio (grade+section+transversal=1, calificadas por el
- * tutor de la sección).
+ * Notas por competencia (libreta SIAGIE). El panel de docentes y el de
+ * admin escriben aquí (Dirección necesita poder registrar notas cuando el
+ * docente no está). Cubre además las competencias transversales, que no
+ * tienen `courseId` propio (grade+section+transversal=1, calificadas por
+ * el tutor de la sección).
  *
  * Toda la resolución de permisos + qué competencias caen en este scope
  * vive en lib/grades/scope.ts::resolveGradeScope — un solo sitio en vez de

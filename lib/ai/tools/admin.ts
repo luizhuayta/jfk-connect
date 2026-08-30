@@ -11,6 +11,7 @@ import { defineTool } from "@/lib/ai/tools/registry";
 import { SCHOOL_YEAR } from "@/lib/school-year";
 import { wrapUserText } from "@/lib/ai/tools/sanitize";
 import { firstNameAndLastInitial } from "@/lib/ai/redact";
+import { ATTENDANCE_STATUS_LABEL, isoDateParam } from "@/lib/ai/tools/common";
 
 export const estadisticasGenerales = defineTool({
   name: "estadisticas_generales",
@@ -107,8 +108,8 @@ export const resumenAsistencia = defineTool({
   params: z.object({
     grade: z.string().optional(),
     section: z.string().optional(),
-    desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    desde: isoDateParam,
+    hasta: isoDateParam,
   }),
   roles: ["admin"],
   run: async (args) => {
@@ -129,8 +130,7 @@ export const resumenAsistencia = defineTool({
        GROUP BY a.status`,
       params,
     );
-    const labels: Record<string, string> = { A: "asistió", F: "faltó", T: "tardanza", J: "justificado" };
-    return { resumen: r.rows.map((row) => ({ estado: labels[row.status] ?? row.status, registros: Number(row.count) })) };
+    return { resumen: r.rows.map((row) => ({ estado: ATTENDANCE_STATUS_LABEL[row.status] ?? row.status, registros: Number(row.count) })) };
   },
 });
 

@@ -14,6 +14,11 @@ import { areaColor } from "@/lib/curriculum/colors";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { useTeacherCourses, type TeacherCourse } from "@/components/teacher/useTeacherCourses";
+import { ICON_COLORS, avgColor, rateColor, gradeBorderColor as avgBorderColor, avgOf } from "@/lib/teacher/theme";
+import { pendingGradesCount } from "@/lib/teacher/pending-grades";
+import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
+import { apiGet } from "@/lib/client/api";
+import { toast } from "sonner";
 
 type CourseStudent = {
   id: string;
@@ -22,47 +27,12 @@ type CourseStudent = {
   order: number;
 };
 
-// ─── Paleta unificada con Dashboard ──────────────────────────────────────────
-const ICON_COLORS = {
-  academic: { bg: "bg-[#1E2A5E]/10", text: "text-[#1E2A5E]" },
-  people:   { bg: "bg-purple-50",    text: "text-purple-600" },
-  progress: { bg: "bg-emerald-50",   text: "text-emerald-600" },
-  gold:     { bg: "bg-amber-50",     text: "text-amber-600" },
-  info:     { bg: "bg-blue-50",      text: "text-blue-600" },
-};
-
-// ─── Color condicional unificado (mismo criterio que Dashboard) ───────────────
-function avgColor(avg: number | null): string {
-  if (avg === null) return "text-gray-400";
-  if (avg >= 15) return "text-emerald-600";
-  if (avg >= 11) return "text-amber-600";
-  return "text-red-500";
-}
-
-function rateColor(rate: number | null): string {
-  if (rate === null) return "text-gray-400";
-  if (rate >= 90) return "text-emerald-600";
-  if (rate >= 75) return "text-amber-600";
-  return "text-red-500";
-}
-
-function avgBorderColor(avg: number | null): string {
-  if (avg === null) return "border-l-gray-300";
-  if (avg >= 15) return "border-l-emerald-500";
-  if (avg >= 11) return "border-l-amber-500";
-  return "border-l-red-500";
-}
-
-// Promedio de valores no nulos; null si ninguno tiene dato.
-function avgOf(nums: (number | null)[]): number | null {
-  const vals = nums.filter((n): n is number => n !== null);
-  return vals.length ? vals.reduce((s, n) => s + n, 0) / vals.length : null;
-}
-
 export default function CoursesPage() {
   const { courses, loading, error, reload } = useTeacherCourses();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [studentsMap, setStudentsMap] = useState<Record<string, CourseStudent[]>>({});
+
+  const [studentsError, setStudentsError] = useState<string | null>(null);
 
   const toggleExpand = async (courseId: string) => {
     if (expandedId === courseId) {
@@ -70,13 +40,15 @@ export default function CoursesPage() {
       return;
     }
     setExpandedId(courseId);
+    setStudentsError(null);
     if (!studentsMap[courseId]) {
       try {
-        const r = await fetch(`/api/teacher/courses/${courseId}/students`);
-        const data = await r.json();
-        if (data.ok) setStudentsMap((prev) => ({ ...prev, [courseId]: data.students }));
-      } catch {
-        // silencioso
+        const data = await apiGet(`/api/teacher/courses/${courseId}/students`);
+        setStudentsMap((prev) => ({ ...prev, [courseId]: data.students as CourseStudent[] }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Error cargando alumnos";
+        setStudentsError(message);
+        toast.error(message);
       }
     }
   };
@@ -107,10 +79,7 @@ export default function CoursesPage() {
 
   // ─── KPI: notas pendientes del bimestre actual (punto 5) ───────────────────
   // Derivado de los datos ya cargados: cursos con inProgress = true y !hasData
-  const pendingGradesCount = courses.filter((c) => {
-    const b = c.bimesters?.[String(c.currentBimester)];
-    return b?.inProgress && !b?.hasData;
-  }).length;
+  const pendingGrades = pendingGradesCount(courses);
 
   if (loading) {
     return <LoadingState label="Cargando cursos..." />;
@@ -126,7 +95,7 @@ export default function CoursesPage() {
       <div>
         <h1 className="text-3xl font-bold text-[#0F172A]">Mis Cursos</h1>
         <p className="text-muted-foreground mt-1">
-          Año Lectivo 2026 · {groupedCourses.length} asignaturas · {courses.length} secciones
+          {SCHOOL_YEAR_LABEL} · {groupedCourses.length} asignaturas · {courses.length} secciones
         </p>
       </div>
 
@@ -157,15 +126,15 @@ export default function CoursesPage() {
           </CardContent>
         </Card>
         {/* Notas pendientes — progreso = verde (punto 5: reemplaza "Hrs/semana") */}
-        <Card className={`border-none shadow-sm rounded-xl border-l-4 ${pendingGradesCount > 0 ? "border-l-amber-500" : "border-l-emerald-500"}`}>
+        <Card className={`border-none shadow-sm rounded-xl border-l-4 ${pendingGrades > 0 ? "border-l-amber-500" : "border-l-emerald-500"}`}>
           <CardContent className="p-5 flex items-center gap-4">
-            <div className={`flex h-11 w-11 items-center justify-center rounded-full ${pendingGradesCount > 0 ? "bg-amber-50" : ICON_COLORS.progress.bg} shrink-0`}>
-              {pendingGradesCount > 0
+            <div className={`flex h-11 w-11 items-center justify-center rounded-full ${pendingGrades > 0 ? "bg-amber-50" : ICON_COLORS.progress.bg} shrink-0`}>
+              {pendingGrades > 0
                 ? <AlertCircle className="h-5 w-5 text-amber-600" />
                 : <CheckCircle2 className={`h-5 w-5 ${ICON_COLORS.progress.text}`} />}
             </div>
             <div>
-              <p className="text-2xl font-bold text-[#0F172A]">{pendingGradesCount}</p>
+              <p className="text-2xl font-bold text-[#0F172A]">{pendingGrades}</p>
               <p className="text-xs text-muted-foreground">Notas pendientes (B{courses[0]?.currentBimester ?? 2})</p>
             </div>
           </CardContent>
@@ -358,7 +327,7 @@ export default function CoursesPage() {
                             </div>
                             {students.length === 0 ? (
                               <p className="text-sm text-muted-foreground py-2">
-                                No hay alumnos registrados en esta sección.
+                                {studentsError ?? "No hay alumnos registrados en esta sección."}
                               </p>
                             ) : (
                               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

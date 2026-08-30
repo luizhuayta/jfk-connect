@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   BookOpen,
@@ -13,6 +12,8 @@ import {
 } from "lucide-react";
 import AppSidebar, { type SidebarItem } from "@/components/layout/AppSidebar";
 import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
+import { useTeacherAnnouncements } from "@/components/teacher/TeacherAnnouncementsProvider";
+import { pendingGradesCount } from "@/lib/teacher/pending-grades";
 
 const GROUP_1: SidebarItem[] = [
   { href: "/teacher",               label: "Dashboard",  icon: LayoutDashboard, exact: true  },
@@ -42,27 +43,9 @@ export default function TeacherSidebar({
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
 }) {
-  const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
+  const { unreadCount } = useTeacherAnnouncements();
   const { courses } = useTeacherCourses();
-
-  useEffect(() => {
-    fetch("/api/announcements")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.ok && Array.isArray(data.announcements)) {
-          setUnreadAnnouncements(
-            data.announcements.filter((a: { read: boolean }) => !a.read).length,
-          );
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  // Cursos del bimestre en curso que aún no tienen notas → badge ámbar
-  const pendingGrades = courses.filter((c) => {
-    const b = c.bimesters?.[String(c.currentBimester)];
-    return b?.inProgress && !b?.hasData;
-  }).length;
+  const pendingGrades = pendingGradesCount(courses);
 
   const group1 = GROUP_1.map((item) =>
     item.href === "/teacher/grades" && pendingGrades > 0
@@ -70,8 +53,8 @@ export default function TeacherSidebar({
       : item,
   );
   const group2 = GROUP_2.map((item) =>
-    item.href === "/teacher/announcements" && unreadAnnouncements > 0
-      ? { ...item, badge: unreadAnnouncements, badgeColor: "red" as const }
+    item.href === "/teacher/announcements" && unreadCount > 0
+      ? { ...item, badge: unreadCount, badgeColor: "red" as const }
       : item,
   );
 

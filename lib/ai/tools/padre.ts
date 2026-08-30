@@ -20,8 +20,9 @@ import { CURRENT_BIMESTER } from "@/lib/grades/bimesters";
 import { SCHOOL_YEAR, BIMESTER_RANGES } from "@/lib/school-year";
 import { wrapUserText } from "@/lib/ai/tools/sanitize";
 import { firstNameOnly } from "@/lib/ai/redact";
-import { MAX_CHILDREN } from "@/lib/father/claim-student";
+import { MAX_CHILDREN } from "@/lib/father/limits";
 import { resolveStudentId } from "@/lib/ai/tools/resolve-student";
+import { ATTENDANCE_STATUS_LABEL, isoDateParam } from "@/lib/ai/tools/common";
 import { buildLibreta } from "@/lib/grades/libreta";
 import {
   getAttendance,
@@ -115,15 +116,13 @@ export const notasDeHijo = defineTool({
   },
 });
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 export const asistenciaDeHijo = defineTool({
   name: "asistencia_de_hijo",
   description:
     "Resumen de asistencia (asistió/faltó/tardanza/justificado) de un hijo. Si omites fechas, se usa el rango del bimestre lectivo actual.",
   params: hijoParam.extend({
-    desde: z.string().regex(DATE_RE).optional(),
-    hasta: z.string().regex(DATE_RE).optional(),
+    desde: isoDateParam.optional(),
+    hasta: isoDateParam.optional(),
   }),
   roles: ["padre"],
   run: async (args, ctx) => {
@@ -138,7 +137,7 @@ export const asistenciaDeHijo = defineTool({
         to: args.hasta ?? range.end,
       }),
     );
-    const labels: Record<string, string> = { A: "asistió", F: "faltó", T: "tardanza", J: "justificado" };
+    const labels = ATTENDANCE_STATUS_LABEL;
     return {
       desde: args.desde ?? range.start,
       hasta: args.hasta ?? range.end,

@@ -2,19 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { apiGet, apiSend } from "@/lib/client/api";
 import type { ScopeValue } from "@/lib/grades/scopeValue";
 
 export interface ConclusionSuggestion {
   studentId: string;
   competencyId: number;
   text: string;
-}
-
-interface ConclusionsResponse {
-  ok: boolean;
-  error?: string;
-  suggestions?: ConclusionSuggestion[];
-  skipped?: string[];
 }
 
 const BATCH_SIZE = 12;
@@ -40,8 +34,7 @@ export function useConclusionsAi(args: {
     let active = true;
     (async () => {
       try {
-        const r = await fetch("/api/ai/health");
-        const data = await r.json();
+        const data = await apiGet("/api/ai/health");
         if (active) setAiAvailable(Boolean(data.ok && data.enabled));
       } catch {
         if (active) setAiAvailable(false);
@@ -63,14 +56,8 @@ export function useConclusionsAi(args: {
     async (studentIds: string[]): Promise<ConclusionSuggestion[]> => {
       const base = scopeBody();
       if (!base) return [];
-      const r = await fetch("/api/ai/conclusions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...base, bimester, studentIds }),
-      });
-      const data: ConclusionsResponse = await r.json();
-      if (!data.ok) throw new Error(data.error ?? "Error al generar conclusiones con IA");
-      return data.suggestions ?? [];
+      const data = await apiSend("/api/ai/conclusions", "POST", { ...base, bimester, studentIds });
+      return (data.suggestions as ConclusionSuggestion[]) ?? [];
     },
     [scopeBody, bimester],
   );

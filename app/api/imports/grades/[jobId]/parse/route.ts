@@ -15,10 +15,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
+import { parseUuidParam } from "@/lib/validate";
 import { resolveGradeScope } from "@/lib/grades/scope";
 import { fetchCatalog } from "@/lib/curriculum/server";
 import { readUpload } from "@/lib/storage/files";
-import { getImportJob, replaceStagedRows, setJobStatus } from "@/lib/imports/jobs";
+import { replaceStagedRows, setJobStatus } from "@/lib/imports/jobs";
+import { requireOwnedImportJob } from "@/lib/imports/access";
 import { fetchRoster } from "@/lib/imports/roster";
 import { parseCsv } from "@/lib/imports/csv";
 import { parseXlsx } from "@/lib/imports/xlsx";
@@ -39,16 +41,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const [user, denied] = await requireRole(request, ["docente", "admin"]);
   if (denied) return denied;
 
-  const { jobId } = await params;
+  const { jobId: jobIdRaw } = await params;
+  const [jobId, jobIdErr] = parseUuidParam(jobIdRaw);
+  if (jobIdErr) return jobIdErr;
 
   try {
-    const job = await getImportJob(jobId);
-    if (!job) {
-      return NextResponse.json({ ok: false, error: "Trabajo de importación no encontrado." }, { status: 404 });
-    }
-    if (job.created_by !== user.id && user.role !== "admin") {
-      return NextResponse.json({ ok: false, error: "No tienes acceso a este trabajo de importación." }, { status: 403 });
-    }
+    const [job, jobDenied] = await requireOwnedImportJob(jobId, user);
+    if (jobDenied) return jobDenied;
     if (!job.file_id) {
       return NextResponse.json({ ok: false, error: "Este trabajo no tiene un archivo asociado." }, { status: 409 });
     }
@@ -141,7 +140,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
   } catch (err) {
     logger.error({ err, route: "imports/grades/[jobId]/parse" }, "error inesperado");
-    await setJobStatus(jobId, "error", { error: "Error interno al analizar el archivo." }).catch(() => {});
+    try {
+      await setJobStatus(jobId, "error", { error: "Error interno al analizar el archivo." });
+    } catch (statusErr) {
+      logger.error({ err: statusErr, route: "imports/grades/[jobId]/parse", jobId }, "no se pudo marcar el job como error");
+    }
     return NextResponse.json({ ok: false, error: "Error interno del servidor." }, { status: 500 });
   }
 }

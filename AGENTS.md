@@ -18,9 +18,8 @@ npm run dev          # localhost:3000 (Turbopack)
 npm run build        # production build; must pass
 npm run typecheck    # tsc --noEmit; must pass
 npm run lint         # ESLint (pre-existing errors in admin/teacher pages)
+npm run test         # vitest run (lib/**/*.test.ts)
 ```
-
-No test runner is configured.
 
 ## Docker stack (app + Postgres)
 

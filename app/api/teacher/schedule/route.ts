@@ -18,6 +18,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { sectionShift } from "@/lib/section-shift";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ ok: true, days: DAYS, schedule });
   } catch (err) {
-    console.error("[teacher/schedule GET] Error:", err);
+    logger.error({ err, route: "teacher/schedule GET" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

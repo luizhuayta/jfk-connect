@@ -10,10 +10,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
-import { parseBody } from "@/lib/validate";
+import { parseBody, parseUuidParam } from "@/lib/validate";
 import { patchImportRowSchema } from "@/lib/schemas";
 import { resolveGradeScope } from "@/lib/grades/scope";
-import { getImportJob, updateStagedRow } from "@/lib/imports/jobs";
+import { updateStagedRow } from "@/lib/imports/jobs";
+import { requireOwnedImportJob } from "@/lib/imports/access";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -28,19 +29,18 @@ export async function PATCH(
   const [user, denied] = await requireRole(request, ["docente", "admin"]);
   if (denied) return denied;
 
-  const { jobId, rowId } = await params;
+  const { jobId: jobIdRaw, rowId: rowIdRaw } = await params;
+  const [jobId, jobIdErr] = parseUuidParam(jobIdRaw);
+  if (jobIdErr) return jobIdErr;
+  const [rowId, rowIdErr] = parseUuidParam(rowIdRaw);
+  if (rowIdErr) return rowIdErr;
 
   const [parsed, validationError] = await parseBody(request, patchImportRowSchema);
   if (validationError) return validationError;
 
   try {
-    const job = await getImportJob(jobId);
-    if (!job) {
-      return NextResponse.json({ ok: false, error: "Trabajo de importación no encontrado." }, { status: 404 });
-    }
-    if (job.created_by !== user.id && user.role !== "admin") {
-      return NextResponse.json({ ok: false, error: "No tienes acceso a este trabajo de importación." }, { status: 403 });
-    }
+    const [job, jobDenied] = await requireOwnedImportJob(jobId, user);
+    if (jobDenied) return jobDenied;
 
     const [, scopeDenied] = await resolveGradeScope(request, {
       courseId: job.course_id,

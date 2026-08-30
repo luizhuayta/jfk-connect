@@ -11,12 +11,13 @@ import { useCompetencyGrid } from "@/components/grades/useCompetencyGrid";
 import { useConclusionsAi } from "@/components/grades/useConclusionsAi";
 import CompetencyGradeTable from "@/components/grades/CompetencyGradeTable";
 import GenerateConclusionsModal from "@/components/grades/GenerateConclusionsModal";
-import ScopeSelector, { type ScopeOption } from "@/components/grades/ScopeSelector";
+import ScopeSelector from "@/components/grades/ScopeSelector";
 import BimesterTabs from "@/components/grades/BimesterTabs";
 import GradeSummaryCards from "@/components/grades/GradeSummaryCards";
 import { CURRENT_BIMESTER } from "@/lib/grades/bimesters";
-import { encodeScope, decodeScope } from "@/lib/grades/scopeValue";
+import { decodeScope } from "@/lib/grades/scopeValue";
 import { computeGridStats } from "@/lib/grades/stats";
+import { buildTeacherScopeOptions } from "@/lib/teacher/scope-options";
 
 /**
  * Captura de notas por competencia. Antes: 464 líneas monolíticas con su
@@ -30,18 +31,8 @@ export default function TeacherGradesPage() {
   const [scopeRaw, setScopeRaw] = useState<string | null>(null);
   const [bimester, setBimester] = useState(String(CURRENT_BIMESTER));
 
-  const options: ScopeOption[] = useMemo(
-    () => [
-      ...courses.map((c) => ({
-        value: encodeScope({ type: "course", courseId: c.id }),
-        label: `${c.subject} · ${c.grade} "${c.section}"`,
-      })),
-      ...tutoredSections.map((t) => ({
-        value: encodeScope({ type: "transversal", grade: t.grade, section: t.section }),
-        label: `${t.grade} "${t.section}"`,
-        group: "Competencias transversales",
-      })),
-    ],
+  const options = useMemo(
+    () => buildTeacherScopeOptions(courses, tutoredSections),
     [courses, tutoredSections],
   );
 

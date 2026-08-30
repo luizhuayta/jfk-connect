@@ -14,9 +14,8 @@ npm run build            # Build de producción (output: standalone)
 npm run start            # Servidor de producción
 npm run lint             # ESLint
 npm run typecheck        # tsc --noEmit (la verificación canónica; debe dar 0 errores)
+npm run test             # vitest run (lib/**/*.test.ts)
 ```
-
-No hay test runner configurado en el proyecto.
 
 ### Docker (stack completo: app + Postgres)
 

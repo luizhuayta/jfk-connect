@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Upload, FileSpreadsheet, Image as ImageIcon, X } from "lucide-react";
+import { toast } from "sonner";
 
 const MAX_MB = 8;
 
@@ -28,7 +29,7 @@ export default function UploadDropzone({
     const file = files?.[0];
     if (!file) return;
     if (file.size > MAX_MB * 1024 * 1024) {
-      alert(`El archivo supera el tamaño máximo de ${MAX_MB} MB.`);
+      toast.error(`El archivo supera el tamaño máximo de ${MAX_MB} MB.`);
       return;
     }
     setSelected(file);

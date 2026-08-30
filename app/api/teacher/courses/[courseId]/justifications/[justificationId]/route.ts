@@ -15,7 +15,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { queryOne, withTransaction } from "@/lib/db";
 import { requireOwnedCourse } from "@/lib/guards";
 import { assertSameOrigin } from "@/lib/csrf";
-import { parseBody } from "@/lib/validate";
+import { parseBody, parseUuidParam } from "@/lib/validate";
 import { reviewJustificationSchema } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
 
@@ -29,6 +29,8 @@ export async function PATCH(
   if (blocked) return blocked;
 
   const { courseId, justificationId } = await params;
+  const [justificationIdOk, justificationIdErr] = parseUuidParam(justificationId);
+  if (justificationIdErr) return justificationIdErr;
 
   const [ctx, denied] = await requireOwnedCourse(request, courseId);
   if (denied) return denied;
@@ -63,7 +65,7 @@ export async function PATCH(
        JOIN students s ON s.id = a.student_id
        JOIN courses c ON c.id = $1
        WHERE aj.id = $2`,
-      [courseId, justificationId],
+      [courseId, justificationIdOk],
     );
 
     if (!j) {
@@ -100,7 +102,7 @@ export async function PATCH(
         `UPDATE attendance_justifications
          SET status = $1, admin_response = $2, reviewed_by = $3, reviewed_at = now()
          WHERE id = $4`,
-        [parsed.decision === "aprobar" ? "aprobada" : "rechazada", response, user.id, justificationId],
+        [parsed.decision === "aprobar" ? "aprobada" : "rechazada", response, user.id, justificationIdOk],
       );
     });
 

@@ -19,6 +19,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { SCHOOL_YEAR } from "@/lib/school-year";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
            FROM attendance a
            JOIN students s3 ON s3.id = a.student_id
            WHERE s3.grade = c.grade AND s3.section = c.section
+             AND a.date BETWEEN make_date($2, 1, 1) AND make_date($2, 12, 31)
          )::int AS attendance_rate
        FROM courses c
        WHERE c.teacher_id = $1
@@ -136,7 +138,7 @@ export async function GET(request: NextRequest) {
       tutoredSections: tutored.rows,
     });
   } catch (err) {
-    console.error("[teacher/courses GET] Error:", err);
+    logger.error({ err, route: "teacher/courses GET" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

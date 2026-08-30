@@ -11,6 +11,7 @@ import { requireOwnedCourse } from "@/lib/guards";
 import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { createMaterialSchema } from "@/lib/schemas";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export async function GET(
       })),
     });
   } catch (err) {
-    console.error("[teacher/courses/[id]/materials GET] Error:", err);
+    logger.error({ err, route: "teacher/courses/[id]/materials GET" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },
@@ -107,7 +108,7 @@ export async function POST(
       },
     });
   } catch (err) {
-    console.error("[teacher/courses/[id]/materials POST] Error:", err);
+    logger.error({ err, route: "teacher/courses/[id]/materials POST" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

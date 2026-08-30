@@ -1,24 +1,14 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Bell, AlertTriangle, Info, Megaphone, BookOpen, ChevronDown, CalendarDays } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
-
-type AnnouncementCategory = "urgente" | "importante" | "general" | "informativo";
-
-type Announcement = {
-  id: string;
-  category: AnnouncementCategory;
-  title: string;
-  body: string;
-  sender: string;
-  date: string;
-  read: boolean;
-  audience: string;
-};
+import { useTeacherAnnouncements } from "@/components/teacher/TeacherAnnouncementsProvider";
+import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
+import type { AnnouncementCategory } from "@/components/father/AnnouncementsProvider";
 
 const CAT_META: Record<AnnouncementCategory, {
   label: string; icon: typeof Bell;
@@ -40,36 +30,9 @@ function fmtDate(iso: string) {
 }
 
 export default function TeacherAnnouncementsPage() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const { announcements, loading, error, unreadCount, reload, markRead } = useTeacherAnnouncements();
   const [activeFilter, setActiveFilter] = useState<AnnouncementCategory | "all">("all");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const r = await fetch("/api/announcements");
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setAnnouncements(data.announcements);
-      setReadIds(new Set(data.announcements.filter((a: Announcement) => a.read).map((a: Announcement) => a.id)));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error cargando avisos");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    (async () => {
-      await load();
-    })();
-  }, []);
-
-  const unread = announcements.filter((a) => !readIds.has(a.id)).length;
 
   const counts = useMemo(() => ({
     urgente:    announcements.filter((a) => a.category === "urgente").length,
@@ -89,9 +52,7 @@ export default function TeacherAnnouncementsPage() {
       if (next.has(id)) { next.delete(id); } else { next.add(id); }
       return next;
     });
-    setReadIds((prev) => new Set([...prev, id]));
-    // Persistir la lectura por usuario (fire-and-forget); el badge del sidebar lo refleja.
-    fetch(`/api/announcements/${id}/read`, { method: "PATCH" }).catch(() => {});
+    markRead(id);
   }
 
   if (loading) {
@@ -99,7 +60,7 @@ export default function TeacherAnnouncementsPage() {
   }
 
   if (error) {
-    return <ErrorState message={error} onRetry={load} />;
+    return <ErrorState message={error} onRetry={reload} />;
   }
 
   return (
@@ -108,9 +69,9 @@ export default function TeacherAnnouncementsPage() {
       <div>
         <h1 className="text-3xl font-bold text-[#0F172A]">Avisos</h1>
         <p className="text-muted-foreground mt-1">
-          {unread > 0
-            ? <><span className="font-semibold text-[#0F172A]">{unread} avisos sin leer</span> · Año Lectivo 2026</>
-            : "Todos los avisos leídos · Año Lectivo 2026"
+          {unreadCount > 0
+            ? <><span className="font-semibold text-[#0F172A]">{unreadCount} avisos sin leer</span> · {SCHOOL_YEAR_LABEL}</>
+            : `Todos los avisos leídos · ${SCHOOL_YEAR_LABEL}`
           }
         </p>
       </div>
@@ -151,7 +112,7 @@ export default function TeacherAnnouncementsPage() {
         {displayed.map((a) => {
           const meta = CAT_META[a.category];
           const Icon = meta.icon;
-          const isRead = readIds.has(a.id);
+          const isRead = a.read;
           const isExpanded = expandedIds.has(a.id);
           return (
             <Card

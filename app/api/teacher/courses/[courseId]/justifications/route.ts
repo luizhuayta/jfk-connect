@@ -10,6 +10,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireOwnedCourse } from "@/lib/guards";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,7 @@ export async function GET(
 
     return NextResponse.json({ ok: true, justifications });
   } catch (err) {
-    console.error("[teacher/courses/[id]/justifications GET] Error:", err);
+    logger.error({ err, route: "teacher/courses/[id]/justifications GET" }, "error inesperado");
     return NextResponse.json(
       { ok: false, error: "Error interno del servidor." },
       { status: 500 },

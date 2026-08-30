@@ -27,6 +27,7 @@ import { aiErrorResponse } from "@/lib/ai/errors";
 import { firstNameOnly, buildAliases, rehydrate } from "@/lib/ai/redact";
 import { conclusionsSystemPrompt } from "@/lib/ai/prompts/conclusions";
 import { LEVEL_LABEL, type Level } from "@/lib/grades/scale";
+import type { TokenUsage } from "@/lib/ai/types";
 
 export const dynamic = "force-dynamic";
 
@@ -140,6 +141,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, suggestions: [], skipped, usage: null });
     }
 
+    let usage: TokenUsage | null = null;
     const suggestions = await runAi({
       usageFeature: "conclusions",
       userId: user.id,
@@ -169,11 +171,12 @@ export async function POST(request: NextRequest) {
           return [{ studentId, competencyId: item.competencyId, text: item.text.slice(0, Math.min(parsed.maxChars, 500)) }];
         });
 
+        usage = result.usage;
         return { data: mapped, usage: result.usage, model: result.model };
       },
     });
 
-    return NextResponse.json({ ok: true, suggestions, skipped, usage: null });
+    return NextResponse.json({ ok: true, suggestions, skipped, usage });
   } catch (err) {
     return aiErrorResponse(err, "ai/conclusions");
   }

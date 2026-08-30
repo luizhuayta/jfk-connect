@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { z } from "zod";
 import { extractEnrollmentCode } from "@/lib/father/enrollment-code";
-import { readApiJson } from "@/lib/client/api";
+import { apiGet, readApiJson } from "@/lib/client/api";
 
 export type AssistantVariant = "padre" | "docente" | "admin";
 
@@ -19,6 +20,21 @@ export interface ClaimedChild {
   grade: string;
   section: string;
 }
+
+const assistantReplySchema = z.object({
+  ok: z.literal(true),
+  reply: z.string(),
+  conversationId: z.string(),
+  steps: z.array(z.object({ tool: z.string(), ok: z.boolean() })).optional(),
+  claimed: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      grade: z.string(),
+      section: z.string(),
+    })
+    .optional(),
+});
 
 const STEP_LABELS: Record<string, string> = {
   obtener_fecha_actual: "consultando la fecha",
@@ -63,13 +79,14 @@ export function useAssistant(opts?: {
   const [error, setError] = useState<string | null>(null);
   const onClaimedRef = useRef(opts?.onClaimed);
   onClaimedRef.current = opts?.onClaimed;
+  const abortRef = useRef<AbortController | null>(null);
+  const reqIdRef = useRef(0);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const r = await fetch("/api/ai/health");
-        const data = await r.json();
+        const data = await apiGet("/api/ai/health");
         if (active) setAvailable(Boolean(data.ok && data.enabled && data.toolsEnabled));
       } catch {
         if (active) setAvailable(false);
@@ -77,6 +94,7 @@ export function useAssistant(opts?: {
     })();
     return () => {
       active = false;
+      abortRef.current?.abort();
     };
   }, []);
 
@@ -84,6 +102,11 @@ export function useAssistant(opts?: {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || sending) return;
+
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      const reqId = ++reqIdRef.current;
 
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: trimmed }]);
       setSending(true);
@@ -95,34 +118,43 @@ export function useAssistant(opts?: {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ conversationId: conversationId ?? undefined, message: trimmed }),
+          signal: ac.signal,
         });
-        const data = await readApiJson(r);
-        setConversationId(data.conversationId as string);
+        const raw = await readApiJson(r);
+        if (reqId !== reqIdRef.current) return;
+        const data = assistantReplySchema.parse(raw);
+        setConversationId(data.conversationId);
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: String(data.reply ?? ""),
-            steps: data.steps as AssistantMessage["steps"],
+            content: data.reply,
+            steps: data.steps,
           },
         ]);
         if (data.claimed) {
-          onClaimedRef.current?.(data.claimed as ClaimedChild);
+          onClaimedRef.current?.(data.claimed);
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (reqId !== reqIdRef.current) return;
         const message = err instanceof Error ? err.message : "Error al consultar al asistente";
         setError(message);
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: message }]);
       } finally {
-        setSending(false);
-        setLinking(false);
+        if (reqId === reqIdRef.current) {
+          setSending(false);
+          setLinking(false);
+        }
       }
     },
     [conversationId, sending, opts?.variant],
   );
 
   const reset = useCallback(() => {
+    abortRef.current?.abort();
+    reqIdRef.current += 1;
+    setSending(false);
     setConversationId(null);
     setMessages([]);
     setError(null);

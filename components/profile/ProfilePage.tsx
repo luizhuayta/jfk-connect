@@ -11,6 +11,7 @@ import { Loader2, ShieldCheck, Save } from "lucide-react";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { getInitials, getRoleLabel } from "@/lib/format";
 import ChangePasswordModal from "@/components/auth/ChangePasswordModal";
+import { apiSend } from "@/lib/client/api";
 
 /**
  * Página de perfil compartida por admin y docente (montada en
@@ -44,13 +45,7 @@ export default function ProfilePage() {
     }
     setSaving(true);
     try {
-      const r = await fetch("/api/auth/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName: nameValue.trim(), phone: phoneValue.trim() || null }),
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
+      await apiSend("/api/auth/me", "PATCH", { fullName: nameValue.trim(), phone: phoneValue.trim() || null });
       toast.success("Perfil actualizado.");
       // El sidebar/navbar leen el nombre del SessionUserProvider, que no
       // expone un refetch; recargar es lo más simple para reflejar el cambio.

@@ -56,6 +56,12 @@ function addUsage(total: TokenUsage, extra: TokenUsage | undefined): TokenUsage 
 
 export async function runToolLoop(args: RunToolLoopArgs): Promise<RunToolLoopResult> {
   const cfg = getAiConfig();
+  if (!cfg.supportsTools && args.tools.length > 0) {
+    throw new AiError(
+      "config",
+      "El proveedor de IA no admite herramientas (AI_SUPPORTS_TOOLS=0).",
+    );
+  }
   const maxSteps = args.maxSteps ?? DEFAULT_MAX_STEPS;
   const toolByName = new Map(args.tools.map((t) => [t.name, t]));
   const toolDefs = toOpenAiTools(args.tools);

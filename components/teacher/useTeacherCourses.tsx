@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { apiGet } from "@/lib/client/api";
 
 export type BimesterStat = {
   avg: number;
@@ -69,12 +70,10 @@ export function TeacherCoursesProvider({
 
   const fetchCourses = useCallback(async () => {
     try {
-      const r = await fetch("/api/teacher/courses");
-      const data = await r.json();
+      const data = await apiGet("/api/teacher/courses");
       if (!active.current) return;
-      if (!data.ok) throw new Error(data.error ?? "Error cargando cursos");
-      setCourses(data.courses);
-      setTutoredSections(data.tutoredSections ?? []);
+      setCourses(data.courses as TeacherCourse[]);
+      setTutoredSections((data.tutoredSections as TutoredSection[]) ?? []);
       setError(null);
     } catch (err) {
       if (!active.current) return;

@@ -124,6 +124,14 @@ export async function requireOwnedCourse(
   courseId: string,
   opts?: { allowAdmin?: boolean },
 ): Promise<[{ user: AuthUser; course: CourseRef }, null] | [null, NextResponse]> {
+  const parsedId = uuidParamSchema.safeParse(courseId);
+  if (!parsedId.success) {
+    return [
+      null,
+      NextResponse.json({ ok: false, error: "Identificador no válido." }, { status: 400 }),
+    ];
+  }
+
   const allowAdmin = opts?.allowAdmin ?? true;
   const roles: AuthUser["role"][] = allowAdmin ? ["docente", "admin"] : ["docente"];
 
@@ -132,7 +140,7 @@ export async function requireOwnedCourse(
 
   const row = await queryOne<CourseRow>(
     "SELECT id, grade, section, area_id, teacher_id FROM courses WHERE id = $1",
-    [courseId],
+    [parsedId.data],
   );
   if (!row) {
     return [
@@ -236,8 +244,8 @@ export async function requireStudentAccess(
 
   if (user.role === "docente" && opts?.allowTutor) {
     const row = await queryOne<{ id: string }>(
-      `SELECT id FROM section_tutors WHERE grade = $1 AND section = $2 AND teacher_id = $3`,
-      [student.grade, student.section, user.id],
+      `SELECT id FROM section_tutors WHERE grade = $1 AND section = $2 AND year = $3 AND teacher_id = $4`,
+      [student.grade, student.section, SCHOOL_YEAR, user.id],
     );
     if (row) return [{ user, student }, null];
   }

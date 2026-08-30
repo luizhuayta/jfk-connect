@@ -12,6 +12,7 @@ import ImportReviewTable, { type ReviewRow, type ReviewCell, type RosterOption }
 import ImportSummary from "@/components/imports/ImportSummary";
 import { CURRENT_BIMESTER } from "@/lib/grades/bimesters";
 import { decodeScope } from "@/lib/grades/scopeValue";
+import { apiGet, apiSend, readApiJson } from "@/lib/client/api";
 
 type WizardStep = "scope" | "upload" | "review" | "done";
 
@@ -53,11 +54,9 @@ export default function ImportWizard({ scopeOptions }: { scopeOptions: ScopeOpti
   }
 
   async function refreshDetail(id: string) {
-    const r = await fetch(`/api/imports/grades/${id}`);
-    const data = await r.json();
-    if (!data.ok) throw new Error(data.error ?? "Error cargando el trabajo de importación");
-    setDetail(data);
-    return data as JobDetail;
+    const data = await apiGet(`/api/imports/grades/${id}`);
+    setDetail(data as unknown as JobDetail);
+    return data as unknown as JobDetail;
   }
 
   async function handleUploadAndParse() {
@@ -69,15 +68,13 @@ export default function ImportWizard({ scopeOptions }: { scopeOptions: ScopeOpti
       for (const [k, v] of Object.entries(scopeFormFields())) form.append(k, v);
 
       const uploadR = await fetch("/api/imports/grades", { method: "POST", body: form });
-      const uploadData = await uploadR.json();
-      if (!uploadData.ok) throw new Error(uploadData.error ?? "Error al subir el archivo");
-      setJobId(uploadData.jobId);
+      const uploadData = await readApiJson(uploadR);
+      const uploadedJobId = String(uploadData.jobId);
+      setJobId(uploadedJobId);
 
-      const parseR = await fetch(`/api/imports/grades/${uploadData.jobId}/parse`, { method: "POST" });
-      const parseData = await parseR.json();
-      if (!parseData.ok) throw new Error(parseData.error ?? "Error al analizar el archivo");
+      await apiSend(`/api/imports/grades/${uploadedJobId}/parse`, "POST");
 
-      await refreshDetail(uploadData.jobId);
+      await refreshDetail(uploadedJobId);
       setStep("review");
       toast.success("Archivo analizado. Revisa las coincidencias antes de aplicar.");
     } catch (err) {
@@ -90,13 +87,7 @@ export default function ImportWizard({ scopeOptions }: { scopeOptions: ScopeOpti
   async function patchRow(rowId: string, patch: Record<string, unknown>) {
     if (!jobId) return;
     try {
-      const r = await fetch(`/api/imports/grades/${jobId}/rows/${rowId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
+      await apiSend(`/api/imports/grades/${jobId}/rows/${rowId}`, "PATCH", patch);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al guardar el cambio");
     }
@@ -146,16 +137,13 @@ export default function ImportWizard({ scopeOptions }: { scopeOptions: ScopeOpti
     if (!jobId) return;
     setApplying(true);
     try {
-      const r = await fetch(`/api/imports/grades/${jobId}/commit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ignoreUnmatched, overwriteExisting: false }),
+      const data = await apiSend(`/api/imports/grades/${jobId}/commit`, "POST", {
+        ignoreUnmatched,
+        overwriteExisting: false,
       });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setResult(data.result);
+      setResult(data.result as { applied: number; skippedUnmatched: number; skippedExisting: number });
       setStep("done");
-      toast.success(`${data.result.applied} nota(s) aplicada(s) a la libreta.`);
+      toast.success(`${(data.result as { applied: number }).applied} nota(s) aplicada(s) a la libreta.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al aplicar la importación");
     } finally {
