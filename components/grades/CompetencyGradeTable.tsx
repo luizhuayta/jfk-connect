@@ -23,6 +23,8 @@ export default function CompetencyGradeTable({
   onScoreChange,
   onConclusionChange,
   readOnly,
+  onGenerateConclusions,
+  generatingFor,
 }: {
   competencies: Competency[];
   students: GridStudent[];
@@ -30,6 +32,9 @@ export default function CompetencyGradeTable({
   onScoreChange?: (studentId: string, competencyId: number, score: number | null) => void;
   onConclusionChange?: (studentId: string, competencyId: number, conclusion: string) => void;
   readOnly: boolean;
+  /** Opcional — feature de IA (ver GenerateConclusionsModal). Sin esto, la tabla se comporta igual que antes. */
+  onGenerateConclusions?: (studentId: string) => void;
+  generatingFor?: string | null;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -128,6 +133,8 @@ export default function CompetencyGradeTable({
                       readOnly={readOnly}
                       getConclusion={(competencyId) => getEntry(s.id, competencyId).conclusion}
                       onChange={(competencyId, value) => onConclusionChange?.(s.id, competencyId, value)}
+                      onGenerate={onGenerateConclusions ? () => onGenerateConclusions(s.id) : undefined}
+                      generating={generatingFor === s.id}
                     />
                   </TableCell>
                 </TableRow>

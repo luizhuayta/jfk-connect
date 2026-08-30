@@ -11,6 +11,8 @@ import {
   Clock,
   Bell,
   TrendingUp,
+  Upload,
+  Sparkles,
 } from "lucide-react";
 import AppSidebar, { type SidebarItem } from "@/components/layout/AppSidebar";
 
@@ -20,11 +22,13 @@ const MENU: SidebarItem[] = [
   { href: "/admin/students",    label: "Alumnos",             icon: GraduationCap, exact: false },
   { href: "/admin/courses",     label: "Cursos y Secciones",  icon: BookOpen,       exact: false },
   { href: "/admin/grades",      label: "Notas",               icon: BarChart3,     exact: false },
+  { href: "/admin/imports",     label: "Importar notas",      icon: Upload,         exact: false },
   { href: "/admin/attendance",  label: "Asistencia",          icon: ClipboardCheck, exact: false },
   { href: "/admin/enrollment",  label: "Matrículas y Pagos",  icon: FileText,       exact: false },
   { href: "/admin/schedule",    label: "Horarios",            icon: Clock,          exact: false },
   { href: "/admin/announcements", label: "Avisos",            icon: Bell,           exact: false },
   { href: "/admin/reports",     label: "Reportes",            icon: TrendingUp,     exact: false },
+  { href: "/admin/ai",          label: "Uso de IA",           icon: Sparkles,       exact: false },
 ];
 
 /**

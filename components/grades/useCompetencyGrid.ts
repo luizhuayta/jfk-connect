@@ -117,6 +117,33 @@ export function useCompetencyGrid(scope: ScopeValue | null, bimester: number) {
     setDirty((prev) => new Set(prev).add(k));
   }, []);
 
+  /**
+   * Aplica un lote de conclusiones sugeridas por IA (POST /api/ai/conclusions)
+   * como si el docente las hubiera tipeado — quedan "sucias" y las persiste
+   * el mismo botón "Guardar" de siempre, sin tocar el flujo de guardado. Un
+   * solo setValues/setDirty por lote (no N llamadas a setConclusion, que
+   * causarían N renders sobre una grilla de 40x4 celdas).
+   */
+  const applySuggestions = useCallback(
+    (items: { studentId: string; competencyId: number; text: string }[]) => {
+      if (items.length === 0) return;
+      setValues((prev) => {
+        const next = new Map(prev);
+        for (const item of items) {
+          const k = entryKey(item.studentId, item.competencyId);
+          next.set(k, { ...(next.get(k) ?? EMPTY_ENTRY), conclusion: item.text });
+        }
+        return next;
+      });
+      setDirty((prev) => {
+        const next = new Set(prev);
+        for (const item of items) next.add(entryKey(item.studentId, item.competencyId));
+        return next;
+      });
+    },
+    [],
+  );
+
   const save = useCallback(async () => {
     if (!scope || dirty.size === 0) return;
     setSaving(true);
@@ -162,6 +189,7 @@ export function useCompetencyGrid(scope: ScopeValue | null, bimester: number) {
     getEntry,
     setScore,
     setConclusion,
+    applySuggestions,
     dirtyCount: dirty.size,
     loading,
     error,

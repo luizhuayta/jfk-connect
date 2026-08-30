@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Save, Loader2, Pencil, Eye } from "lucide-react";
+import { Save, Loader2, Pencil, Eye, Sparkles } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { useCompetencyGrid } from "@/components/grades/useCompetencyGrid";
+import { useConclusionsAi } from "@/components/grades/useConclusionsAi";
 import CompetencyGradeTable from "@/components/grades/CompetencyGradeTable";
+import GenerateConclusionsModal from "@/components/grades/GenerateConclusionsModal";
 import ScopeSelector, { type ScopeOption } from "@/components/grades/ScopeSelector";
 import BimesterTabs from "@/components/grades/BimesterTabs";
 import GradeSummaryCards from "@/components/grades/GradeSummaryCards";
@@ -83,6 +85,16 @@ export default function AdminGradesPage() {
     [grid],
   );
 
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const conclusionsAi = useConclusionsAi({ scope, bimester: Number(bimester), applySuggestions: grid.applySuggestions });
+  const gradedStudentIds = useMemo(
+    () =>
+      grid.students
+        .filter((s) => grid.competencies.some((c) => grid.getEntry(s.id, c.id).score !== null))
+        .map((s) => s.id),
+    [grid],
+  );
+
   if (coursesLoading) return <LoadingState label="Cargando cursos..." />;
   if (coursesError) return <ErrorState message={coursesError} />;
 
@@ -102,6 +114,17 @@ export default function AdminGradesPage() {
             {editMode ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
             {editMode ? "Ver solo lectura" : "Editar notas"}
           </Button>
+          {editMode && conclusionsAi.aiAvailable && (
+            <Button
+              variant="outline"
+              onClick={() => setShowGenerateModal(true)}
+              disabled={grid.scope?.editable === false || gradedStudentIds.length === 0}
+              className="rounded-xl h-10 gap-2 font-semibold border-[#1E2A5E] text-[#1E2A5E] hover:bg-[#1E2A5E]/5"
+            >
+              <Sparkles className="h-4 w-4" />
+              Generar conclusiones
+            </Button>
+          )}
           {editMode && (
             <Button
               onClick={grid.save}
@@ -143,11 +166,27 @@ export default function AdminGradesPage() {
                 readOnly={readOnly}
                 onScoreChange={grid.setScore}
                 onConclusionChange={grid.setConclusion}
+                onGenerateConclusions={
+                  editMode && conclusionsAi.aiAvailable ? conclusionsAi.generateForStudent : undefined
+                }
+                generatingFor={conclusionsAi.generatingFor}
               />
             </CardContent>
           </Card>
         </>
       )}
+
+      <GenerateConclusionsModal
+        open={showGenerateModal}
+        onClose={() => setShowGenerateModal(false)}
+        studentCount={gradedStudentIds.length}
+        generating={conclusionsAi.generatingBatch}
+        progress={conclusionsAi.progress}
+        onGenerate={async () => {
+          await conclusionsAi.generateForSection(gradedStudentIds);
+          setShowGenerateModal(false);
+        }}
+      />
     </div>
   );
 }

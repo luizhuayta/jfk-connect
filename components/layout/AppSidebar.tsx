@@ -26,6 +26,8 @@ interface AppSidebarProps {
   brand: { short: string; sub?: string; logoSrc?: string };
   /** Grupos de enlaces; cada grupo se separa con un divisor. */
   groups: SidebarItem[][];
+  /** Rótulos opcionales (mismo índice que `groups`). Se ocultan al colapsar. */
+  groupLabels?: (string | undefined)[];
   mobileOpen: boolean;
   onCloseMobile: () => void;
   children: React.ReactNode;
@@ -79,6 +81,7 @@ export default function AppSidebar({
   showUserBlock = true,
   showLogoutButton = true,
   collapseIcon = "chevron",
+  groupLabels,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -292,6 +295,11 @@ export default function AppSidebar({
           {groups.map((group, gi) => (
             <div key={gi}>
               {gi > 0 && <hr className="border-white/10 my-3" />}
+              {groupLabels?.[gi] && !collapsed && (
+                <p className="px-3 pb-1.5 pt-0.5 text-xs font-semibold uppercase tracking-wide text-white/45">
+                  {groupLabels[gi]}
+                </p>
+              )}
               {group.map(renderItem)}
             </div>
           ))}

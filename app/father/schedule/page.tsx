@@ -1,7 +1,9 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { useFatherStudents } from "@/components/father/useFatherStudents";
 import { useCachedFatherResource } from "@/components/father/useCachedFatherResource";
 import ChildSelector from "@/components/father/ChildSelector";
@@ -10,6 +12,9 @@ import ErrorState from "@/components/common/ErrorState";
 import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
 import { useIsClient } from "@/lib/useIsClient";
 import { areaColor } from "@/lib/curriculum/colors";
+import { paperCardClass, honorLinkClass } from "@/components/father/chrome";
+import { cn } from "@/lib/utils";
+import { downloadHorario } from "@/lib/report";
 
 type ScheduleSlot = {
   time: string;
@@ -88,6 +93,29 @@ export default function SchedulePage() {
 
   const periods = periodsForShift(student?.shift);
   const dayRange = `${periods[0].split(" - ")[0]} – ${periods[periods.length - 1].split(" - ")[1]}`;
+  const [busy, setBusy] = useState(false);
+
+  const handleDownload = async () => {
+    if (!student) return;
+    setBusy(true);
+    try {
+      await downloadHorario({
+        student: {
+          name: student.name,
+          grade: student.grade,
+          section: student.section,
+        },
+        shift: student.shift ?? "",
+        periods,
+        recessLabel: RECESS_TIME[student.shift ?? "Mañana"] ?? RECESS_TIME.Mañana,
+        schedule,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo generar el horario");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (loading) return <LoadingState label="Cargando horario..." />;
 
@@ -96,12 +124,34 @@ export default function SchedulePage() {
   return (
     <div className="space-y-8">
       {/* Header — el turno sale del alumno, no está escrito a mano */}
-      <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-primary">Horario</h1>
-        <p className="text-muted-foreground mt-1">
-          {student?.shift ? `Turno ${student.shift.toLowerCase()} · ` : ""}
-          {dayRange} · {SCHOOL_YEAR_LABEL}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-on-surface lg:text-3xl">Horario</h1>
+          <p className="mt-1.5 text-sm text-on-surface-variant">
+            {student?.shift ? `Turno ${student.shift.toLowerCase()} · ` : ""}
+            {dayRange} · {SCHOOL_YEAR_LABEL}
+          </p>
+          {students.length > 0 && (
+            <p className="mt-1 text-xs text-on-surface-variant">
+              El PDF sale en hoja horizontal A4, listo para imprimir.
+            </p>
+          )}
+        </div>
+        {students.length > 0 && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={busy || !student}
+            className={cn(honorLinkClass, "disabled:opacity-60")}
+          >
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden />
+            )}
+            Descargar horario PDF
+          </button>
+        )}
       </div>
 
       {/* Selector de hijo (selección compartida con el resto del panel) */}
@@ -109,6 +159,43 @@ export default function SchedulePage() {
 
       {students.length > 0 && (
         <>
+          {todayName && DAYS.includes(todayName) && (
+            <section className={cn(paperCardClass, "p-5")}>
+              <h2 className="text-lg font-bold tracking-tight text-on-surface">
+                Hoy, {todayName}
+              </h2>
+              <ol className="mt-4 space-y-2">
+                {periods.map((period, pi) => {
+                  const slot = schedule[todayName]?.[pi] ?? null;
+                  return (
+                    <li key={period}>
+                      {pi === 3 && (
+                        <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                          Recreo · {RECESS_TIME[student?.shift ?? "Mañana"]}
+                        </p>
+                      )}
+                      <div className="flex items-baseline gap-3">
+                        <span className="w-28 shrink-0 font-mono text-xs tabular-nums text-on-surface-variant">
+                          {period}
+                        </span>
+                        {slot ? (
+                          <span className="text-sm font-semibold text-on-surface">{slot.subject}</span>
+                        ) : (
+                          <span className="text-sm text-on-surface-variant">—</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          )}
+          {todayName && !DAYS.includes(todayName) && (
+            <p className="text-sm text-on-surface-variant">
+              Hoy no hay clase. El horario de la semana:
+            </p>
+          )}
+
           {/* Schedule grid */}
           <Card className="border-none shadow-sm rounded-xl overflow-hidden">
             <CardContent className="p-0 overflow-x-auto">
@@ -130,7 +217,7 @@ export default function SchedulePage() {
                         <span className="hidden sm:block">{day}</span>
                         <span className="sm:hidden">{DAY_SHORT[day]}</span>
                         {isToday && (
-                          <span className="block text-[10px] text-accent mt-0.5 font-bold tracking-wide">
+                          <span className="block text-xs font-bold tracking-wide text-accent mt-0.5">
                             ● HOY
                           </span>
                         )}
@@ -155,7 +242,7 @@ export default function SchedulePage() {
                     <div className="grid grid-cols-[110px_repeat(5,1fr)] border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                       {/* Time */}
                       <div className="p-3 flex items-center justify-center border-r border-gray-100">
-                        <span className="text-xs font-medium text-muted-foreground text-center leading-tight">
+                        <span className="font-mono text-xs font-medium tabular-nums text-muted-foreground text-center leading-tight">
                           {period}
                         </span>
                       </div>
@@ -177,14 +264,14 @@ export default function SchedulePage() {
                                 className={`rounded-lg border p-2 h-full flex flex-col gap-0.5 ${subjectStyle(slot.subject)} ${isToday ? "shadow-sm" : ""}`}
                               >
                                 <p className="text-xs font-bold leading-tight">{slot.subject}</p>
-                                <p className="text-[10px] opacity-80 leading-tight">{slot.teacher}</p>
-                                <p className="text-[10px] opacity-70 leading-tight hidden md:block">
+                                <p className="text-xs opacity-80 leading-tight">{slot.teacher}</p>
+                                <p className="text-xs opacity-70 leading-tight hidden md:block">
                                   {slot.room}
                                 </p>
                               </div>
                             ) : (
                               <div className="rounded-lg border border-dashed border-gray-200 p-2 h-full flex items-center justify-center min-h-[52px]">
-                                <span className="text-[10px] text-muted-foreground">—</span>
+                                <span className="text-xs text-muted-foreground">—</span>
                               </div>
                             )}
                           </div>

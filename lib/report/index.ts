@@ -8,3 +8,4 @@
 export * from "./theme";
 export * from "./constancia";
 export * from "./libreta";
+export * from "./horario";

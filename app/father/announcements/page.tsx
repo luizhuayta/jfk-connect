@@ -65,54 +65,40 @@ export default function AnnouncementsPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-primary">Avisos</h1>
-          <p className="text-muted-foreground mt-1">Comunicados de la institución</p>
+          <h1 className="text-2xl font-bold tracking-tight text-on-surface lg:text-3xl">Avisos</h1>
+          <p className="mt-1.5 text-sm text-on-surface-variant">
+            Comunicados de dirección y tutoría
+          </p>
         </div>
         {unreadCount > 0 && (
-          <div className="flex items-center gap-2 bg-primary/5 border border-primary/10 rounded-xl px-4 py-2">
-            <Bell className="h-4 w-4 text-primary" aria-hidden />
-            <span className="text-sm font-semibold text-primary">
-              {unreadCount} sin leer
-            </span>
-          </div>
+          <p className="text-sm font-semibold text-primary">
+            {unreadCount} sin leer
+          </p>
         )}
       </div>
 
-      {/* Resumen por categoría + filtro (un solo control: antes las tarjetas y
-          los tabs peleaban por el mismo estado y se contradecían). */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <button
-          onClick={() => setFilter("all")}
-          aria-pressed={filter === "all"}
-          className={`rounded-xl border p-4 text-left transition-all hover:shadow-sm bg-primary/5 border-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-            filter === "all" ? "ring-2 ring-primary" : ""
-          }`}
+      <div>
+        <label htmlFor="aviso-filtro" className="sr-only">
+          Filtrar avisos
+        </label>
+        <select
+          id="aviso-filtro"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as "all" | AnnouncementCategory)}
+          className="h-11 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 text-sm font-semibold text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <Bell className="h-5 w-5 mb-2 text-primary" aria-hidden />
-          <p className="text-xl font-bold text-primary">{announcements.length}</p>
-          <p className="text-xs font-medium text-primary">Todos</p>
-        </button>
-        {CATEGORIES.map((cat) => {
-          const cfg = CATEGORY_CONFIG[cat];
-          const count = announcements.filter((a) => a.category === cat).length;
-          const Icon = cfg.icon;
-          return (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              aria-pressed={filter === cat}
-              className={`rounded-xl border p-4 text-left transition-all hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cfg.bg} ${cfg.border} ${
-                filter === cat ? "ring-2 ring-primary" : ""
-              }`}
-            >
-              <Icon className={`h-5 w-5 mb-2 ${cfg.text}`} aria-hidden />
-              <p className={`text-xl font-bold ${cfg.text}`}>{count}</p>
-              <p className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</p>
-            </button>
-          );
-        })}
+          <option value="all">Todos ({announcements.length})</option>
+          {CATEGORIES.map((cat) => {
+            const count = announcements.filter((a) => a.category === cat).length;
+            return (
+              <option key={cat} value={cat}>
+                {CATEGORY_CONFIG[cat].label} ({count})
+              </option>
+            );
+          })}
+        </select>
       </div>
 
       {/* Announcements list */}
@@ -171,11 +157,11 @@ export default function AnnouncementsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Badge className={`text-[11px] font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                          <Badge className={`text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
                             {cfg.label}
                           </Badge>
                           {!aviso.read && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-primary">
                               <span className="h-2 w-2 rounded-full bg-primary" aria-hidden />
                               Sin leer
                             </span>

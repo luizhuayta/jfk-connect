@@ -4,7 +4,7 @@ import { GraduationCap, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
- * Estado vacío único para "no tienes hijos vinculados".
+ * Estado vacío único para "no tiene hijos vinculados".
  *
  * Antes existían tres versiones distintas del mismo mensaje (dashboard,
  * Mis Hijos y `ChildSelector`), cada una con su propio color de botón y su
@@ -26,17 +26,17 @@ export default function NoChildrenState({
         <GraduationCap className="h-7 w-7 text-primary" aria-hidden />
       </div>
       <p className="mt-4 text-sm font-semibold text-foreground">
-        Aún no tienes hijos vinculados
+        Aún no tiene hijos vinculados
       </p>
-      <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
-        Usa el código de matrícula de tu hijo para vincularlo y seguir sus notas,
+      <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+        Use el código de matrícula de su hijo para vincularlo y seguir sus notas,
         asistencia y materiales de clase.
       </p>
       <Button
         onClick={onAddChild}
-        className="mt-5 h-10 gap-2 rounded-lg bg-primary font-semibold text-white hover:bg-primary-hover"
+        className="mt-5 h-11 gap-2 rounded-lg bg-primary font-semibold text-white hover:bg-primary-hover"
       >
-        <Plus className="h-4 w-4" aria-hidden /> Vincular a mi hijo
+        <Plus className="h-4 w-4" aria-hidden /> Vincular a su hijo
       </Button>
     </div>
   );

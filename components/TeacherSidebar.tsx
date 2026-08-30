@@ -9,6 +9,7 @@ import {
   Clock,
   FileBox,
   Bell,
+  Upload,
 } from "lucide-react";
 import AppSidebar, { type SidebarItem } from "@/components/layout/AppSidebar";
 import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
@@ -17,6 +18,7 @@ const GROUP_1: SidebarItem[] = [
   { href: "/teacher",               label: "Dashboard",  icon: LayoutDashboard, exact: true  },
   { href: "/teacher/courses",       label: "Mis Cursos", icon: BookOpen,       exact: false },
   { href: "/teacher/grades",        label: "Notas",      icon: FileText,       exact: false },
+  { href: "/teacher/imports",       label: "Importar notas", icon: Upload,     exact: false },
   { href: "/teacher/attendance",    label: "Asistencia", icon: Calendar,       exact: false },
   { href: "/teacher/schedule",      label: "Horario",    icon: Clock,          exact: false },
 ];

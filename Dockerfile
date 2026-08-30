@@ -64,6 +64,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Directorio para el volumen de uploads del importador de notas (IA). Tiene
+# que crearse aquí, con el owner correcto, ANTES de montar el volumen
+# nombrado: Docker solo copia el ownership del path de la imagen al
+# inicializar un volumen vacío, así que si el mkdir ocurriera después de
+# USER nextjs (o no ocurriera) el volumen quedaría root:root y el proceso
+# (uid 1001) fallaría con EACCES en la primera subida.
+RUN mkdir -p /app/uploads && chown -R nextjs:nodejs /app/uploads
+
 USER nextjs
 EXPOSE 3000
 

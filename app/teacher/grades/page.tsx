@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Save, Loader2 } from "lucide-react";
+import { Save, Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { useTeacherCourses } from "@/components/teacher/useTeacherCourses";
 import { useCompetencyGrid } from "@/components/grades/useCompetencyGrid";
+import { useConclusionsAi } from "@/components/grades/useConclusionsAi";
 import CompetencyGradeTable from "@/components/grades/CompetencyGradeTable";
+import GenerateConclusionsModal from "@/components/grades/GenerateConclusionsModal";
 import ScopeSelector, { type ScopeOption } from "@/components/grades/ScopeSelector";
 import BimesterTabs from "@/components/grades/BimesterTabs";
 import GradeSummaryCards from "@/components/grades/GradeSummaryCards";
@@ -57,6 +59,16 @@ export default function TeacherGradesPage() {
     [grid],
   );
 
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const conclusionsAi = useConclusionsAi({ scope, bimester: Number(bimester), applySuggestions: grid.applySuggestions });
+  const gradedStudentIds = useMemo(
+    () =>
+      grid.students
+        .filter((s) => grid.competencies.some((c) => grid.getEntry(s.id, c.id).score !== null))
+        .map((s) => s.id),
+    [grid],
+  );
+
   if (coursesLoading) return <LoadingState label="Cargando cursos..." />;
   if (coursesError) return <ErrorState message={coursesError} />;
   if (options.length === 0) {
@@ -75,14 +87,27 @@ export default function TeacherGradesPage() {
           <h1 className="text-3xl font-bold text-[#0F172A]">Notas</h1>
           <p className="text-muted-foreground mt-1">Registro de competencias por bimestre</p>
         </div>
-        <Button
-          onClick={grid.save}
-          disabled={grid.dirtyCount === 0 || grid.saving || grid.scope?.editable === false}
-          className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold"
-        >
-          {grid.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {grid.dirtyCount > 0 ? `Guardar (${grid.dirtyCount})` : "Guardar"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {conclusionsAi.aiAvailable && (
+            <Button
+              variant="outline"
+              onClick={() => setShowGenerateModal(true)}
+              disabled={grid.scope?.editable === false || gradedStudentIds.length === 0}
+              className="rounded-xl h-10 gap-2 font-semibold border-[#1E2A5E] text-[#1E2A5E] hover:bg-[#1E2A5E]/5"
+            >
+              <Sparkles className="h-4 w-4" />
+              Generar conclusiones
+            </Button>
+          )}
+          <Button
+            onClick={grid.save}
+            disabled={grid.dirtyCount === 0 || grid.saving || grid.scope?.editable === false}
+            className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold"
+          >
+            {grid.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {grid.dirtyCount > 0 ? `Guardar (${grid.dirtyCount})` : "Guardar"}
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -113,11 +138,25 @@ export default function TeacherGradesPage() {
                 readOnly={grid.scope?.editable === false}
                 onScoreChange={grid.setScore}
                 onConclusionChange={grid.setConclusion}
+                onGenerateConclusions={conclusionsAi.aiAvailable ? conclusionsAi.generateForStudent : undefined}
+                generatingFor={conclusionsAi.generatingFor}
               />
             </CardContent>
           </Card>
         </>
       )}
+
+      <GenerateConclusionsModal
+        open={showGenerateModal}
+        onClose={() => setShowGenerateModal(false)}
+        studentCount={gradedStudentIds.length}
+        generating={conclusionsAi.generatingBatch}
+        progress={conclusionsAi.progress}
+        onGenerate={async () => {
+          await conclusionsAi.generateForSection(gradedStudentIds);
+          setShowGenerateModal(false);
+        }}
+      />
     </div>
   );
 }

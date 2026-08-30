@@ -21,15 +21,27 @@ export default function LibretaTable({
 
   return (
     <div className="space-y-6">
-      <Table>
+      <Table className="table-fixed min-w-[40rem]">
+        <colgroup>
+          <col className="w-[36%]" />
+          <col className="w-16" />
+          <col className="w-16" />
+          <col className="w-16" />
+          <col className="w-16" />
+          <col />
+        </colgroup>
         <TableHeader>
-          <TableRow className="bg-[#1E2A5E] hover:bg-[#1E2A5E]">
-            <TableHead className="text-white text-xs font-semibold">Áreas curriculares y competencias</TableHead>
-            <TableHead className="text-white text-xs font-semibold text-center w-12">I</TableHead>
-            <TableHead className="text-white text-xs font-semibold text-center w-12">II</TableHead>
-            <TableHead className="text-white text-xs font-semibold text-center w-12">III</TableHead>
-            <TableHead className="text-white text-xs font-semibold text-center w-12">IV</TableHead>
-            <TableHead className="text-white text-xs font-semibold">Conclusión descriptiva</TableHead>
+          <TableRow className="bg-primary hover:bg-primary">
+            <TableHead className="text-white text-xs font-semibold whitespace-normal">
+              Áreas curriculares y competencias
+            </TableHead>
+            <TableHead className="text-white text-xs font-semibold text-center px-1">I</TableHead>
+            <TableHead className="text-white text-xs font-semibold text-center px-1">II</TableHead>
+            <TableHead className="text-white text-xs font-semibold text-center px-1">III</TableHead>
+            <TableHead className="text-white text-xs font-semibold text-center px-1">IV</TableHead>
+            <TableHead className="text-white text-xs font-semibold whitespace-normal">
+              Conclusión descriptiva
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -44,7 +56,15 @@ export default function LibretaTable({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Competencias transversales
           </p>
-          <Table>
+          <Table className="table-fixed min-w-[40rem]">
+            <colgroup>
+              <col className="w-[36%]" />
+              <col className="w-16" />
+              <col className="w-16" />
+              <col className="w-16" />
+              <col className="w-16" />
+              <col />
+            </colgroup>
             <TableBody>
               {transversal.map((area) => (
                 <LibretaAreaGroup key={area.id} area={area} activeBimester={activeBimester} />

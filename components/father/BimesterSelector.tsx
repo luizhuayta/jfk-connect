@@ -60,7 +60,7 @@ export default function BimesterTiles({
           >
             <p
               className={cn(
-                "text-[10px] font-semibold uppercase tracking-wide mb-1",
+                "text-xs font-semibold uppercase tracking-wide mb-1",
                 isActive ? "text-white/80" : "text-on-surface-variant",
               )}
             >
@@ -82,7 +82,7 @@ export default function BimesterTiles({
             </div>
             <p
               className={cn(
-                "text-[10px] mt-1 font-medium",
+                "text-xs mt-1 font-medium",
                 isActive ? "text-white/80" : "text-on-surface-variant",
               )}
             >

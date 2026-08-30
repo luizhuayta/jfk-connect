@@ -65,6 +65,10 @@ Copy `.env.example` → `.env`. For Gmail SMTP:
 
 Sentry is installed but inactive if `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` are empty.
 
+## AI module
+
+`AI_ENABLED=0` by default — the app works identically with it off. Provider-agnostic OpenAI-compatible adapter in `lib/ai/` (plain `fetch`, no SDK); switch providers via `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL_TEXT`/`AI_MODEL_VISION` only, see `.env.example`. Four features: AI-drafted grade conclusions (`POST /api/ai/conclusions`), the grade importer (Excel/CSV deterministic, photo via vision-as-OCR-only — `app/api/imports/grades/**`, `lib/imports/*`), the role-scoped conversational assistant (`POST /api/assistant/messages`, tools in `lib/ai/tools/*`), and course-assignment explanations on top of a deterministic engine (`lib/courses/assignment.ts`). All spend is logged to `ai_usage_log` (migration `00000000000010_ia.sql`), visible at `/admin/ai`. New migrations that must run against the already-seeded DB (not a fresh volume) go through `npm run migrate:apply` (see its own ledger table `schema_migrations`), not `docker:reset`.
+
 ## MCP note
 
 `opencode.json` configures a Supabase MCP. The app does **not** use Supabase REST for its database, so do not use that MCP to operate on app tables — it is only for docs or an external Supabase project.

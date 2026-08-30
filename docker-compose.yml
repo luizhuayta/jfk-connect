@@ -93,6 +93,37 @@ services:
       NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
       # Activar Sentry solo si el DSN está configurado (no rompe dev/tests sin él)
       NEXT_PUBLIC_SENTRY_ENABLED: ${NEXT_PUBLIC_SENTRY_ENABLED:-true}
+      # --- IA (módulo de tesis) ---
+      # AI_ENABLED=0 apaga TODA la IA; la app funciona idéntico sin proveedor.
+      # Ver .env.example para la lista completa y cómo cambiar de proveedor.
+      AI_ENABLED: ${AI_ENABLED:-0}
+      AI_BASE_URL: ${AI_BASE_URL:-https://openrouter.ai/api/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL_TEXT: ${AI_MODEL_TEXT:-deepseek/deepseek-chat}
+      AI_MODEL_VISION: ${AI_MODEL_VISION:-google/gemini-2.5-flash}
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-45000}
+      AI_MAX_RETRIES: ${AI_MAX_RETRIES:-2}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-1200}
+      AI_SUPPORTS_JSON_SCHEMA: ${AI_SUPPORTS_JSON_SCHEMA:-1}
+      AI_SUPPORTS_TOOLS: ${AI_SUPPORTS_TOOLS:-1}
+      AI_SUPPORTS_VISION: ${AI_SUPPORTS_VISION:-1}
+      AI_EXTRA_HEADERS: ${AI_EXTRA_HEADERS:-}
+      AI_DAILY_TOKEN_BUDGET: ${AI_DAILY_TOKEN_BUDGET:-2000000}
+      AI_LOG_PROMPTS: ${AI_LOG_PROMPTS:-0}
+      # --- Archivos subidos (importador de notas) ---
+      UPLOADS_DIR: ${UPLOADS_DIR:-/app/uploads}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}
+    volumes:
+      - uploads-data:/app/uploads
+    # DNS público explícito: el forwarder DNS interno de algunos entornos
+    # Podman rootless (10.89.0.1) resuelve nombres de servicios de
+    # docker-compose (p. ej. "db") pero no reenvía consultas a internet, lo
+    # que rompe las llamadas salientes al proveedor de IA (AI_BASE_URL). Sin
+    # afectar la resolución de "db" (sigue funcionando vía /etc/hosts que
+    # compose inyecta igual).
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       db:
         condition: service_healthy
@@ -173,6 +204,8 @@ volumes:
     name: ijfk-supabase-data
   pgadmin-data:
     name: ijfk-pgadmin-data
+  uploads-data:
+    name: ijfk-uploads
 
 # =============================================================================
 # Red interna

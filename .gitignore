@@ -51,4 +51,10 @@ dev-server.log
 .mcp.json
 .codex/
 .freebuff/
+.claude/
+.impeccable/
+
+# Archivos subidos fuera de Docker (dentro de Docker usan el volumen
+# nombrado ijfk-uploads — ver docker-compose.yml y UPLOADS_DIR)
+/uploads/
 

@@ -7,6 +7,7 @@ import { FatherStudentsProvider } from "@/components/father/useFatherStudents";
 import { AnnouncementsProvider } from "@/components/father/AnnouncementsProvider";
 import { SessionUserProvider } from "@/lib/useSessionUser";
 import { CurriculumProvider } from "@/lib/curriculum/client";
+import AssistantLauncher from "@/components/assistant/AssistantLauncher";
 
 /**
  * Layout del panel del padre.
@@ -46,6 +47,7 @@ export default function FatherLayout({
             >
               <FatherTopBar onMenuClick={() => setMobileOpen((v) => !v)} />
               {children}
+              <AssistantLauncher />
             </FatherSidebar>
           </AnnouncementsProvider>
         </FatherStudentsProvider>

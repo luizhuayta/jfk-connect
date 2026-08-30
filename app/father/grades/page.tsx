@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Download, Printer } from "lucide-react";
 import { toast } from "sonner";
 import BimesterTabs from "@/components/grades/BimesterTabs";
@@ -12,15 +12,21 @@ import AttendanceBlock from "@/components/libreta/AttendanceBlock";
 import { downloadLibreta, printLibreta } from "@/lib/report";
 import type { LibretaData, BimesterKey } from "@/lib/grades/libreta";
 import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
+import { CURRENT_BIMESTER, parseBimesterParam } from "@/lib/grades/bimesters";
 import { useFatherStudents } from "@/components/father/useFatherStudents";
 import { useCachedFatherResource } from "@/components/father/useCachedFatherResource";
 import ChildSelector from "@/components/father/ChildSelector";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
+import { paperCardClass } from "@/components/father/chrome";
+import { cn } from "@/lib/utils";
 
 const EMPTY_LIBRETA: LibretaData | null = null;
 
-export default function GradesPage() {
+function GradesPageInner() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const {
     students,
     loading,
@@ -29,8 +35,21 @@ export default function GradesPage() {
     activeStudentId,
     activeStudent: student,
   } = useFatherStudents();
-  const [activeBimester, setActiveBimester] = useState("1");
+  const [activeBimester, setActiveBimester] = useState(() =>
+    parseBimesterParam(searchParams.get("b")),
+  );
   const [busy, setBusy] = useState<"pdf" | "print" | null>(null);
+
+  useEffect(() => {
+    setActiveBimester(parseBimesterParam(searchParams.get("b")));
+  }, [searchParams]);
+
+  const selectBimester = (bimester: string) => {
+    setActiveBimester(parseBimesterParam(bimester));
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("b", bimester);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const { data: libreta, error, handleRetry } = useCachedFatherResource<LibretaData | null>({
     activeStudentId,
@@ -55,30 +74,32 @@ export default function GradesPage() {
     }
   };
 
-  if (loading) return <LoadingState label="Cargando notas..." />;
+  if (loading) return <LoadingState label="Cargando la libreta..." />;
 
   if (error) return <ErrorState message={error} onRetry={handleRetry} />;
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-primary">Notas</h1>
-        <p className="text-muted-foreground mt-1">
-          Informe de progreso de las competencias — {SCHOOL_YEAR_LABEL}
+        <h1 className="text-2xl font-bold tracking-tight text-on-surface lg:text-3xl">Libreta</h1>
+        <p className="mt-1.5 text-sm text-on-surface-variant">
+          Competencias y nivel de logro — {SCHOOL_YEAR_LABEL}
         </p>
       </div>
 
-      {/* Selector de hijo (selección compartida con el resto del panel) */}
       <ChildSelector />
 
       {students.length > 0 && libreta && (
         <>
-          <BimesterTabs active={activeBimester} onSelect={setActiveBimester} />
+          <BimesterTabs
+            active={activeBimester}
+            onSelect={selectBimester}
+            currentBimester={CURRENT_BIMESTER}
+            showOpenDots={false}
+          />
 
-          <Card className="border-none shadow-sm rounded-xl overflow-hidden">
-            <CardContent className="p-5 space-y-6">
-              <h2 className="text-base font-bold text-foreground">
+          <section className={cn(paperCardClass, "space-y-6 overflow-x-auto p-5")}>
+              <h2 className="text-base font-bold text-on-surface">
                 {student ? student.name : ""} — {libreta.student.grade} &quot;{libreta.student.section}&quot;
               </h2>
 
@@ -88,39 +109,45 @@ export default function GradesPage() {
 
               <LibretaLegend legend={libreta.legend} />
 
-              {/* Actions */}
               <div className="flex flex-wrap gap-3">
                 <Button
                   onClick={() => handleLibreta("pdf")}
                   disabled={busy !== null}
                   variant="outline"
-                  className="rounded-lg border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors gap-2"
+                  className="h-11 rounded-lg border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors gap-2"
                 >
                   {busy === "pdf" ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                   ) : (
                     <Download className="h-4 w-4" aria-hidden />
                   )}
-                  Descargar Libreta PDF
+                  Descargar PDF
                 </Button>
                 <Button
                   onClick={() => handleLibreta("print")}
                   disabled={busy !== null}
-                  variant="outline"
-                  className="rounded-lg border-primary/20 text-primary hover:bg-primary hover:text-white transition-colors gap-2"
+                  variant="ghost"
+                  className="h-11 rounded-lg text-on-surface-variant hover:text-on-surface gap-2"
                 >
                   {busy === "print" ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                   ) : (
                     <Printer className="h-4 w-4" aria-hidden />
                   )}
-                  Imprimir Reporte
+                  Imprimir
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+          </section>
         </>
       )}
     </div>
+  );
+}
+
+export default function GradesPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Cargando la libreta..." />}>
+      <GradesPageInner />
+    </Suspense>
   );
 }

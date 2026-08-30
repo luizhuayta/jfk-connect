@@ -11,6 +11,14 @@ export type BimesterLabel = (typeof BIMESTERS)[number];
 /** Bimestre por defecto al abrir la grilla de captura. */
 export const CURRENT_BIMESTER = 2;
 
+/** Query `?b=` o fallback al bimestre lectivo actual. */
+export function parseBimesterParam(raw: string | null | undefined): BimesterLabel {
+  if (raw && (BIMESTERS as readonly string[]).includes(raw)) {
+    return raw as BimesterLabel;
+  }
+  return String(CURRENT_BIMESTER) as BimesterLabel;
+}
+
 /**
  * Bimestres 1 y 2 abiertos a captura; 3 y 4 bloqueados (aún no llega el
  * calendario lectivo a esa altura). Única fuente — la usan tanto el cliente

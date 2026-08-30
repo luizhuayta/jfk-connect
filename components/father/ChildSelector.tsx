@@ -27,7 +27,10 @@ export default function ChildSelector() {
         <ClaimChildModal
           open={claimOpen}
           onClose={() => setClaimOpen(false)}
-          onClaimed={() => reload()}
+          onClaimed={(student) => {
+            selectStudent(student.id);
+            reload();
+          }}
         />
       </>
     );
@@ -40,6 +43,7 @@ export default function ChildSelector() {
         return (
           <button
             key={s.id}
+            type="button"
             onClick={() => selectStudent(s.id)}
             aria-pressed={isActive}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${

@@ -36,6 +36,24 @@ type FatherStudentsValue = {
   selectStudent: (studentId: string) => void;
 };
 
+const STORAGE_KEY = "ijfk_father_active_student";
+
+function readStoredId(): string | null {
+  try {
+    return sessionStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredId(id: string) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    /* private mode */
+  }
+}
+
 const FatherStudentsContext = createContext<FatherStudentsValue | null>(null);
 
 /**
@@ -55,7 +73,18 @@ export function FatherStudentsProvider({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const active = useRef(true);
+
+  useEffect(() => {
+    setSelectedId(readStoredId());
+    setHydrated(true);
+  }, []);
+
+  const selectStudent = useCallback((studentId: string) => {
+    setSelectedId(studentId);
+    writeStoredId(studentId);
+  }, []);
 
   const fetchStudents = useCallback(async () => {
     try {
@@ -82,6 +111,14 @@ export function FatherStudentsProvider({
     };
   }, [fetchStudents]);
 
+  useEffect(() => {
+    if (!hydrated || students.length === 0) return;
+    if (selectedId && students.some((s) => s.id === selectedId)) return;
+    const next = students[0].id;
+    setSelectedId(next);
+    writeStoredId(next);
+  }, [hydrated, students, selectedId]);
+
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -102,9 +139,9 @@ export function FatherStudentsProvider({
       reload,
       activeStudentId,
       activeStudent: students.find((s) => s.id === activeStudentId) ?? null,
-      selectStudent: setSelectedId,
+      selectStudent,
     };
-  }, [students, loading, error, reload, selectedId]);
+  }, [students, loading, error, reload, selectedId, selectStudent]);
 
   return (
     <FatherStudentsContext.Provider value={value}>

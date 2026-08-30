@@ -5,6 +5,7 @@ import TeacherNavbar from "@/components/TeacherNavbar";
 import TeacherSidebar from "@/components/TeacherSidebar";
 import { TeacherCoursesProvider } from "@/components/teacher/useTeacherCourses";
 import { CurriculumProvider } from "@/lib/curriculum/client";
+import AssistantLauncher from "@/components/assistant/AssistantLauncher";
 
 export default function TeacherLayout({
   children,
@@ -24,6 +25,7 @@ export default function TeacherLayout({
           >
             {children}
           </TeacherSidebar>
+          <AssistantLauncher />
         </div>
       </TeacherCoursesProvider>
     </CurriculumProvider>

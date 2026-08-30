@@ -17,22 +17,29 @@ export default function LibretaAreaGroup({
 }) {
   return (
     <Fragment>
-      <TableRow className="bg-gray-100 hover:bg-gray-100">
-        <TableCell colSpan={6} className="text-xs font-bold text-[#1E2A5E] uppercase tracking-wide py-2">
+      <TableRow className="bg-surface-container-low hover:bg-surface-container-low">
+        <TableCell
+          colSpan={6}
+          className="py-2 text-xs font-bold uppercase tracking-wide text-primary whitespace-normal"
+        >
           {area.name}
         </TableCell>
       </TableRow>
       {area.competencies.map((c) => {
         const active = c.bimesters[activeBimester];
         return (
-          <TableRow key={c.id} className="hover:bg-gray-50/50">
-            <TableCell className="text-sm text-[#0F172A] py-2.5 max-w-[220px]">{c.name}</TableCell>
+          <TableRow key={c.id} className="hover:bg-surface-container-low/70">
+            <TableCell className="py-2.5 text-sm text-on-surface whitespace-normal break-words">
+              {c.name}
+            </TableCell>
             {([1, 2, 3, 4] as const).map((b) => (
-              <TableCell key={b} className="text-center py-2.5">
-                <LevelBadge level={c.bimesters[b].level} />
+              <TableCell key={b} className="px-1 py-2.5 text-center whitespace-normal">
+                <span className="inline-flex justify-center">
+                  <LevelBadge level={c.bimesters[b].level} compact />
+                </span>
               </TableCell>
             ))}
-            <TableCell className="text-xs text-muted-foreground py-2.5 whitespace-normal break-words max-w-[220px]">
+            <TableCell className="py-2.5 text-xs text-on-surface-variant whitespace-normal break-words">
               {active.conclusion || "—"}
             </TableCell>
           </TableRow>

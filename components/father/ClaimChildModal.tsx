@@ -33,7 +33,7 @@ export default function ClaimChildModal({
 
   async function handleSubmit() {
     if (!code.trim()) {
-      setError("Ingresa el código de matrícula.");
+      setError("Ingrese el código de matrícula.");
       return;
     }
     setLoading(true);
@@ -76,7 +76,7 @@ export default function ClaimChildModal({
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 id="claim-child-title" className="text-xl font-bold text-primary">
-            Vincular a tu hijo
+            Vincular a su hijo
           </h2>
           <ModalCloseButton onClose={handleClose} disabled={loading} />
         </div>
@@ -88,7 +88,7 @@ export default function ClaimChildModal({
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 mb-3">
                 <CheckCircle2 className="h-8 w-8 text-emerald-600" />
               </div>
-              <p className="text-sm text-muted-foreground">¡Hijo vinculado!</p>
+              <p className="text-sm text-muted-foreground">Ya puede ver la jornada de hoy.</p>
               <p className="text-lg font-bold text-foreground mt-1">{success.name}</p>
               <Badge className="mt-2 bg-primary/10 text-primary text-xs font-semibold">
                 {success.grade} &quot;{success.section}&quot;
@@ -96,7 +96,7 @@ export default function ClaimChildModal({
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleClose} className="flex-1">
-                Ver panel
+                Ver la jornada de hoy
               </Button>
               {canAddMore && (
                 <Button
@@ -112,9 +112,9 @@ export default function ClaimChildModal({
           /* Input state */
           <>
             <p className="text-sm text-muted-foreground">
-              Ingresa el <strong>código de matrícula</strong> que el colegio te
-              entregó físicamente. Lo encuentras en la ficha de matrícula o
-              constancia del alumno.
+              Ingrese el <strong>código de matrícula</strong> que el colegio le
+              entregó en papel. Lo encuentra en la ficha de matrícula o
+              constancia del alumno. El ejemplo de abajo no es un código real.
             </p>
 
             <div className="space-y-2">
@@ -130,7 +130,7 @@ export default function ClaimChildModal({
                     setError(null);
                   }}
                   onKeyDown={(e) => e.key === "Enter" && !loading && handleSubmit()}
-                  placeholder="Ej: 2026-2A-0042"
+                  placeholder="Ejemplo: 2026-2A-0042"
                   className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground font-mono"
                   disabled={loading}
                   autoFocus
@@ -164,8 +164,8 @@ export default function ClaimChildModal({
             <p className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-2">
               <GraduationCap className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
               <span>
-                ¿No tienes el código? Acércate a Secretaría del colegio (lunes a
-                viernes de 8:00 a 13:00 hrs) para obtenerlo.
+                ¿No tiene el código? Acérquese a Secretaría del colegio (lunes a
+                viernes de 8:00 a 13:00) para obtenerlo.
               </span>
             </p>
           </>

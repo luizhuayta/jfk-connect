@@ -2,7 +2,11 @@
  * GET /api/admin/teachers
  *
  * Lista docentes, opcionalmente filtrados por asignatura.
- *   ?subject=Matemáticas → solo docentes de esa asignatura.
+ *   ?subject=Matemáticas → solo docentes de esa asignatura (legacy, TEXT libre).
+ *   ?areaId=10 → solo docentes de esa área curricular (clave semántica
+ *     post-migración 008; ver lib/courses/assignment.ts::areaMatches).
+ * Ambos son aditivos — ninguno reemplaza al otro, para no romper llamadores
+ * existentes que todavía usan `?subject=`.
  *
  * Seguridad: solo rol 'admin'.
  */
@@ -18,6 +22,7 @@ interface TeacherRow {
   full_name: string;
   email: string;
   subject: string | null;
+  area_id: number | null;
   shift_preference: string | null;
   is_active: boolean;
   courses_count: number;
@@ -30,6 +35,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const subject = searchParams.get("subject");
+    const areaIdRaw = searchParams.get("areaId");
+    const areaId = areaIdRaw !== null && Number.isInteger(Number(areaIdRaw)) ? Number(areaIdRaw) : null;
 
     const where: string[] = [`u.role = 'docente'`];
     const params: unknown[] = [];
@@ -38,6 +45,10 @@ export async function GET(request: NextRequest) {
       params.push(subject);
       where.push(`u.subject = $${params.length}`);
     }
+    if (areaId !== null) {
+      params.push(areaId);
+      where.push(`u.area_id = $${params.length}`);
+    }
 
     const r = await query<TeacherRow>(
       `SELECT
@@ -45,6 +56,7 @@ export async function GET(request: NextRequest) {
          u.full_name,
          u.email,
          u.subject,
+         u.area_id,
          u.shift_preference,
          u.is_active,
          (SELECT COUNT(*) FROM courses c WHERE c.teacher_id = u.id)::int AS courses_count

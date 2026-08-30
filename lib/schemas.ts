@@ -145,6 +145,55 @@ export const saveCompetencyGradesSchema = z.object({
   entries: z.array(competencyGradeEntrySchema).min(1).max(2000),
 });
 
+/** POST /api/imports/grades (multipart, campos no-archivo) — mismo scope que saveCompetencyGradesSchema. z.coerce porque FormData entrega todo como string. */
+export const importUploadFieldsSchema = z.object({
+  bimester: z.coerce.number().int().min(1).max(4),
+  courseId: z.string().min(1).optional(),
+  grade: z.string().min(1).optional(),
+  section: z.string().min(1).optional(),
+  transversal: z.coerce.boolean().optional(),
+});
+
+/** PATCH /api/imports/grades/[jobId]/rows/[rowId] — corrección manual en la UI de revisión. */
+export const patchImportRowSchema = z.object({
+  matchedStudentId: z.string().min(1).nullable().optional(),
+  status: z.enum(["ok", "omitido"]).optional(),
+  cells: z
+    .array(
+      z.object({
+        competencyId: z.number().int().positive(),
+        score: z.number().min(0).max(20).nullable(),
+      }),
+    )
+    .max(8)
+    .optional(),
+});
+
+/** POST /api/imports/grades/[jobId]/commit */
+export const commitImportSchema = z.object({
+  ignoreUnmatched: z.boolean().default(false),
+  overwriteExisting: z.boolean().default(false),
+});
+
+/** POST /api/assistant/messages */
+export const assistantMessageSchema = z.object({
+  conversationId: z.string().uuid().optional(),
+  message: nonEmpty("El mensaje").max(1000, "El mensaje no puede superar 1000 caracteres."),
+});
+
+/** POST /api/ai/conclusions — genera borradores de conclusión descriptiva con IA. Mismo scope que saveCompetencyGradesSchema (courseId, o grade+section+transversal). */
+export const generateConclusionsSchema = z.object({
+  bimester: z.number().int().min(1).max(4),
+  courseId: z.string().min(1).optional(),
+  grade: z.string().min(1).optional(),
+  section: z.string().min(1).optional(),
+  transversal: z.boolean().optional(),
+  studentIds: z.array(z.string().min(1)).min(1, "Selecciona al menos un alumno.").max(12, "Máximo 12 alumnos por solicitud."),
+  competencyIds: z.array(z.number().int().positive()).max(8).optional(),
+  tone: z.enum(["formal", "cercano"]).default("formal"),
+  maxChars: z.number().int().min(80).max(400).default(220),
+});
+
 /** /api/teacher/courses/[courseId]/attendance (POST) */
 const attendanceStatusEnum = z.enum(["A", "F", "T", "J"]);
 
@@ -239,6 +288,15 @@ export const createSectionSchema = z.object({
 export const createEnrollmentSchema = z.object({
   studentId: z.string().min(1, "El alumno es obligatorio."),
 });
+
+/** /api/admin/courses/assign (POST) — asigna/reasigna un docente a un curso. Antes vivía inline en la ruta. */
+export const assignCourseTeacherSchema = z.object({
+  courseId: z.string().min(1, "courseId es obligatorio."),
+  teacherId: z.string().min(1, "teacherId es obligatorio."),
+});
+
+/** /api/admin/courses/assign/explain (POST) — mismo shape que assignCourseTeacherSchema. */
+export const explainAssignmentSchema = assignCourseTeacherSchema;
 
 /** /api/admin/schedule (PATCH) — mover entradas de horario (drag-and-drop) */
 const scheduleDayEnum = z.enum(

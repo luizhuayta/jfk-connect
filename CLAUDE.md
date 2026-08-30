@@ -35,9 +35,11 @@ Seed de datos demo (idempotente) y hasheo de contraseñas:
 npm run seed:full        # Puebla la BD (docker compose exec app npm run seed)
 npm run seed:clean       # Limpia y vuelve a sembrar
 npm run hash-passwords   # Hashea contraseñas de usuarios seed si faltó
+npm run migrate:apply    # Aplica migraciones nuevas SIN perder los datos sembrados (ver §Base de datos)
+npm run migrate:status   # Lista migraciones aplicadas/pendientes
 ```
 
-Credenciales demo: `admin@ijfk.edu.pe` / `docente1@ijfk.edu.pe` / `padre1@ijfk.edu.pe` — contraseña `Demo2026!`.
+Credenciales demo — contraseña `Demo2026!` para todas: `admin@ijfk.edu.pe` (admin) y docentes con el patrón `d<codigo-area><NN>@ijfk.edu.pe` (p. ej. `ddpcc01@ijfk.edu.pe`, `dmat01@ijfk.edu.pe` — ver `curricular_areas.code` para los prefijos, o `SELECT email FROM users WHERE role='docente' LIMIT 5`). **No hay padres sembrados** — se registran solos vía `/register` y luego vinculan un hijo con el `enrollment_code` de un alumno (`SELECT enrollment_code FROM students LIMIT 1`).
 
 ## Arquitectura
 
@@ -65,8 +67,8 @@ Sistema de gestión académica del Colegio John F. Kennedy (Chincha) con 3 panel
 > Nota: `lib/constants.ts` define roles en inglés (`father/teacher/admin`) — es un vestigio del mock inicial. Los roles canónicos en la BD y el middleware son `admin | docente | padre`.
 
 ### Base de datos
-- Migraciones SQL en `supabase/migrations/*.sql` se aplican **automáticamente al primer arranque del contenedor** vía `docker-entrypoint-initdb.d`. No hay herramienta de migraciones; solo se ejecutan en un volumen nuevo. Cambios de esquema → nueva migración SQL numerada, no editar las existentes (aunque son idempotentes con `IF NOT EXISTS`).
-- Tablas principales: `users`, `students`, `courses`, `grades`, `attendance`, `enrollments`, `announcements`. La letra de calificación (A/B/C/D) la calcula un trigger de BD y se replica en TS en `lib/letter-grade.ts` (mismo criterio: A=18-20, B=15-17, C=10-14, D=0-9).
+- Migraciones SQL en `supabase/migrations/*.sql` se aplican **automáticamente al primer arranque del contenedor** vía `docker-entrypoint-initdb.d` (solo en un volumen nuevo). Para aplicar una migración nueva sobre una BD **ya sembrada** (sin perder los datos de `npm run seed:full`), usa `npm run migrate:apply` (`npm run migrate:status` para ver qué falta) — lleva su propio ledger (`schema_migrations`) con auto-baseline. Cambios de esquema → nueva migración SQL numerada, no editar las existentes (aunque son idempotentes con `IF NOT EXISTS`).
+- Tablas principales: `users`, `students`, `courses`, `attendance`, `enrollments`, `announcements`. Las notas son por **competencia** (libreta SIAGIE): `curricular_areas` → `competencies` → `competency_grades` (nivel de logro AD/A/B/C 0-20, generado por la función SQL `nivel_logro()` y espejado en TS en `lib/grades/scale.ts`). La tabla `grades` (modelo plano viejo, letra A/B/C/D) fue renombrada a `grades_legacy` y ya no la usa la app.
 - `lib/db.ts` expone `query`, `queryOne` y `withTransaction` (pool global singleton, evita duplicar conexiones en dev).
 
 ### Patrones de las API routes
@@ -74,6 +76,11 @@ Las route handlers siguen este patrón consistente (ver `app/api/auth/login/rout
 
 ### Diseño visual
 Paleta institucional consistente en las 23 páginas: azul `#1E2A5E` (primary), dorado `#F4C15C` (acentos), con estados verde/ámbar/rojo/azul-claro por semántica (asistencia, aprobaciones, faltas, justificaciones). Patrones: día destacado con ring + barra dorada + `● HOY`, `border-l-4` por estado, chips de letter grade, expansión animada (`max-h-96/0 transition-all`).
+
+### Módulo de IA
+Cuatro funciones sobre una capa de proveedor agnóstica (`lib/ai/`, adaptador OpenAI-compatible por `fetch` — OpenRouter/DeepSeek/xAI/Groq/Google, sin SDK): (1) **conclusiones descriptivas** generadas para la libreta (`POST /api/ai/conclusions`, se integran en `useCompetencyGrid`/`ConclusionsRow` como sugerencias que el docente revisa y guarda con el flujo normal); (2) **importador de notas** por Excel/CSV/foto (`app/api/imports/grades/**`, `lib/imports/*` — la IA de visión solo hace OCR, el matching de alumnos y la validación son deterministas); (3) **asistente conversacional** por rol (`POST /api/assistant/messages`, herramientas en `lib/ai/tools/*` — las del padre reciben un índice sobre sus hijos, nunca un `studentId`, resuelto en el servidor antes de invocar al modelo); (4) **asignación inteligente de cursos** (`lib/courses/assignment.ts`, motor determinista; la IA solo redacta la justificación en `POST /api/admin/courses/assign/explain`).
+
+`AI_ENABLED=0` (default) apaga toda la IA sin romper nada más — ver `.env.example`. Todo el gasto se audita en `ai_usage_log` (migración 010), visible en `/admin/ai`. `lib/ai/redact.ts` aplica la política de anonimización (nunca DNI/email/apellidos completos hacia el proveedor) — dato sensible por tratarse de menores de edad.
 
 ## Errores comunes al arrancar
 - **La app no conecta a BD:** esperar 10-15s a que Postgres inicialice migraciones; verificar `docker compose exec db pg_isready -U supabase_admin`.

@@ -4,6 +4,7 @@ import { useState } from "react";
 import AdminNavbar from "@/components/AdminNavbar";
 import AdminSidebar from "@/components/AdminSidebar";
 import { CurriculumProvider } from "@/lib/curriculum/client";
+import AssistantLauncher from "@/components/assistant/AssistantLauncher";
 
 export default function AdminLayout({
   children,
@@ -19,6 +20,7 @@ export default function AdminLayout({
         <AdminSidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)}>
           {children}
         </AdminSidebar>
+        <AssistantLauncher />
       </div>
     </CurriculumProvider>
   );

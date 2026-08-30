@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
+import AssignSuggestions from "@/components/admin/courses/AssignSuggestions";
 
 type AdminSection = {
   id: string; grade: string; gradeNum: number; section: string;
@@ -23,10 +24,6 @@ type Course = {
   studentsTotal: number;
 };
 
-type Teacher = {
-  id: string; full_name: string; subject: string | null;
-  shift_preference: string | null; is_active: boolean; courses_count: number;
-};
 
 const GRADES = ["1ro", "2do", "3ro", "4to", "5to"];
 
@@ -54,12 +51,10 @@ export default function AdminCoursesPage() {
   const [expandedGrades, setExpandedGrades] = useState<Set<string>>(new Set(["1ro"]));
   const [selectedSection, setSelectedSection] = useState<AdminSection | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [assigning, setAssigning] = useState<string | null>(null);
-  const [assignMsg, setAssignMsg] = useState<string | null>(null);
+  const [aiAvailable, setAiAvailable] = useState(false);
 
   // ─── Sprint 7: alta de sección ─────────────────────────────────────────────
   const [showNew, setShowNew] = useState(false);
@@ -90,6 +85,18 @@ export default function AdminCoursesPage() {
     const t = setTimeout(() => { void loadSections(); }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/ai/health");
+        const data = await r.json();
+        setAiAvailable(Boolean(data.ok && data.enabled));
+      } catch {
+        setAiAvailable(false);
+      }
+    })();
   }, []);
 
   // Letras A-M aún no usadas para el grado elegido
@@ -134,7 +141,6 @@ export default function AdminCoursesPage() {
   const loadCourses = async (sec: AdminSection) => {
     setSelectedSection(sec);
     setLoadingCourses(true);
-    setAssignMsg(null);
     try {
       const r = await fetch(`/api/admin/courses?grade=${sec.grade}&section=${sec.section}`);
       const data = await r.json();
@@ -147,44 +153,12 @@ export default function AdminCoursesPage() {
     }
   };
 
-  const loadTeachers = async (subject: string) => {
-    try {
-      const r = await fetch(`/api/admin/teachers?subject=${encodeURIComponent(subject)}`);
-      const data = await r.json();
-      if (data.ok) setTeachers(data.teachers);
-    } catch {
-      setTeachers([]);
-    }
-  };
-
   function toggleGrade(g: string) {
     setExpandedGrades((prev) => { const n = new Set(prev); n.has(g) ? n.delete(g) : n.add(g); return n; });
   }
 
-  async function handleAssign(courseId: string, teacherId: string) {
-    if (!teacherId) return;
-    setAssigning(courseId);
-    setAssignMsg(null);
-    try {
-      const r = await fetch("/api/admin/courses/assign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId, teacherId }),
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setAssignMsg(data.message);
-      // Actualizar el curso en la lista
-      setCourses((prev) => prev.map((c) =>
-        c.id === courseId
-          ? { ...c, teacherId, teacherName: teachers.find((t) => t.id === teacherId)?.full_name ?? null }
-          : c
-      ));
-    } catch (err) {
-      setAssignMsg(err instanceof Error ? err.message : "Error al asignar");
-    } finally {
-      setAssigning(null);
-    }
+  function handleAssigned(courseId: string, teacherId: string, teacherName: string) {
+    setCourses((prev) => prev.map((c) => (c.id === courseId ? { ...c, teacherId, teacherName } : c)));
   }
 
   const totalSections = sections.length;
@@ -304,12 +278,6 @@ export default function AdminCoursesPage() {
                   <Badge className="bg-[#1E2A5E]/10 text-[#1E2A5E] text-xs">{courses.length} cursos</Badge>
                 </div>
 
-                {assignMsg && (
-                  <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                    <CheckCircle2 className="h-4 w-4" /> {assignMsg}
-                  </div>
-                )}
-
                 <div className="space-y-2">
                   {courses.map((course) => (
                     <div key={course.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
@@ -331,26 +299,13 @@ export default function AdminCoursesPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {assigning === course.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-[#1E2A5E]" />
-                        ) : (
-                          <select
-                            value={course.teacherId ?? ""}
-                            onChange={(e) => {
-                              handleAssign(course.id, e.target.value);
-                              loadTeachers(course.subject);
-                            }}
-                            onClick={() => loadTeachers(course.subject)}
-                            className="h-8 px-2 text-xs rounded-md border border-gray-200 bg-white text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 min-w-[160px]"
-                          >
-                            <option value="">{course.teacherName ?? "Asignar docente..."}</option>
-                            {teachers.filter((t) => t.is_active).map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.full_name} ({t.courses_count} cursos)
-                              </option>
-                            ))}
-                          </select>
-                        )}
+                        <AssignSuggestions
+                          courseId={course.id}
+                          courseName={course.subject}
+                          currentTeacherName={course.teacherName}
+                          aiAvailable={aiAvailable}
+                          onAssigned={(teacherId, teacherName) => handleAssigned(course.id, teacherId, teacherName)}
+                        />
                       </div>
                     </div>
                   ))}

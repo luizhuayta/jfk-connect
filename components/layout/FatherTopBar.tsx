@@ -57,7 +57,7 @@ export default function FatherTopBar({
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white ring-1 ring-white/40 overflow-hidden shrink-0">
             <Image
               src="/Image/logo.jpg"
-              alt=""
+              alt="Escudo del Colegio Industrial John F. Kennedy"
               width={36}
               height={36}
               className="object-cover"
@@ -68,7 +68,7 @@ export default function FatherTopBar({
             <span className="text-sm font-bold text-white tracking-tight">
               Colegio IJFK
             </span>
-            <span className="text-[10px] text-white/70">
+            <span className="text-xs text-white/70">
               Panel de padres
             </span>
           </div>
@@ -81,14 +81,15 @@ export default function FatherTopBar({
       {/* Avisos */}
       <Link
         href="/father/announcements"
-        className="relative p-2 rounded-full hover:bg-white/10 transition-colors shrink-0"
+        className="relative flex items-center gap-2 rounded-full px-2 py-2 hover:bg-white/10 transition-colors shrink-0"
         aria-label={
           unreadCount > 0 ? `${unreadCount} avisos sin leer` : "Avisos"
         }
       >
         <Bell className="h-5 w-5 text-white" aria-hidden />
+        <span className="hidden text-xs font-semibold text-white sm:inline">Avisos</span>
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-primary/70">
+          <span className="absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white ring-2 ring-primary/70 sm:static sm:ring-0">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
