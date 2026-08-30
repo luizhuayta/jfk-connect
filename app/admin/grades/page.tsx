@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Save, Loader2, Pencil, Eye, Sparkles } from "lucide-react";
@@ -10,15 +10,14 @@ import { useCompetencyGrid } from "@/components/grades/useCompetencyGrid";
 import { useConclusionsAi } from "@/components/grades/useConclusionsAi";
 import CompetencyGradeTable from "@/components/grades/CompetencyGradeTable";
 import GenerateConclusionsModal from "@/components/grades/GenerateConclusionsModal";
-import ScopeSelector, { type ScopeOption } from "@/components/grades/ScopeSelector";
+import ScopeSelector from "@/components/grades/ScopeSelector";
 import BimesterTabs from "@/components/grades/BimesterTabs";
 import GradeSummaryCards from "@/components/grades/GradeSummaryCards";
 import { CURRENT_BIMESTER } from "@/lib/grades/bimesters";
-import { encodeScope, decodeScope } from "@/lib/grades/scopeValue";
+import { decodeScope } from "@/lib/grades/scopeValue";
 import { computeGridStats } from "@/lib/grades/stats";
-
-type AdminCourseOption = { id: string; subject: string; grade: string; section: string };
-type SectionOption = { grade: string; section: string };
+import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
+import { useAdminCourseScopes } from "@/lib/admin/useAdminCourses";
 
 /**
  * Vista del admin: misma grilla que el docente (CompetencyGradeTable), en
@@ -29,46 +28,10 @@ type SectionOption = { grade: string; section: string };
  * del servidor ya lo permite para el rol admin).
  */
 export default function AdminGradesPage() {
-  const [courses, setCourses] = useState<AdminCourseOption[]>([]);
-  const [sections, setSections] = useState<SectionOption[]>([]);
-  const [coursesLoading, setCoursesLoading] = useState(true);
-  const [coursesError, setCoursesError] = useState<string | null>(null);
+  const { options, loading: coursesLoading, error: coursesError, reload: reloadCourses } = useAdminCourseScopes();
   const [scopeRaw, setScopeRaw] = useState<string | null>(null);
   const [bimester, setBimester] = useState(String(CURRENT_BIMESTER));
   const [editMode, setEditMode] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      setCoursesLoading(true);
-      setCoursesError(null);
-      try {
-        const r = await fetch("/api/admin/courses");
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
-        setCourses(data.courses);
-        setSections(data.sections ?? []);
-      } catch (err) {
-        setCoursesError(err instanceof Error ? err.message : "Error cargando cursos");
-      } finally {
-        setCoursesLoading(false);
-      }
-    })();
-  }, []);
-
-  const options: ScopeOption[] = useMemo(
-    () => [
-      ...courses.map((c) => ({
-        value: encodeScope({ type: "course", courseId: c.id }),
-        label: `${c.subject} · ${c.grade} "${c.section}"`,
-      })),
-      ...sections.map((s) => ({
-        value: encodeScope({ type: "transversal", grade: s.grade, section: s.section }),
-        label: `${s.grade} "${s.section}"`,
-        group: "Competencias transversales",
-      })),
-    ],
-    [courses, sections],
-  );
 
   const activeRaw = scopeRaw ?? options[0]?.value ?? null;
   const scope = useMemo(() => (activeRaw ? decodeScope(activeRaw) : null), [activeRaw]);
@@ -96,14 +59,14 @@ export default function AdminGradesPage() {
   );
 
   if (coursesLoading) return <LoadingState label="Cargando cursos..." />;
-  if (coursesError) return <ErrorState message={coursesError} />;
+  if (coursesError) return <ErrorState message={coursesError} onRetry={reloadCourses} />;
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-[#0F172A]">Notas</h1>
-          <p className="text-muted-foreground mt-1">Registro académico por curso y bimestre · Año Lectivo 2026</p>
+          <p className="text-muted-foreground mt-1">Registro académico por curso y bimestre · {SCHOOL_YEAR_LABEL}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button

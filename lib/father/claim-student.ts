@@ -8,10 +8,10 @@
 
 import { withTransaction } from "@/lib/db";
 import { rateLimit, rateLimitHeaders, type RateLimitConfig } from "@/lib/rate-limit";
+import { MAX_CHILDREN } from "@/lib/father/limits";
 
 export { extractEnrollmentCode, redactEnrollmentCodes } from "@/lib/father/enrollment-code";
-
-export const MAX_CHILDREN = 5;
+export { MAX_CHILDREN };
 
 /** Mismo mensaje para código inexistente y código ya vinculado (anti-enumeración). */
 export const CLAIM_GENERIC_ERROR =

@@ -17,11 +17,15 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query, withTransaction } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
-import { assertSameOrigin } from "@/lib/csrf";
 import { createEnrollmentSchema } from "@/lib/schemas";
-import { logger } from "@/lib/logger";
+import { parseQuery, enrollmentsListQuerySchema } from "@/lib/admin/params";
+import {
+  guardAdmin,
+  guardAdminMutation,
+  internalError,
+  uniqueConflict,
+} from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -50,17 +54,50 @@ interface CountRow {
   total: number;
 }
 
+interface KpiRow {
+  total: number;
+  regular: number;
+  condicional: number;
+  pendiente: number;
+  completo: number;
+  parcial: number;
+  pay_pendiente: number;
+  total_apafa: number;
+  total_actividades: number;
+}
+
+function mapEnrollment(row: EnrollmentRow) {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    studentName: row.student_name,
+    initials: row.initials,
+    dni: row.dni,
+    grade: row.grade,
+    section: row.section,
+    code: row.code,
+    year: row.year,
+    enrolledAt: row.enrolled_at,
+    enrollmentStatus: row.status,
+    docsTotal: row.docs_total,
+    docsSubmitted: row.docs_submitted,
+    apafaPaid: row.apafa_paid,
+    apafaAmount: row.apafa_amount,
+    actividadesPaid: row.actividades_paid,
+    actividadesAmount: row.actividades_amount,
+    lastPaymentDate: row.last_payment_date,
+  };
+}
+
 export async function GET(request: NextRequest) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
-  try {
-    const { searchParams } = new URL(request.url);
-    const q = searchParams.get("q");
+  const [filters, invalid] = parseQuery(request, enrollmentsListQuerySchema);
+  if (invalid) return invalid;
 
-    // Paginación
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
+  try {
+    const { q, status, pay, page, limit } = filters;
     const offset = (page - 1) * limit;
 
     const where: string[] = [];
@@ -71,99 +108,111 @@ export async function GET(request: NextRequest) {
       const i = params.length;
       where.push(`(LOWER(s.full_name) LIKE $${i} OR s.dni LIKE $${i})`);
     }
+    if (status !== "all") {
+      params.push(status);
+      where.push(`e.status = $${params.length}`);
+    }
+    if (pay === "completo") {
+      where.push(`e.apafa_paid AND e.actividades_paid`);
+    } else if (pay === "parcial") {
+      where.push(`(e.apafa_paid OR e.actividades_paid) AND NOT (e.apafa_paid AND e.actividades_paid)`);
+    } else if (pay === "pendiente") {
+      where.push(`NOT e.apafa_paid AND NOT e.actividades_paid`);
+    }
 
     const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
 
-    // Total
-    const countR = await query<CountRow>(
-      `SELECT COUNT(*)::int AS total
-       FROM enrollments e JOIN students s ON s.id = e.student_id
-       ${whereClause}`,
-      params,
-    );
-    const total = countR.rows[0]?.total ?? 0;
-    const totalPages = Math.ceil(total / limit) || 1;
-
-    // Datos paginados
-    const dataParams = [...params];
-    dataParams.push(limit);
-    const limitIdx = dataParams.length;
-    dataParams.push(offset);
+    const dataParams = [...params, limit, offset];
+    const limitIdx = dataParams.length - 1;
     const offsetIdx = dataParams.length;
 
-    const r = await query<EnrollmentRow>(
-      `SELECT
-         e.id,
-         e.student_id,
-         e.code,
-         e.year,
-         e.status::text AS status,
-         e.docs_total,
-         e.docs_submitted,
-         e.apafa_paid,
-         e.apafa_amount::float AS apafa_amount,
-         e.actividades_paid,
-         e.actividades_amount::float AS actividades_amount,
-         to_char(e.last_payment_date, 'YYYY-MM-DD') AS last_payment_date,
-         s.full_name AS student_name,
-         COALESCE(s.initials, UPPER(LEFT(s.full_name, 1))) AS initials,
-         s.dni,
-         s.grade,
-         s.section,
-         to_char(e.created_at, 'YYYY-MM-DD') AS enrolled_at
-       FROM enrollments e
-       JOIN students s ON s.id = e.student_id
-       ${whereClause}
-       ORDER BY s.grade, s.section, s.full_name
-       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-      dataParams,
-    );
+    const [countR, kpiR, r] = await Promise.all([
+      query<CountRow>(
+        `SELECT COUNT(*)::int AS total
+         FROM enrollments e JOIN students s ON s.id = e.student_id
+         ${whereClause}`,
+        params,
+      ),
+      query<KpiRow>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE e.status = 'regular')::int AS regular,
+           COUNT(*) FILTER (WHERE e.status = 'condicional')::int AS condicional,
+           COUNT(*) FILTER (WHERE e.status = 'pendiente')::int AS pendiente,
+           COUNT(*) FILTER (WHERE e.apafa_paid AND e.actividades_paid)::int AS completo,
+           COUNT(*) FILTER (
+             WHERE (e.apafa_paid OR e.actividades_paid)
+               AND NOT (e.apafa_paid AND e.actividades_paid)
+           )::int AS parcial,
+           COUNT(*) FILTER (WHERE NOT e.apafa_paid AND NOT e.actividades_paid)::int AS pay_pendiente,
+           COALESCE(SUM(CASE WHEN e.apafa_paid THEN e.apafa_amount ELSE 0 END), 0)::float AS total_apafa,
+           COALESCE(SUM(CASE WHEN e.actividades_paid THEN e.actividades_amount ELSE 0 END), 0)::float AS total_actividades
+         FROM enrollments e`,
+      ),
+      query<EnrollmentRow>(
+        `SELECT
+           e.id,
+           e.student_id,
+           e.code,
+           e.year,
+           e.status::text AS status,
+           e.docs_total,
+           e.docs_submitted,
+           e.apafa_paid,
+           e.apafa_amount::float AS apafa_amount,
+           e.actividades_paid,
+           e.actividades_amount::float AS actividades_amount,
+           to_char(e.last_payment_date, 'YYYY-MM-DD') AS last_payment_date,
+           s.full_name AS student_name,
+           COALESCE(s.initials, UPPER(LEFT(s.full_name, 1))) AS initials,
+           s.dni,
+           s.grade,
+           s.section,
+           to_char(e.created_at, 'YYYY-MM-DD') AS enrolled_at
+         FROM enrollments e
+         JOIN students s ON s.id = e.student_id
+         ${whereClause}
+         ORDER BY s.grade, s.section, s.full_name
+         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+        dataParams,
+      ),
+    ]);
+
+    const total = countR.rows[0]?.total ?? 0;
+    const kpi = kpiR.rows[0] ?? {
+      total: 0, regular: 0, condicional: 0, pendiente: 0,
+      completo: 0, parcial: 0, pay_pendiente: 0,
+      total_apafa: 0, total_actividades: 0,
+    };
 
     return NextResponse.json({
       ok: true,
-      enrollments: r.rows.map((row) => ({
-        id: row.id,
-        studentId: row.student_id,
-        studentName: row.student_name,
-        initials: row.initials,
-        dni: row.dni,
-        grade: row.grade,
-        section: row.section,
-        code: row.code,
-        year: row.year,
-        enrolledAt: row.enrolled_at,
-        enrollmentStatus: row.status,
-        docsTotal: row.docs_total,
-        docsSubmitted: row.docs_submitted,
-        apafaPaid: row.apafa_paid,
-        apafaAmount: row.apafa_amount,
-        actividadesPaid: row.actividades_paid,
-        actividadesAmount: row.actividades_amount,
-        lastPaymentDate: row.last_payment_date,
-      })),
+      enrollments: r.rows.map(mapEnrollment),
+      counts: {
+        total: kpi.total,
+        regular: kpi.regular,
+        condicional: kpi.condicional,
+        pendiente: kpi.pendiente,
+        completo: kpi.completo,
+        parcial: kpi.parcial,
+        payPendiente: kpi.pay_pendiente,
+        totalApafa: kpi.total_apafa,
+        totalActividades: kpi.total_actividades,
+      },
       pagination: {
         page,
         limit,
         total,
-        totalPages,
+        totalPages: Math.ceil(total / limit) || 1,
       },
     });
   } catch (err) {
-    logger.error({ err, route: "admin/enrollments" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/enrollments");
   }
 }
 
-// ─── POST: generar matrícula para un alumno existente ────────────────────────
-
 export async function POST(request: NextRequest) {
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   const [parsed, validationError] = await parseBody(
@@ -176,7 +225,6 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await withTransaction(async (client) => {
-      // 1. Alumno existe y está activo
       const stR = await client.query<{
         id: string;
         full_name: string;
@@ -199,7 +247,6 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      // 2. ¿Ya tiene matrícula este año?
       const yearR = await client.query<{ year: number }>(
         "SELECT EXTRACT(YEAR FROM now())::int AS year",
       );
@@ -216,8 +263,6 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      // 3. Siguiente correlativo del año (máximo entre matrículas y códigos
-      //    ya asignados a alumnos, ambos comparten el formato <año>-...-<seq>)
       const seqR = await client.query<{ next: number }>(
         `SELECT COALESCE(MAX(seq), 0) + 1 AS next
          FROM (
@@ -234,7 +279,6 @@ export async function POST(request: NextRequest) {
       const seq = seqR.rows[0].next;
       const code = `${year}-${student.grade_num}${student.section}-${String(seq).padStart(4, "0")}`;
 
-      // 4. Crear la matrícula
       const insR = await client.query<{ id: string; code: string; year: number }>(
         `INSERT INTO enrollments (student_id, code, year, status, docs_total, docs_submitted)
          VALUES ($1, $2, $3, 'pendiente', 7, 0)
@@ -242,7 +286,6 @@ export async function POST(request: NextRequest) {
         [studentId, code, year],
       );
 
-      // 5. Asignar el código al alumno si aún no tenía (para reclamo del apoderado)
       if (!student.enrollment_code) {
         await client.query(
           "UPDATE students SET enrollment_code = $1, updated_at = now() WHERE id = $2",
@@ -273,10 +316,11 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (err) {
-    logger.error({ err, route: "admin/enrollments POST" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
+    const conflict = uniqueConflict(
+      err,
+      "No se pudo generar la matrícula: el código o el alumno ya están registrados.",
     );
+    if (conflict) return conflict;
+    return internalError(err, "admin/enrollments POST");
   }
 }

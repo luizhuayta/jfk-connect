@@ -5,15 +5,13 @@
  *   ?subject=Matemáticas → solo docentes de esa asignatura (legacy, TEXT libre).
  *   ?areaId=10 → solo docentes de esa área curricular (clave semántica
  *     post-migración 008; ver lib/courses/assignment.ts::areaMatches).
- * Ambos son aditivos — ninguno reemplaza al otro, para no romper llamadores
- * existentes que todavía usan `?subject=`.
  *
  * Seguridad: solo rol 'admin'.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { guardAdmin, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +27,7 @@ interface TeacherRow {
 }
 
 export async function GET(request: NextRequest) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
   try {
@@ -59,8 +57,13 @@ export async function GET(request: NextRequest) {
          u.area_id,
          u.shift_preference,
          u.is_active,
-         (SELECT COUNT(*) FROM courses c WHERE c.teacher_id = u.id)::int AS courses_count
+         COALESCE(cc.courses_count, 0)::int AS courses_count
        FROM users u
+       LEFT JOIN (
+         SELECT teacher_id, COUNT(*)::int AS courses_count
+         FROM courses
+         GROUP BY teacher_id
+       ) cc ON cc.teacher_id = u.id
        WHERE ${where.join(" AND ")}
        ORDER BY u.subject, u.full_name`,
       params,
@@ -68,10 +71,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ ok: true, teachers: r.rows });
   } catch (err) {
-    console.error("[admin/teachers GET] Error:", err);
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/teachers GET");
   }
 }

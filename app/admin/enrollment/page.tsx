@@ -1,17 +1,30 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, CheckCircle2, AlertTriangle, XCircle, Search, Plus, MoreHorizontal, CalendarDays, Loader2, Eye, Wallet, X, Hash, Copy } from "lucide-react";
+import { FileText, CheckCircle2, AlertTriangle, XCircle, Search, Plus, MoreHorizontal, CalendarDays, Loader2, Eye, Wallet, Hash, Copy } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Modal, { ModalCloseButton } from "@/components/ui/modal";
+import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
+import { apiGet, apiSend } from "@/lib/client/api";
+import { formatAdminDate } from "@/lib/admin/theme";
+import { useAdminResource, useDebouncedValue, type AdminPagination } from "@/lib/admin/useAdminList";
+import {
+  AdminPageHeader,
+  FilterPills,
+  PaginationBar,
+  SearchInput,
+  StatCard,
+  StatCardGrid,
+} from "@/components/admin/shared";
 
 type Enrollment = {
   id: string; studentId: string; studentName: string; initials: string; dni: string;
@@ -26,33 +39,62 @@ type Enrollment = {
 type StatusFilter = "all" | "regular" | "condicional" | "pendiente";
 type PayFilter = "all" | "completo" | "parcial" | "pendiente";
 
+type EnrollmentCounts = {
+  total: number;
+  regular: number;
+  condicional: number;
+  pendiente: number;
+  completo: number;
+  parcial: number;
+  payPendiente: number;
+  totalApafa: number;
+  totalActividades: number;
+};
+
+const EMPTY_COUNTS: EnrollmentCounts = {
+  total: 0, regular: 0, condicional: 0, pendiente: 0,
+  completo: 0, parcial: 0, payPendiente: 0, totalApafa: 0, totalActividades: 0,
+};
+
 const STATUS_META = {
   regular: { label: "Regular", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   condicional: { label: "Condicional", cls: "bg-amber-100 text-amber-700 border-amber-200" },
   pendiente: { label: "Pendiente", cls: "bg-red-100 text-red-600 border-red-200" },
 };
 
-function payStatus(e: Enrollment): "completo" | "parcial" | "pendiente" {
-  if (e.apafaPaid && e.actividadesPaid) return "completo";
-  if (e.apafaPaid || e.actividadesPaid) return "parcial";
-  return "pendiente";
-}
-function fmtDate(iso: string) { return new Date(iso + "T12:00:00").toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" }); }
-
 type StudentHit = { id: string; name: string; dni: string; grade: string; section: string };
 type EditDraft = { status: "regular" | "condicional" | "pendiente"; docsSubmitted: number; apafaPaid: boolean; actividadesPaid: boolean };
 
+function parseEnrollments(d: Record<string, unknown> & { ok: true }) {
+  return {
+    enrollments: (d.enrollments ?? []) as Enrollment[],
+    pagination: d.pagination as AdminPagination,
+    counts: (d.counts as EnrollmentCounts | undefined) ?? EMPTY_COUNTS,
+  };
+}
+
 export default function AdminEnrollmentPage() {
-  const [items, setItems] = useState<Enrollment[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
+  const debouncedQuery = useDebouncedValue(query, 300);
 
-  // ─── Sprint 7: nueva matrícula + acciones por fila ─────────────────────────
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", "50");
+  if (debouncedQuery) params.set("q", debouncedQuery);
+  if (statusFilter !== "all") params.set("status", statusFilter);
+  if (payFilter !== "all") params.set("pay", payFilter);
+
+  const { data, loading, error, reload } = useAdminResource(
+    `/api/admin/enrollments?${params}`,
+    parseEnrollments,
+  );
+  const items = data?.enrollments ?? [];
+  const pagination = data?.pagination ?? { page: 1, limit: 50, total: 0, totalPages: 1 };
+  const counts = data?.counts ?? EMPTY_COUNTS;
+
   const [showNew, setShowNew] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [hits, setHits] = useState<StudentHit[]>([]);
@@ -68,57 +110,27 @@ export default function AdminEnrollmentPage() {
   const [editError, setEditError] = useState("");
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
-  const loadEnrollments = async (targetPage: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set("page", String(targetPage));
-      params.set("limit", "50");
-      if (query) params.set("q", query);
-      const r = await fetch(`/api/admin/enrollments?${params}`);
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setItems(data.enrollments);
-      setPagination(data.pagination);
-      setPage(targetPage);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { loadEnrollments(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => {
-    const t = setTimeout(() => loadEnrollments(1), 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-  useEffect(() => {
-    // El query se lee en el cliente (window): usar useSearchParams rompería el
-    // prerender estático de la build (missing-suspense-with-csr-bailout).
     if (new URLSearchParams(window.location.search).get("nueva") === "1") {
       openNew();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Buscar alumnos activos para el modal de nueva matrícula (debounce)
+  const debouncedSearchQ = useDebouncedValue(searchQ, 300);
   useEffect(() => {
-    const t = setTimeout(async () => {
-      if (!showNew || searchQ.trim().length < 2) { setHits([]); return; }
-      setSearching(true);
-      try {
-        const r = await fetch(`/api/admin/students?status=activo&limit=8&q=${encodeURIComponent(searchQ.trim())}`);
-        const data = await r.json();
-        if (data.ok) setHits(data.students.map((s: { id: string; name: string; dni: string; grade: string; section: string }) => ({ id: s.id, name: s.name, dni: s.dni, grade: s.grade, section: s.section })));
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [searchQ, showNew]);
+    if (!showNew || debouncedSearchQ.trim().length < 2) { setHits([]); return; }
+    const ac = new AbortController();
+    setSearching(true);
+    apiGet(`/api/admin/students?status=activo&limit=8&q=${encodeURIComponent(debouncedSearchQ.trim())}`, { signal: ac.signal })
+      .then((data) => {
+        const students = (data.students as { id: string; name: string; dni: string; grade: string; section: string }[]) ?? [];
+        setHits(students.map((s) => ({ id: s.id, name: s.name, dni: s.dni, grade: s.grade, section: s.section })));
+      })
+      .catch(() => { if (!ac.signal.aborted) setHits([]); })
+      .finally(() => { if (!ac.signal.aborted) setSearching(false); });
+    return () => ac.abort();
+  }, [debouncedSearchQ, showNew]);
 
   function openNew() {
     setSearchQ("");
@@ -134,15 +146,10 @@ export default function AdminEnrollmentPage() {
     setSaving(true);
     setFormError("");
     try {
-      const r = await fetch("/api/admin/enrollments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: selected.id }),
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setCreated({ code: data.enrollment.code, studentName: data.enrollment.studentName });
-      await loadEnrollments(1);
+      const data = await apiSend("/api/admin/enrollments", "POST", { studentId: selected.id });
+      const enrollment = data.enrollment as { code: string; studentName: string };
+      setCreated({ code: enrollment.code, studentName: enrollment.studentName });
+      reload();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Error al generar la matrícula");
     } finally {
@@ -161,17 +168,11 @@ export default function AdminEnrollmentPage() {
     setEditSaving(true);
     setEditError("");
     try {
-      const r = await fetch(`/api/admin/enrollments/${editTarget.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editDraft),
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
+      await apiSend(`/api/admin/enrollments/${editTarget.id}`, "PATCH", editDraft);
       setEditTarget(null);
       setEditDraft(null);
       setActionMsg(`Matrícula ${editTarget.code} actualizada.`);
-      await loadEnrollments(page);
+      reload();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Error al actualizar");
     } finally {
@@ -179,35 +180,17 @@ export default function AdminEnrollmentPage() {
     }
   }
 
-  const counts = useMemo(() => ({
-    regular: items.filter((e) => e.enrollmentStatus === "regular").length,
-    condicional: items.filter((e) => e.enrollmentStatus === "condicional").length,
-    pendiente: items.filter((e) => e.enrollmentStatus === "pendiente").length,
-    completo: items.filter((e) => payStatus(e) === "completo").length,
-    parcial: items.filter((e) => payStatus(e) === "parcial").length,
-    payPendiente: items.filter((e) => payStatus(e) === "pendiente").length,
-    totalApafa: items.filter((e) => e.apafaPaid).length * 50,
-    totalActividades: items.filter((e) => e.actividadesPaid).length * 30,
-  }), [items]);
-
-  const filtered = useMemo(() => items.filter((e) => {
-    if (statusFilter !== "all" && e.enrollmentStatus !== statusFilter) return false;
-    if (payFilter !== "all" && payStatus(e) !== payFilter) return false;
-    return true;
-  }), [items, statusFilter, payFilter]);
-
-  if (loading) { return <LoadingState label="Cargando matrículas..." />; }
-  if (error) { return <ErrorState message={error} onRetry={() => loadEnrollments(1)} />; }
-
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[#0F172A]">Matrículas y Pagos</h1>
-          <p className="text-muted-foreground mt-1">Estado de matrícula y contribuciones APAFA · Año Lectivo 2026</p>
-        </div>
-        <Button onClick={openNew} className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold"><Plus className="h-4 w-4" />Nueva matrícula</Button>
-      </div>
+      <AdminPageHeader
+        title="Matrículas y Pagos"
+        subtitle={`Estado de matrícula y contribuciones APAFA · ${SCHOOL_YEAR_LABEL}`}
+        action={
+          <Button onClick={openNew} className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold">
+            <Plus className="h-4 w-4" />Nueva matrícula
+          </Button>
+        }
+      />
 
       {actionMsg && (
         <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
@@ -215,21 +198,12 @@ export default function AdminEnrollmentPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "Matrículas regulares", value: counts.regular, icon: CheckCircle2, bg: "bg-emerald-50", text: "text-emerald-600" },
-          { label: "Condicionales", value: counts.condicional, icon: AlertTriangle, bg: "bg-amber-50", text: "text-amber-600" },
-          { label: "Pendientes", value: counts.pendiente, icon: XCircle, bg: "bg-red-50", text: "text-red-600" },
-          { label: "Pagos al día", value: counts.completo, icon: FileText, bg: "bg-blue-50", text: "text-[#2563EB]" },
-        ].map((s) => (
-          <Card key={s.label} className="border-none shadow-sm rounded-xl">
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-full ${s.bg} shrink-0`}><s.icon className={`h-5 w-5 ${s.text}`} /></div>
-              <div><p className="text-2xl font-bold text-[#0F172A]">{s.value}</p><p className="text-xs text-muted-foreground">{s.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <StatCardGrid>
+        <StatCard label="Matrículas regulares" value={counts.regular} icon={CheckCircle2} bg="bg-emerald-50" text="text-emerald-600" />
+        <StatCard label="Condicionales" value={counts.condicional} icon={AlertTriangle} bg="bg-amber-50" text="text-amber-600" />
+        <StatCard label="Pendientes" value={counts.pendiente} icon={XCircle} bg="bg-red-50" text="text-red-600" />
+        <StatCard label="Pagos al día" value={counts.completo} icon={FileText} bg="bg-blue-50" text="text-[#2563EB]" />
+      </StatCardGrid>
 
       <div className="rounded-xl bg-[#1E2A5E] px-6 py-4 flex items-center justify-between flex-wrap gap-4">
         <div>
@@ -243,24 +217,43 @@ export default function AdminEnrollmentPage() {
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-          {(["all", "regular", "condicional", "pendiente"] as StatusFilter[]).map((s) => (
-            <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${statusFilter === s ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>{s === "all" ? "Todos" : s}</button>
-          ))}
-        </div>
-        <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-          {(["all", "completo", "parcial", "pendiente"] as PayFilter[]).map((p) => (
-            <button key={p} onClick={() => setPayFilter(p)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${payFilter === p ? "bg-[#2563EB] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>{p === "all" ? "Todos los pagos" : p}</button>
-          ))}
-        </div>
-        <div className="relative ml-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input type="text" placeholder="Nombre o DNI..." value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 bg-white w-56 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E]" />
-        </div>
+        <FilterPills
+          value={statusFilter}
+          onChange={(s) => { setStatusFilter(s); setPage(1); }}
+          options={[
+            { value: "all", label: "Todos" },
+            { value: "regular", label: "regular" },
+            { value: "condicional", label: "condicional" },
+            { value: "pendiente", label: "pendiente" },
+          ]}
+        />
+        <FilterPills
+          value={payFilter}
+          onChange={(p) => { setPayFilter(p); setPage(1); }}
+          activeClass="bg-[#2563EB] text-white"
+          options={[
+            { value: "all", label: "Todos los pagos" },
+            { value: "completo", label: "completo" },
+            { value: "parcial", label: "parcial" },
+            { value: "pendiente", label: "pendiente" },
+          ]}
+        />
+        <SearchInput
+          value={query}
+          onChange={(v) => { setQuery(v); setPage(1); }}
+          placeholder="Nombre o DNI..."
+          label="Buscar matrículas"
+        />
       </div>
 
       <Card className="border-none shadow-sm rounded-xl overflow-hidden">
         <CardContent className="p-0">
+          {loading ? (
+            <LoadingState label="Cargando matrículas..." className="py-12" />
+          ) : error ? (
+            <ErrorState message={error} onRetry={reload} />
+          ) : (
+            <>
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 hover:bg-gray-50">
@@ -276,7 +269,7 @@ export default function AdminEnrollmentPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((e) => {
+              {items.map((e) => {
                 const smeta = STATUS_META[e.enrollmentStatus];
                 const docPct = e.docsTotal ? Math.round((e.docsSubmitted / e.docsTotal) * 100) : 0;
                 const isAtRisk = e.enrollmentStatus !== "regular" || !e.apafaPaid;
@@ -306,7 +299,7 @@ export default function AdminEnrollmentPage() {
                         : <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600"><AlertTriangle className="h-3.5 w-3.5" />Debe</span>}
                     </TableCell>
                     <TableCell className="text-center text-xs text-muted-foreground hidden lg:table-cell">
-                      {e.lastPaymentDate ? <span className="flex items-center gap-1 justify-center"><CalendarDays className="h-3 w-3" />{fmtDate(e.lastPaymentDate)}</span> : "—"}
+                      {e.lastPaymentDate ? <span className="flex items-center gap-1 justify-center"><CalendarDays className="h-3 w-3" />{formatAdminDate(e.lastPaymentDate)}</span> : "—"}
                     </TableCell>
                     <TableCell className="text-center pr-5">
                       <DropdownMenu>
@@ -328,122 +321,113 @@ export default function AdminEnrollmentPage() {
               })}
             </TableBody>
           </Table>
-          {filtered.length === 0 && <div className="py-12 text-center text-muted-foreground text-sm">No se encontraron registros con ese criterio</div>}
-          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
-            <p className="text-xs text-muted-foreground">Mostrando {filtered.length} de {pagination.total} matrículas</p>
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => loadEnrollments(page - 1)} className="h-8 px-3">← Anterior</Button>
-                <span className="text-xs text-muted-foreground font-medium">Página {page} de {pagination.totalPages}</span>
-                <Button variant="outline" size="sm" disabled={page >= pagination.totalPages || loading} onClick={() => loadEnrollments(page + 1)} className="h-8 px-3">Siguiente →</Button>
-              </div>
-            )}
-          </div>
+          {items.length === 0 && <div className="py-12 text-center text-muted-foreground text-sm">No se encontraron registros con ese criterio</div>}
+          <PaginationBar
+            page={page}
+            totalPages={pagination.totalPages}
+            shown={items.length}
+            total={pagination.total}
+            loading={loading}
+            onPage={setPage}
+            noun="matrículas"
+          />
+            </>
+          )}
         </CardContent>
       </Card>
 
-      {/* Modal: Nueva matrícula */}
-      {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1E2A5E]">Nueva matrícula</h2>
-              <button onClick={() => setShowNew(false)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
-            </div>
-
-            {created ? (
-              <div className="space-y-4">
-                <div className="flex flex-col items-center text-center py-2">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 mb-3">
-                    <CheckCircle2 className="h-7 w-7 text-emerald-600" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">Matrícula generada para</p>
-                  <p className="text-base font-bold text-[#0F172A] mt-0.5">{created.studentName}</p>
-                </div>
-                <div className="rounded-xl bg-[#1E2A5E]/5 border border-[#1E2A5E]/15 p-4 text-center">
-                  <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wide flex items-center justify-center gap-1"><Hash className="h-3 w-3" /> Código de matrícula</p>
-                  <p className="text-xl font-bold font-mono text-[#1E2A5E] mt-1">{created.code}</p>
-                  <button
-                    onClick={() => navigator.clipboard?.writeText(created.code)}
-                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
-                  >
-                    <Copy className="h-3 w-3" /> Copiar código
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Entrega este código al apoderado: lo usará para vincular a su hijo desde la app.
-                </p>
-                <Button onClick={() => setShowNew(false)} className="w-full bg-[#1E2A5E] text-white hover:bg-[#162043]">Listo</Button>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Buscar alumno (nombre o DNI)</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={searchQ}
-                      onChange={(e) => { setSearchQ(e.target.value); setSelected(null); setFormError(""); }}
-                      placeholder="Escribe al menos 2 caracteres..."
-                      className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
-                      autoFocus
-                    />
-                  </div>
-                </div>
-
-                <div className="min-h-28">
-                  {searching ? (
-                    <div className="py-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-[#1E2A5E]" /></div>
-                  ) : hits.length > 0 ? (
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {hits.map((h) => (
-                        <button
-                          key={h.id}
-                          onClick={() => { setSelected(h); setFormError(""); }}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border-2 text-left transition-all ${selected?.id === h.id ? "border-[#2563EB] bg-[#2563EB]/5" : "border-gray-100 hover:border-[#2563EB]/30"}`}
-                        >
-                          <div>
-                            <p className="text-sm font-semibold text-[#0F172A]">{h.name}</p>
-                            <p className="text-[11px] text-muted-foreground">DNI {h.dni}</p>
-                          </div>
-                          <Badge className="text-[10px] font-bold border-0 bg-[#1E2A5E]/10 text-[#1E2A5E] hover:bg-[#1E2A5E]/10">{h.grade} &quot;{h.section}&quot;</Badge>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="py-6 text-center text-xs text-muted-foreground">
-                      {searchQ.trim().length < 2 ? "Los resultados aparecerán aquí." : "Sin resultados con ese criterio."}
-                    </p>
-                  )}
-                </div>
-
-                {formError && <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>}
-
-                <div className="flex gap-2 pt-1">
-                  <Button variant="outline" onClick={() => setShowNew(false)} disabled={saving} className="flex-1">Cancelar</Button>
-                  <Button onClick={handleCreateEnrollment} disabled={saving || !selected} className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]">
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Generar matrícula"}
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
+      <Modal open={showNew} onClose={() => !saving && setShowNew(false)} titleId="new-enrollment-title" closable={!saving}>
+        <div className="flex items-center justify-between">
+          <h2 id="new-enrollment-title" className="text-xl font-bold text-[#1E2A5E]">Nueva matrícula</h2>
+          <ModalCloseButton onClose={() => setShowNew(false)} disabled={saving} />
         </div>
-      )}
+        {created ? (
+          <div className="space-y-4">
+            <div className="flex flex-col items-center text-center py-2">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 mb-3">
+                <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+              </div>
+              <p className="text-sm text-muted-foreground">Matrícula generada para</p>
+              <p className="text-base font-bold text-[#0F172A] mt-0.5">{created.studentName}</p>
+            </div>
+            <div className="rounded-xl bg-[#1E2A5E]/5 border border-[#1E2A5E]/15 p-4 text-center">
+              <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wide flex items-center justify-center gap-1"><Hash className="h-3 w-3" /> Código de matrícula</p>
+              <p className="text-xl font-bold font-mono text-[#1E2A5E] mt-1">{created.code}</p>
+              <button
+                onClick={() => navigator.clipboard?.writeText(created.code)}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
+              >
+                <Copy className="h-3 w-3" /> Copiar código
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Entrega este código al apoderado: lo usará para vincular a su hijo desde la app.
+            </p>
+            <Button onClick={() => setShowNew(false)} className="w-full bg-[#1E2A5E] text-white hover:bg-[#162043]">Listo</Button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              <label htmlFor="enroll-search" className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Buscar alumno (nombre o DNI)</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  id="enroll-search"
+                  type="search"
+                  value={searchQ}
+                  onChange={(e) => { setSearchQ(e.target.value); setSelected(null); setFormError(""); }}
+                  placeholder="Escribe al menos 2 caracteres..."
+                  className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="min-h-28">
+              {searching ? (
+                <div className="py-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-[#1E2A5E]" /></div>
+              ) : hits.length > 0 ? (
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {hits.map((h) => (
+                    <button
+                      key={h.id}
+                      onClick={() => { setSelected(h); setFormError(""); }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border-2 text-left transition-all ${selected?.id === h.id ? "border-[#2563EB] bg-[#2563EB]/5" : "border-gray-100 hover:border-[#2563EB]/30"}`}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-[#0F172A]">{h.name}</p>
+                        <p className="text-[11px] text-muted-foreground">DNI {h.dni}</p>
+                      </div>
+                      <Badge className="text-[10px] font-bold border-0 bg-[#1E2A5E]/10 text-[#1E2A5E] hover:bg-[#1E2A5E]/10">{h.grade} &quot;{h.section}&quot;</Badge>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-6 text-center text-xs text-muted-foreground">
+                  {searchQ.trim().length < 2 ? "Los resultados aparecerán aquí." : "Sin resultados con ese criterio."}
+                </p>
+              )}
+            </div>
+            {formError && <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>}
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" onClick={() => setShowNew(false)} disabled={saving} className="flex-1">Cancelar</Button>
+              <Button onClick={handleCreateEnrollment} disabled={saving || !selected} className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Generar matrícula"}
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
 
-      {/* Modal: Editar pagos */}
-      {editTarget && editDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+      <Modal open={!!editTarget && !!editDraft} onClose={() => { if (!editSaving) { setEditTarget(null); setEditDraft(null); } }} titleId="edit-pay-title" closable={!editSaving}>
+        {editTarget && editDraft && (
+          <>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-[#1E2A5E]">Editar pagos</h2>
+                <h2 id="edit-pay-title" className="text-xl font-bold text-[#1E2A5E]">Editar pagos</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">{editTarget.studentName} · <span className="font-mono">{editTarget.code}</span></p>
               </div>
-              <button onClick={() => { setEditTarget(null); setEditDraft(null); }} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+              <ModalCloseButton onClose={() => { setEditTarget(null); setEditDraft(null); }} disabled={editSaving} />
             </div>
-
             <div className="space-y-3">
               {([
                 { key: "apafaPaid" as const, label: "APAFA", amount: editTarget.apafaAmount },
@@ -460,45 +444,44 @@ export default function AdminEnrollmentPage() {
                     : <span className="inline-flex items-center gap-1 text-xs font-bold text-red-500"><XCircle className="h-4 w-4" /> Pendiente</span>}
                 </button>
               ))}
-
               <div className="flex items-center justify-between px-1 pt-1">
                 <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Documentos entregados</p>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setEditDraft((d) => d && { ...d, docsSubmitted: Math.max(0, d.docsSubmitted - 1) })} className="h-7 w-7 rounded-lg border border-gray-200 text-sm font-bold text-[#64748B] hover:bg-gray-50">−</button>
+                  <button type="button" onClick={() => setEditDraft((d) => d && { ...d, docsSubmitted: Math.max(0, d.docsSubmitted - 1) })} className="h-7 w-7 rounded-lg border border-gray-200 text-sm font-bold text-[#64748B] hover:bg-gray-50">−</button>
                   <span className="text-sm font-bold text-[#0F172A] w-8 text-center">{editDraft.docsSubmitted}/7</span>
-                  <button onClick={() => setEditDraft((d) => d && { ...d, docsSubmitted: Math.min(7, d.docsSubmitted + 1) })} className="h-7 w-7 rounded-lg border border-gray-200 text-sm font-bold text-[#64748B] hover:bg-gray-50">+</button>
+                  <button type="button" onClick={() => setEditDraft((d) => d && { ...d, docsSubmitted: Math.min(7, d.docsSubmitted + 1) })} className="h-7 w-7 rounded-lg border border-gray-200 text-sm font-bold text-[#64748B] hover:bg-gray-50">+</button>
                 </div>
               </div>
-
               <div className="space-y-1.5 px-1">
                 <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Estado de matrícula</p>
-                <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-                  {(["regular", "condicional", "pendiente"] as const).map((s) => (
-                    <button key={s} onClick={() => setEditDraft((d) => d && { ...d, status: s })} className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${editDraft.status === s ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>{s}</button>
-                  ))}
-                </div>
+                <FilterPills
+                  value={editDraft.status}
+                  onChange={(s) => setEditDraft((d) => d && { ...d, status: s })}
+                  options={[
+                    { value: "regular", label: "regular" },
+                    { value: "condicional", label: "condicional" },
+                    { value: "pendiente", label: "pendiente" },
+                  ]}
+                />
               </div>
             </div>
-
             {editError && <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{editError}</p>}
-
             <div className="flex gap-2 pt-1">
               <Button variant="outline" onClick={() => { setEditTarget(null); setEditDraft(null); }} disabled={editSaving} className="flex-1">Cancelar</Button>
               <Button onClick={handleSaveEdit} disabled={editSaving} className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]">
                 {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar cambios"}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
-      {/* Modal: Ver detalle */}
-      {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDetail(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} titleId="enrollment-detail-title">
+        {detail && (
+          <>
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1E2A5E]">Detalle de matrícula</h2>
-              <button onClick={() => setDetail(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+              <h2 id="enrollment-detail-title" className="text-xl font-bold text-[#1E2A5E]">Detalle de matrícula</h2>
+              <ModalCloseButton onClose={() => setDetail(null)} />
             </div>
             <div className="flex items-center gap-3">
               <Avatar className="h-12 w-12 shrink-0"><AvatarFallback className="bg-[#1E2A5E] text-white text-sm font-bold">{detail.initials}</AvatarFallback></Avatar>
@@ -511,16 +494,16 @@ export default function AdminEnrollmentPage() {
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Código</p><p className="font-mono font-semibold text-[#0F172A] mt-0.5">{detail.code}</p></div>
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Año</p><p className="font-semibold text-[#0F172A] mt-0.5">{detail.year}</p></div>
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Estado</p><p className="font-semibold text-[#0F172A] mt-0.5 capitalize">{detail.enrollmentStatus}</p></div>
-              <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Registrada</p><p className="font-semibold text-[#0F172A] mt-0.5">{fmtDate(detail.enrolledAt)}</p></div>
+              <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Registrada</p><p className="font-semibold text-[#0F172A] mt-0.5">{formatAdminDate(detail.enrolledAt)}</p></div>
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Documentos</p><p className="font-semibold text-[#0F172A] mt-0.5">{detail.docsSubmitted}/{detail.docsTotal}</p></div>
-              <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Último pago</p><p className="font-semibold text-[#0F172A] mt-0.5">{detail.lastPaymentDate ? fmtDate(detail.lastPaymentDate) : "—"}</p></div>
+              <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Último pago</p><p className="font-semibold text-[#0F172A] mt-0.5">{detail.lastPaymentDate ? formatAdminDate(detail.lastPaymentDate) : "—"}</p></div>
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">APAFA (S/ {detail.apafaAmount})</p><p className={`font-semibold mt-0.5 ${detail.apafaPaid ? "text-emerald-600" : "text-red-500"}`}>{detail.apafaPaid ? "Pagado" : "Pendiente"}</p></div>
               <div className="rounded-xl bg-gray-50 p-3"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Actividades (S/ {detail.actividadesAmount})</p><p className={`font-semibold mt-0.5 ${detail.actividadesPaid ? "text-emerald-600" : "text-red-500"}`}>{detail.actividadesPaid ? "Pagado" : "Pendiente"}</p></div>
             </div>
             <Button variant="outline" onClick={() => setDetail(null)} className="w-full">Cerrar</Button>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

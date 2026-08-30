@@ -15,14 +15,16 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { query, queryOne } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { query, withTransaction } from "@/lib/db";
 import { parseBody } from "@/lib/validate";
-import { assertSameOrigin } from "@/lib/csrf";
 import { createSectionSchema } from "@/lib/schemas";
-import { logger } from "@/lib/logger";
 import { fetchCatalog } from "@/lib/curriculum/server";
 import { SCHOOL_YEAR } from "@/lib/school-year";
+import {
+  guardAdmin,
+  guardAdminMutation,
+  internalError,
+} from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -39,16 +41,10 @@ interface SectionRow {
 }
 
 export async function GET(request: NextRequest) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
   try {
-    // avg_grade y attendance_rate se calculan UNA sola vez por sección (CTEs
-    // section_avg/section_attendance), no con una subconsulta correlacionada
-    // por cada una de las 65 secciones: eso obligaba a Postgres a reagregar
-    // competency_grades (127k filas) y attendance (133k filas) 65 veces cada
-    // uno — ~10s de respuesta. Con un solo GROUP BY por tabla y un LEFT JOIN
-    // a `keys`, la misma información sale en una sola pasada.
     const r = await query<SectionRow>(
       `WITH keys AS (
          SELECT s.grade, s.grade_num, s.section, s.shift::text AS shift
@@ -85,8 +81,6 @@ export async function GET(request: NextRequest) {
          JOIN users u ON u.id = t.teacher_id
          WHERE t.year = $1
        ),
-       -- Respaldo si una sección no tiene tutor de DPCC asignado todavía:
-       -- el docente del primer curso de esa sección.
        section_fallback_teacher AS (
          SELECT DISTINCT ON (c.grade, c.section) c.grade, c.section, u.full_name AS teacher
          FROM courses c
@@ -135,25 +129,12 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (err) {
-    console.error("[admin/sections GET] Error:", err);
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/sections GET");
   }
 }
 
-// ─── POST: crear sección (grado + sección + aula + turno) ────────────────────
-// Las áreas y sus horas ya no están hardcodeadas acá — se leen del catálogo
-// real (curricular_areas), fuente única compartida con el resto de la app
-// (ver lib/curriculum/). Las transversales no llevan curso propio (no tienen
-// grade/section: las califica el tutor de la sección, no un docente de área).
-
 export async function POST(request: NextRequest) {
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   const [parsed, validationError] = await parseBody(
@@ -165,65 +146,79 @@ export async function POST(request: NextRequest) {
   const { grade, section, shift, room } = parsed;
 
   try {
-    // Ya existe la sección (con alumnos o con cursos) → 409
-    const existing = await queryOne<{ found: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1 FROM students WHERE grade = $1 AND section = $2
-         UNION ALL
-         SELECT 1 FROM courses WHERE grade = $1 AND section = $2
-         LIMIT 1
-       ) AS found`,
-      [grade, section],
-    );
-    if (existing?.found) {
+    const { areas } = await fetchCatalog();
+    const courseAreas = areas.filter((a) => !a.isTransversal);
+    if (courseAreas.length === 0) {
+      return NextResponse.json(
+        { ok: false, error: "No hay áreas curriculares activas para crear cursos." },
+        { status: 400 },
+      );
+    }
+
+    const result = await withTransaction(async (client) => {
+      const existing = await client.query<{ found: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM students WHERE grade = $1 AND section = $2
+           UNION ALL
+           SELECT 1 FROM courses WHERE grade = $1 AND section = $2
+           LIMIT 1
+         ) AS found`,
+        [grade, section],
+      );
+      if (existing.rows[0]?.found) {
+        return { conflict: true as const };
+      }
+
+      const yearRow = await client.query<{ year: number; bimester: number | null }>(
+        `SELECT EXTRACT(YEAR FROM now())::int AS year,
+                (SELECT c.bimester FROM courses c
+                 WHERE c.year = EXTRACT(YEAR FROM now())::int
+                 ORDER BY c.created_at DESC LIMIT 1) AS bimester`,
+      );
+      const year = yearRow.rows[0]?.year ?? new Date().getFullYear();
+      const bimester = yearRow.rows[0]?.bimester ?? 1;
+      const classroom = room?.trim() || `Aula ${grade}-${section}`;
+
+      const values: string[] = [];
+      const params: unknown[] = [];
+      for (const a of courseAreas) {
+        params.push(a.name, grade, section, year, shift, classroom, bimester, a.hoursPerWeek, a.id);
+        const b = params.length;
+        values.push(`($${b - 8}, $${b - 7}, $${b - 6}, $${b - 5}, $${b - 4}, $${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
+      }
+
+      const ins = await client.query(
+        `INSERT INTO courses (name, grade, section, year, shift, classroom, bimester, hours_per_week, area_id)
+         VALUES ${values.join(", ")}
+         ON CONFLICT (name, grade, section, year) DO NOTHING
+         RETURNING id`,
+        params,
+      );
+
+      return {
+        conflict: false as const,
+        inserted: ins.rowCount ?? 0,
+        year,
+        classroom,
+      };
+    });
+
+    if (result.conflict || result.inserted === 0) {
       return NextResponse.json(
         { ok: false, error: `La sección ${grade} "${section}" ya existe.` },
         { status: 409 },
       );
     }
 
-    // Año lectivo y bimester actuales (mismo criterio que los cursos existentes)
-    const yearRow = await queryOne<{ year: number; bimester: number | null }>(
-      `SELECT EXTRACT(YEAR FROM now())::int AS year,
-              (SELECT c.bimester FROM courses c
-               WHERE c.year = EXTRACT(YEAR FROM now())::int
-               ORDER BY c.created_at DESC LIMIT 1) AS bimester`,
-    );
-    const year = yearRow?.year ?? new Date().getFullYear();
-    const bimester = yearRow?.bimester ?? 1;
-    const classroom = room?.trim() || `Aula ${grade}-${section}`;
-
-    const { areas } = await fetchCatalog();
-    const courseAreas = areas.filter((a) => !a.isTransversal);
-
-    const values: string[] = [];
-    const params: unknown[] = [];
-    for (const a of courseAreas) {
-      params.push(a.name, grade, section, year, shift, classroom, bimester, a.hoursPerWeek, a.id);
-      const b = params.length;
-      values.push(`($${b - 8}, $${b - 7}, $${b - 6}, $${b - 5}, $${b - 4}, $${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
-    }
-
-    await query(
-      `INSERT INTO courses (name, grade, section, year, shift, classroom, bimester, hours_per_week, area_id)
-       VALUES ${values.join(", ")}
-       ON CONFLICT (name, grade, section, year) DO NOTHING`,
-      params,
-    );
-
     return NextResponse.json(
       {
         ok: true,
-        section: { grade, section, shift, room: classroom, year },
-        message: `Sección ${grade} "${section}" creada con ${courseAreas.length} cursos.`,
+        section: { grade, section, shift, room: result.classroom, year: result.year },
+        message: `Sección ${grade} "${section}" creada con ${result.inserted} cursos.`,
       },
       { status: 201 },
     );
   } catch (err) {
-    logger.error({ err, route: "admin/sections POST" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/sections POST");
   }
 }

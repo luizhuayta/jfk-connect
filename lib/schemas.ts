@@ -204,7 +204,10 @@ export const attendanceRecordSchema = z.object({
 
 export const saveAttendanceSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida (YYYY-MM-DD)."),
-  records: z.array(attendanceRecordSchema),
+  records: z
+    .array(attendanceRecordSchema)
+    .min(1, "No hay registros para guardar.")
+    .max(60, "Demasiados registros de asistencia en una sola petición."),
 });
 
 /** /api/father/attendance/justify (POST) — el padre justifica una falta */
@@ -262,7 +265,7 @@ export const createMaterialSchema = z.object({
 
 // ─── Sprint 7: altas y gestión desde el panel admin ──────────────────────────
 
-const schoolGradeEnum = z.enum(["1ro", "2do", "3ro", "4to", "5to"], {
+export const schoolGradeEnum = z.enum(["1ro", "2do", "3ro", "4to", "5to"], {
   message: "Grado no válido.",
 });
 const schoolSectionField = z
@@ -312,13 +315,13 @@ export const createSectionSchema = z.object({
 
 /** /api/admin/enrollments (POST) — matricula a un alumno existente */
 export const createEnrollmentSchema = z.object({
-  studentId: z.string().min(1, "El alumno es obligatorio."),
+  studentId: uuidParamSchema,
 });
 
 /** /api/admin/courses/assign (POST) — asigna/reasigna un docente a un curso. Antes vivía inline en la ruta. */
 export const assignCourseTeacherSchema = z.object({
-  courseId: z.string().min(1, "courseId es obligatorio."),
-  teacherId: z.string().min(1, "teacherId es obligatorio."),
+  courseId: uuidParamSchema,
+  teacherId: uuidParamSchema,
 });
 
 /** /api/admin/courses/assign/explain (POST) — mismo shape que assignCourseTeacherSchema. */

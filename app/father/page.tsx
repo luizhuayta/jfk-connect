@@ -22,7 +22,7 @@ import { useJornadaHoy } from "@/lib/attendance/useJornadaHoy";
 import WeekStrip from "@/components/father/WeekStrip";
 import { honorLinkClass, paperShadow } from "@/components/father/chrome";
 import { ANNOUNCEMENT_CATEGORY_VISUAL } from "@/lib/announcements/categories";
-import { MAX_CHILDREN } from "@/lib/father/claim-student";
+import { MAX_CHILDREN } from "@/lib/father/limits";
 import { SCHOOL_YEAR } from "@/lib/school-year";
 import type { AttendanceRecord } from "@/lib/father/types";
 

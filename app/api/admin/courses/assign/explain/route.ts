@@ -15,8 +15,6 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { requireRole } from "@/lib/auth";
-import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { explainAssignmentSchema } from "@/lib/schemas";
 import { fetchCourseCandidates } from "@/lib/courses/queries";
@@ -27,6 +25,7 @@ import { requestJson } from "@/lib/ai/json";
 import { aiErrorResponse } from "@/lib/ai/errors";
 import { firstNameOnly } from "@/lib/ai/redact";
 import { ASSIGNMENT_EXPLAIN_SYSTEM_PROMPT, buildAssignmentExplainPrompt } from "@/lib/ai/prompts/assignment";
+import { guardAdminMutation } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +42,7 @@ function templateExplanation(args: { teacherName: string; courseName: string; gr
 }
 
 export async function POST(request: NextRequest) {
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [user, denied] = await requireRole(request, ["admin"]);
+  const [user, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   const [parsed, validationError] = await parseBody(request, explainAssignmentSchema);

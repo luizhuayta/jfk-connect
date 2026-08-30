@@ -10,9 +10,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType, infer as zInfer } from "zod";
 import { sniffMime, mimeMatchesSniff } from "@/lib/storage/sniff";
+import { uuidParamSchema } from "@/lib/schemas";
 
 /** Par [éxito] | [null, respuesta 400 lista para devolver]. */
 export type ParseResult<T> = [T, null] | [null, NextResponse];
+
+/** Valida un path param UUID. 400 en vez de dejar que Postgres reviente con 500. */
+export function parseUuidParam(raw: string): ParseResult<string> {
+  const result = uuidParamSchema.safeParse(raw);
+  if (!result.success) {
+    return [
+      null,
+      NextResponse.json({ ok: false, error: "Identificador no válido." }, { status: 400 }),
+    ];
+  }
+  return [result.data, null];
+}
 
 /**
  * Lee el body JSON de la request y lo valida contra el schema Zod.

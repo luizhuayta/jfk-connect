@@ -10,11 +10,10 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { parseBody } from "@/lib/validate";
-import { assertSameOrigin } from "@/lib/csrf";
+import { parseBody, parseUuidParam } from "@/lib/validate";
 import { updateStudentSchema } from "@/lib/schemas";
-import { logger } from "@/lib/logger";
+import { recordAdminAction } from "@/lib/admin/audit";
+import { guardAdminMutation, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +22,7 @@ interface Params {
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [admin, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   const [parsed, validationError] = await parseBody(
@@ -36,7 +32,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (validationError) return validationError;
 
   try {
-    const { id } = await params;
+    const { id: rawId } = await params;
+    const [id, invalid] = parseUuidParam(rawId);
+    if (invalid) return invalid;
 
     const updates: string[] = [];
     const sqlParams: unknown[] = [];
@@ -69,6 +67,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       );
     }
 
+    if (parsed.unlinkParent === true) {
+      await recordAdminAction({
+        actorId: admin.id,
+        action: "student.unlink_parent",
+        entityType: "student",
+        entityId: id,
+        summary: `Desvinculó al apoderado del alumno ${id}.`,
+        meta: { studentId: id },
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       student: {
@@ -78,10 +87,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       },
     });
   } catch (err) {
-    logger.error({ err, route: "admin/students/[id] PATCH" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/students/[id] PATCH");
   }
 }

@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Search, Bell, User, Settings, HelpCircle, LogOut, ChevronDown, Menu } from "lucide-react";
+import { Bell, User, Settings, HelpCircle, LogOut, ChevronDown, Menu } from "lucide-react";
 import Image from "next/image";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { getInitials, getRoleLabel } from "@/lib/format";
+import { apiGet } from "@/lib/client/api";
 
 /**
  * Barra superior del panel admin. Antes compartía components/layout/Navbar.tsx
@@ -20,20 +20,24 @@ export default function AdminNavbar({ onMenuClick }: { onMenuClick?: () => void 
   const { user } = useSessionUser();
   const [open, setOpen] = useState(false);
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
+  const [announcementsError, setAnnouncementsError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Contador de avisos no leídos para el badge de la campana
   useEffect(() => {
-    fetch("/api/announcements")
-      .then((r) => r.json())
+    const ac = new AbortController();
+    apiGet("/api/announcements", { signal: ac.signal })
       .then((data) => {
-        if (data.ok && Array.isArray(data.announcements)) {
-          setUnreadAnnouncements(
-            data.announcements.filter((a: { read: boolean }) => !a.read).length,
-          );
-        }
+        const list = Array.isArray(data.announcements) ? data.announcements : [];
+        setUnreadAnnouncements(
+          list.filter((a: { read: boolean }) => !a.read).length,
+        );
+        setAnnouncementsError(false);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setAnnouncementsError(true);
+      });
+    return () => ac.abort();
   }, []);
 
   // Cerrar con click fuera y con Escape
@@ -104,22 +108,20 @@ export default function AdminNavbar({ onMenuClick }: { onMenuClick?: () => void 
         </div>
       </div>
 
-      {/* Center: Search */}
-      <div className="hidden md:flex flex-1 max-w-md mx-6">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60" />
-          <Input
-            placeholder="Buscar usuarios, cursos, notas..."
-            className="w-full rounded-full border-white/20 bg-white/10 pl-10 text-sm text-white placeholder:text-white/50 focus-visible:ring-[#F4C15C] focus-visible:bg-white/15"
-          />
-        </div>
-      </div>
-
       {/* Right: Notifications + User */}
       <div className="flex items-center gap-4">
         <button
+          type="button"
+          onClick={() => router.push("/admin/announcements")}
           className="relative p-2 rounded-full hover:bg-white/10 transition-colors"
-          aria-label={unreadAnnouncements > 0 ? `${unreadAnnouncements} avisos sin leer` : "Avisos"}
+          aria-label={
+            announcementsError
+              ? "No se pudieron cargar los avisos"
+              : unreadAnnouncements > 0
+                ? `${unreadAnnouncements} avisos sin leer`
+                : "Avisos"
+          }
+          title={announcementsError ? "No se pudieron cargar los avisos" : undefined}
         >
           <Bell className="h-5 w-5 text-white" />
           {unreadAnnouncements > 0 && (

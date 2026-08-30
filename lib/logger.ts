@@ -40,6 +40,7 @@ function buildLogger() {
         "*.password",
         "*.passwordHash",
         "*.password_hash",
+        "*.tempPassword",
         "*.token",
         "*.code",
         "verification_code",

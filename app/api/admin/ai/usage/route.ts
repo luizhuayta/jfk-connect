@@ -13,9 +13,8 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
 import { isAiEnabled, getAiConfig } from "@/lib/ai/config";
-import { logger } from "@/lib/logger";
+import { guardAdmin, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +33,7 @@ interface ByDayRow {
 }
 
 export async function GET(request: NextRequest) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
   try {
@@ -79,7 +78,6 @@ export async function GET(request: NextRequest) {
       byDay: byDay.rows.map((r) => ({ day: r.day, calls: Number(r.calls), totalTokens: Number(r.total_tokens ?? 0) })),
     });
   } catch (err) {
-    logger.error({ err, route: "admin/ai/usage" }, "error inesperado");
-    return NextResponse.json({ ok: false, error: "Error interno del servidor." }, { status: 500 });
+    return internalError(err, "admin/ai/usage");
   }
 }

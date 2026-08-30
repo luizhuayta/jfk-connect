@@ -11,11 +11,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
-import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
-import { assertSameOrigin } from "@/lib/csrf";
 import { createUserSchema } from "@/lib/schemas";
 import crypto from "node:crypto";
+import { recordAdminAction } from "@/lib/admin/audit";
+import { parseQuery, usersListQuerySchema } from "@/lib/admin/params";
+import {
+  guardAdmin,
+  guardAdminMutation,
+  internalError,
+  uniqueConflict,
+} from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -45,9 +51,15 @@ interface CountRow {
   total: number;
 }
 
-/**
- * Genera una contraseña temporal aleatoria de 10 caracteres alfanuméricos.
- */
+interface KpiRow {
+  total: number;
+  admin: number;
+  docente: number;
+  padre: number;
+  activo: number;
+  inactivo: number;
+}
+
 function generateTempPassword(): string {
   const chars =
     "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -60,29 +72,24 @@ function generateTempPassword(): string {
 }
 
 export async function GET(request: NextRequest) {
-  // Proteger: solo admin
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
-  try {
-    const { searchParams } = new URL(request.url);
-    const role = searchParams.get("role");
-    const status = searchParams.get("status");
-    const q = searchParams.get("q");
+  const [filters, invalid] = parseQuery(request, usersListQuerySchema);
+  if (invalid) return invalid;
 
-    // Paginación
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
+  try {
+    const { role, status, q, page, limit } = filters;
     const offset = (page - 1) * limit;
 
     const where: string[] = [];
     const params: unknown[] = [];
 
-    if (role && role !== "all") {
+    if (role !== "all") {
       params.push(role);
       where.push(`role = $${params.length}`);
     }
-    if (status && status !== "all") {
+    if (status !== "all") {
       params.push(status === "activo");
       where.push(`is_active = $${params.length}`);
     }
@@ -94,30 +101,41 @@ export async function GET(request: NextRequest) {
 
     const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
 
-    const countR = await query<CountRow>(
-      `SELECT COUNT(*)::int AS total FROM users ${whereClause}`,
-      params,
-    );
-    const total = countR.rows[0]?.total ?? 0;
-    const totalPages = Math.ceil(total / limit) || 1;
-
     const dataParams = [...params, limit, offset];
     const limitIdx = dataParams.length - 1;
     const offsetIdx = dataParams.length;
 
-    const r = await query<UserRow>(
-      `SELECT id, email, full_name, role, phone, is_active, created_at, last_login_at, avatar_url, subject, shift_preference
-       FROM users
-       ${whereClause}
-       ORDER BY created_at DESC
-       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-      dataParams,
-    );
+    const [countR, kpiR, r] = await Promise.all([
+      query<CountRow>(
+        `SELECT COUNT(*)::int AS total FROM users ${whereClause}`,
+        params,
+      ),
+      query<KpiRow>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE role = 'admin')::int AS admin,
+           COUNT(*) FILTER (WHERE role = 'docente')::int AS docente,
+           COUNT(*) FILTER (WHERE role = 'padre')::int AS padre,
+           COUNT(*) FILTER (WHERE is_active)::int AS activo,
+           COUNT(*) FILTER (WHERE NOT is_active)::int AS inactivo
+         FROM users`,
+      ),
+      query<UserRow>(
+        `SELECT id, email, full_name, role, phone, is_active, created_at, last_login_at, avatar_url, subject, shift_preference
+         FROM users
+         ${whereClause}
+         ORDER BY created_at DESC
+         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+        dataParams,
+      ),
+    ]);
 
-    // Secciones que dicta cada docente de esta página (para la columna
-    // "Asignatura" de la tabla). Se resuelve vía `courses.teacher_id`, la
-    // única relación confiable: varios docentes de seed comparten el mismo
-    // full_name, así que no se puede inferir por nombre.
+    const total = countR.rows[0]?.total ?? 0;
+    const totalPages = Math.ceil(total / limit) || 1;
+    const kpi = kpiR.rows[0] ?? {
+      total: 0, admin: 0, docente: 0, padre: 0, activo: 0, inactivo: 0,
+    };
+
     const teacherIds = r.rows.filter((u) => u.role === "docente").map((u) => u.id);
     const sectionsByTeacher = new Map<string, { grade: string; section: string; shift: string }[]>();
     if (teacherIds.length > 0) {
@@ -141,23 +159,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       users,
+      counts: kpi,
       pagination: { page, limit, total, totalPages },
     });
   } catch (err) {
-    console.error("[admin/users GET] Error:", err);
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/users GET");
   }
 }
 
 export async function POST(request: NextRequest) {
-  // Proteger: solo admin
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [admin, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   try {
@@ -170,14 +181,11 @@ export async function POST(request: NextRequest) {
     const subject = parsed.subject ?? null;
     const shiftPreference = parsed.shiftPreference ?? "Ambos";
 
-    // Si el admin envía una contraseña explícita, se usa; si no, se genera una
-    // temporal aleatoria (antes era "ijfk2026" hardcodeada).
     const password: string =
       typeof parsed.password === "string" && parsed.password.length >= 8
         ? parsed.password
         : generateTempPassword();
 
-    // Validar: si es docente, subject es obligatorio
     if (role === "docente" && !subject) {
       return NextResponse.json(
         { ok: false, error: "La asignatura es obligatoria para docentes." },
@@ -185,7 +193,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificar que el email no exista
     const exists = await queryOne<{ id: string }>(
       "SELECT id FROM users WHERE email = $1",
       [email],
@@ -197,10 +204,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Solo docente y admin deben cambiar la contraseña al primer login.
-    // Los padres se crean manualmente con su propia contraseña.
     const mustChange = role === "docente" || role === "admin";
-
     const passwordHash = await hashPassword(password);
 
     const r = await query<UserRow>(
@@ -210,17 +214,23 @@ export async function POST(request: NextRequest) {
       [email, fullName, role, phone, passwordHash, mustChange, subject, shiftPreference],
     );
 
-    return NextResponse.json({
-      ok: true,
-      user: r.rows[0],
-      tempPassword: password,
-      message: `Usuario creado. Contraseña temporal: ${password}`,
+    const created = r.rows[0];
+    await recordAdminAction({
+      actorId: admin.id,
+      action: "user.create",
+      entityType: "user",
+      entityId: created.id,
+      summary: `Creó al usuario ${email} (${role}).`,
+      meta: { email, role },
     });
-  } catch (err) {
-    console.error("[admin/users POST] Error:", err);
+
     return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
+      { ok: true, user: created, tempPassword: password },
+      { status: 201, headers: { "Cache-Control": "no-store" } },
     );
+  } catch (err) {
+    const conflict = uniqueConflict(err, "Ya existe un usuario con ese email.");
+    if (conflict) return conflict;
+    return internalError(err, "admin/users POST");
   }
 }

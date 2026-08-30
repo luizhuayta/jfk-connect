@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  GraduationCap, Users, TrendingUp, Search, Plus, MoreHorizontal, Phone, AlertTriangle, Loader2,
-  Eye, UserX, X, CheckCircle2, RefreshCw, Download,
+  GraduationCap, Users, TrendingUp, Plus, MoreHorizontal, Phone, AlertTriangle, Loader2,
+  Eye, UserX, CheckCircle2, RefreshCw, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import LoadingState from "@/components/common/LoadingState";
@@ -19,8 +19,22 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Modal, { ModalCloseButton } from "@/components/ui/modal";
 import { levelFromScore, levelBadgeClass } from "@/lib/grades/scale";
 import { downloadLibreta } from "@/lib/report";
+import { SCHOOL_YEAR_LABEL } from "@/lib/school-year";
+import { apiSend } from "@/lib/client/api";
+import { ADMIN_GRADES, avgColor, attendanceColor } from "@/lib/admin/theme";
+import { useAdminResource, useDebouncedValue, type AdminPagination } from "@/lib/admin/useAdminList";
+import {
+  AdminPageHeader,
+  ConfirmDialog,
+  FilterPills,
+  PaginationBar,
+  SearchInput,
+  StatCard,
+  StatCardGrid,
+} from "@/components/admin/shared";
 
 type Student = {
   id: string; name: string; initials: string; dni: string;
@@ -30,43 +44,61 @@ type Student = {
 };
 type Section = { id: string; grade: string; section: string; studentsTotal: number; avgGrade: number | null; attendanceRate: number | null };
 
-const GRADES = ["1ro", "2do", "3ro", "4to", "5to"];
-
-function avgColor(avg: number | null) {
-  if (avg === null) return "text-gray-400";
-  if (avg >= 14) return "text-emerald-600 font-bold";
-  if (avg >= 11) return "text-[#0F172A] font-semibold";
-  return "text-red-500 font-bold";
-}
-function attendanceColor(pct: number | null) {
-  if (pct === null) return "text-gray-400";
-  if (pct >= 90) return "text-emerald-600";
-  if (pct >= 75) return "text-amber-600";
-  return "text-red-500";
-}
+type StudentCounts = {
+  total: number; activo: number; retirado: number; trasladado: number; atRisk: number;
+};
+const EMPTY_COUNTS: StudentCounts = { total: 0, activo: 0, retirado: 0, trasladado: 0, atRisk: 0 };
 
 type NewStudentDraft = { dni: string; fullName: string; grade: string; section: string; shift: "Mañana" | "Tarde" };
 const EMPTY_DRAFT: NewStudentDraft = { dni: "", fullName: "", grade: "1ro", section: "", shift: "Mañana" };
 
+function parseStudents(d: Record<string, unknown> & { ok: true }) {
+  return {
+    students: (d.students ?? []) as Student[],
+    pagination: d.pagination as AdminPagination,
+    counts: (d.counts as StudentCounts | undefined) ?? EMPTY_COUNTS,
+  };
+}
+
 export default function AdminStudentsPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
   const [gradeFilter, setGradeFilter] = useState("all");
   const [sectionFilter, setSectionFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "activo" | "retirado" | "trasladado">("all");
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
+  const debouncedQuery = useDebouncedValue(query, 300);
 
-  // ─── Sprint 7: alta de alumno + acciones por fila ──────────────────────────
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", "50");
+  if (gradeFilter !== "all") params.set("grade", gradeFilter);
+  if (sectionFilter !== "all") params.set("section", sectionFilter);
+  if (statusFilter !== "all") params.set("status", statusFilter);
+  if (debouncedQuery) params.set("q", debouncedQuery);
+
+  const { data, loading, error, reload } = useAdminResource(
+    `/api/admin/students?${params}`,
+    parseStudents,
+  );
+  const { data: sections } = useAdminResource(
+    "/api/admin/sections",
+    (d) => (d.sections ?? []) as Section[],
+  );
+  const students = data?.students ?? [];
+  const pagination = data?.pagination ?? { page: 1, limit: 50, total: 0, totalPages: 1 };
+  const counts = data?.counts ?? EMPTY_COUNTS;
+  const sectionList = sections ?? [];
+
   const [showNew, setShowNew] = useState(false);
   const [draft, setDraft] = useState<NewStudentDraft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [detail, setDetail] = useState<Student | null>(null);
   const [downloadingLibreta, setDownloadingLibreta] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [pendingUnlink, setPendingUnlink] = useState<Student | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<{ student: Student; status: "activo" | "retirado" | "trasladado" } | null>(null);
 
   const handleDownloadLibreta = async (studentId: string) => {
     setDownloadingLibreta(true);
@@ -78,72 +110,29 @@ export default function AdminStudentsPage() {
       setDownloadingLibreta(false);
     }
   };
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [rowBusy, setRowBusy] = useState<string | null>(null);
 
-  const loadStudents = async (targetPage: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set("page", String(targetPage));
-      params.set("limit", "50");
-      if (gradeFilter !== "all") params.set("grade", gradeFilter);
-      if (sectionFilter !== "all") params.set("section", sectionFilter);
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      if (query) params.set("q", query);
-
-      const [stRes, secRes] = await Promise.all([
-        fetch(`/api/admin/students?${params}`),
-        fetch("/api/admin/sections"),
-      ]);
-      const st = await stRes.json();
-      const sec = await secRes.json();
-      if (!st.ok) throw new Error(st.error);
-      if (sec.ok) setSections(sec.sections);
-      setStudents(st.students);
-      setPagination(st.pagination);
-      setPage(targetPage);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error cargando alumnos");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Cargar al montar y cuando cambien los filtros
-  useEffect(() => { loadStudents(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [gradeFilter, sectionFilter, statusFilter]);
-  useEffect(() => {
-    const t = setTimeout(() => loadStudents(1), 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-
-  const totalStudents = pagination.total;
-  const sectionsWithAvg = sections.filter((s): s is Section & { avgGrade: number } => s.avgGrade !== null);
+  const sectionsWithAvg = sectionList.filter((s): s is Section & { avgGrade: number } => s.avgGrade !== null);
   const globalAvg = sectionsWithAvg.length
     ? sectionsWithAvg.reduce((s, sec) => s + sec.avgGrade, 0) / sectionsWithAvg.length
     : 0;
-  const sectionsWithAttendance = sections.filter((s): s is Section & { attendanceRate: number } => s.attendanceRate !== null);
+  const sectionsWithAttendance = sectionList.filter((s): s is Section & { attendanceRate: number } => s.attendanceRate !== null);
   const globalAttendance = sectionsWithAttendance.length
     ? Math.round(sectionsWithAttendance.reduce((s, sec) => s + sec.attendanceRate, 0) / sectionsWithAttendance.length)
     : 0;
-  const atRisk = students.filter((s) => (s.avg_grade !== null && s.avg_grade < 11) || (s.attendance_rate !== null && s.attendance_rate < 80)).length;
 
   const availableSections = useMemo(() => {
-    return sections
+    return sectionList
       .filter((s) => gradeFilter === "all" || s.grade === gradeFilter)
       .map((s) => s.section)
       .sort();
-  }, [gradeFilter, sections]);
+  }, [gradeFilter, sectionList]);
 
-  // Secciones disponibles para el grado elegido en el modal de alta
   const draftSections = useMemo(() => {
-    return sections
+    return sectionList
       .filter((s) => s.grade === draft.grade)
       .map((s) => s.section)
       .sort();
-  }, [sections, draft.grade]);
+  }, [sectionList, draft.grade]);
 
   function openNew() {
     setDraft(EMPTY_DRAFT);
@@ -158,16 +147,14 @@ export default function AdminStudentsPage() {
     setSaving(true);
     setFormError("");
     try {
-      const r = await fetch("/api/admin/students", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dni: draft.dni.trim(), fullName: draft.fullName.trim(), grade: draft.grade, section: draft.section, shift: draft.shift }),
+      const data = await apiSend("/api/admin/students", "POST", {
+        dni: draft.dni.trim(), fullName: draft.fullName.trim(),
+        grade: draft.grade, section: draft.section, shift: draft.shift,
       });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
       setShowNew(false);
-      setActionMsg(`Alumno ${data.student.name} creado correctamente.`);
-      await loadStudents(1);
+      const name = (data.student as { name?: string } | undefined)?.name ?? draft.fullName;
+      setActionMsg(`Alumno ${name} creado correctamente.`);
+      reload();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Error al crear el alumno");
     } finally {
@@ -179,15 +166,9 @@ export default function AdminStudentsPage() {
     setRowBusy(id);
     setActionMsg(null);
     try {
-      const r = await fetch(`/api/admin/students/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
+      await apiSend(`/api/admin/students/${id}`, "PATCH", body);
       setActionMsg(doneMsg);
-      await loadStudents(page);
+      reload();
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Error al actualizar");
     } finally {
@@ -195,20 +176,17 @@ export default function AdminStudentsPage() {
     }
   }
 
-  if (loading) {
-    return <LoadingState label="Cargando alumnos..." />;
-  }
-  if (error) { return <ErrorState message={error} onRetry={() => loadStudents(page)} />; }
-
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[#0F172A]">Alumnos</h1>
-          <p className="text-muted-foreground mt-1">Padrón general de alumnos matriculados · Año Lectivo 2026</p>
-        </div>
-        <Button onClick={openNew} className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold"><Plus className="h-4 w-4" />Nuevo alumno</Button>
-      </div>
+      <AdminPageHeader
+        title="Alumnos"
+        subtitle={`Padrón general de alumnos matriculados · ${SCHOOL_YEAR_LABEL}`}
+        action={
+          <Button onClick={openNew} className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold">
+            <Plus className="h-4 w-4" />Nuevo alumno
+          </Button>
+        }
+      />
 
       {actionMsg && (
         <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
@@ -216,50 +194,59 @@ export default function AdminStudentsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "Total matriculados", value: students.length, icon: GraduationCap, bg: "bg-blue-50", text: "text-[#2563EB]" },
-          { label: "Promedio general", value: globalAvg.toFixed(1), icon: TrendingUp, bg: "bg-emerald-50", text: "text-emerald-600" },
-          { label: "% Asistencia", value: `${globalAttendance}%`, icon: Users, bg: "bg-purple-50", text: "text-purple-600" },
-          { label: "En riesgo", value: atRisk, icon: AlertTriangle, bg: "bg-red-50", text: "text-red-600" },
-        ].map((s) => (
-          <Card key={s.label} className="border-none shadow-sm rounded-xl">
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-full ${s.bg} shrink-0`}><s.icon className={`h-5 w-5 ${s.text}`} /></div>
-              <div><p className="text-2xl font-bold text-[#0F172A]">{s.value}</p><p className="text-xs text-muted-foreground">{s.label}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <StatCardGrid>
+        <StatCard label="Total matriculados" value={counts.activo} icon={GraduationCap} bg="bg-blue-50" text="text-[#2563EB]" />
+        <StatCard label="Promedio general" value={globalAvg.toFixed(1)} icon={TrendingUp} bg="bg-emerald-50" text="text-emerald-600" />
+        <StatCard label="% Asistencia" value={`${globalAttendance}%`} icon={Users} bg="bg-purple-50" text="text-purple-600" />
+        <StatCard label="En riesgo" value={counts.atRisk} icon={AlertTriangle} bg="bg-red-50" text="text-red-600" />
+      </StatCardGrid>
 
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-          <button onClick={() => { setGradeFilter("all"); setSectionFilter("all"); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${gradeFilter === "all" ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>Todos</button>
-          {GRADES.map((g) => (
-            <button key={g} onClick={() => { setGradeFilter(g); setSectionFilter("all"); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${gradeFilter === g ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>{g}</button>
-          ))}
-        </div>
+        <FilterPills
+          value={gradeFilter}
+          onChange={(g) => { setGradeFilter(g); setSectionFilter("all"); setPage(1); }}
+          options={[
+            { value: "all", label: "Todos" },
+            ...ADMIN_GRADES.map((g) => ({ value: g, label: g })),
+          ]}
+        />
         {gradeFilter !== "all" && (
-          <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-            <button onClick={() => setSectionFilter("all")} className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${sectionFilter === "all" ? "bg-[#2563EB] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>Todas</button>
-            {availableSections.map((sec) => (
-              <button key={sec} onClick={() => setSectionFilter(sec)} className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${sectionFilter === sec ? "bg-[#2563EB] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>{sec}</button>
-            ))}
-          </div>
+          <FilterPills
+            value={sectionFilter}
+            onChange={(s) => { setSectionFilter(s); setPage(1); }}
+            activeClass="bg-[#2563EB] text-white"
+            options={[
+              { value: "all", label: "Todas" },
+              ...availableSections.map((sec) => ({ value: sec, label: sec })),
+            ]}
+          />
         )}
-        <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-          {(["all", "activo", "retirado", "trasladado"] as const).map((s) => (
-            <button key={s} onClick={() => setStatusFilter(s)} className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${statusFilter === s ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>{s === "all" ? "Todos" : s}</button>
-          ))}
-        </div>
-        <div className="relative ml-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input type="text" placeholder="Nombre, DNI o apoderado..." value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 bg-white w-60 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E]" />
-        </div>
+        <FilterPills
+          value={statusFilter}
+          onChange={(s) => { setStatusFilter(s); setPage(1); }}
+          options={[
+            { value: "all", label: "Todos" },
+            { value: "activo", label: "activo" },
+            { value: "retirado", label: "retirado" },
+            { value: "trasladado", label: "trasladado" },
+          ]}
+        />
+        <SearchInput
+          value={query}
+          onChange={(v) => { setQuery(v); setPage(1); }}
+          placeholder="Nombre, DNI o apoderado..."
+          label="Buscar alumnos"
+        />
       </div>
 
       <Card className="border-none shadow-sm rounded-xl overflow-hidden">
         <CardContent className="p-0">
+          {loading ? (
+            <LoadingState label="Cargando alumnos..." className="py-12" />
+          ) : error ? (
+            <ErrorState message={error} onRetry={reload} />
+          ) : (
+            <>
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 hover:bg-gray-50">
@@ -285,7 +272,11 @@ export default function AdminStudentsPage() {
                     <TableCell>
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-8 w-8 shrink-0"><AvatarFallback className="bg-[#2563EB] text-white text-[10px] font-bold">{st.initials}</AvatarFallback></Avatar>
-                        <div><p className="text-sm font-semibold text-[#0F172A]">{st.name}</p><p className="text-[11px] text-muted-foreground">DNI {st.dni}</p></div>
+                        <div>
+                          <p className="text-sm font-semibold text-[#0F172A]">{st.name}</p>
+                          <p className="text-[11px] text-muted-foreground">DNI {st.dni}</p>
+                          {isAtRisk && <span className="sr-only">Alumno en riesgo académico o de asistencia</span>}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -326,7 +317,7 @@ export default function AdminStudentsPage() {
                                 <DropdownMenuItem
                                   key={s}
                                   disabled={st.status === s}
-                                  onClick={() => handlePatch(st.id, { status: s }, `Estado de ${st.name} actualizado a "${s}".`)}
+                                  onClick={() => setPendingStatus({ student: st, status: s })}
                                   className="capitalize cursor-pointer"
                                 >
                                   {s}{st.status === s ? " (actual)" : ""}
@@ -338,11 +329,7 @@ export default function AdminStudentsPage() {
                           <DropdownMenuItem
                             disabled={!st.parent_name}
                             variant="destructive"
-                            onClick={() => {
-                              if (confirm(`¿Desvincular al apoderado de ${st.name}?`)) {
-                                handlePatch(st.id, { unlinkParent: true }, `Apoderado desvinculado de ${st.name}.`);
-                              }
-                            }}
+                            onClick={() => setPendingUnlink(st)}
                             className="gap-2 cursor-pointer"
                           >
                             <UserX className="h-3.5 w-3.5" /> Desvincular apoderado
@@ -356,125 +343,104 @@ export default function AdminStudentsPage() {
             </TableBody>
           </Table>
           {students.length === 0 && <div className="py-12 text-center text-muted-foreground text-sm">No se encontraron alumnos con ese criterio</div>}
-          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
-            <p className="text-xs text-muted-foreground">
-              Mostrando {students.length} de {pagination.total} alumnos
-            </p>
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1 || loading}
-                  onClick={() => loadStudents(page - 1)}
-                  className="h-8 px-3"
-                >
-                  ← Anterior
-                </Button>
-                <span className="text-xs text-muted-foreground font-medium">
-                  Página {page} de {pagination.totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= pagination.totalPages || loading}
-                  onClick={() => loadStudents(page + 1)}
-                  className="h-8 px-3"
-                >
-                  Siguiente →
-                </Button>
-              </div>
-            )}
-          </div>
+          <PaginationBar
+            page={page}
+            totalPages={pagination.totalPages}
+            shown={students.length}
+            total={pagination.total}
+            loading={loading}
+            onPage={setPage}
+            noun="alumnos"
+          />
+            </>
+          )}
         </CardContent>
       </Card>
 
-      {/* Modal: Nuevo alumno */}
-      {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1E2A5E]">Nuevo alumno</h2>
-              <button onClick={() => setShowNew(false)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+      <Modal open={showNew} onClose={() => !saving && setShowNew(false)} titleId="new-student-title" closable={!saving}>
+        <div className="flex items-center justify-between">
+          <h2 id="new-student-title" className="text-xl font-bold text-[#1E2A5E]">Nuevo alumno</h2>
+          <ModalCloseButton onClose={() => setShowNew(false)} disabled={saving} />
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="draft-dni" className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">DNI</label>
+            <input
+              id="draft-dni"
+              type="text"
+              inputMode="numeric"
+              maxLength={8}
+              value={draft.dni}
+              onChange={(e) => { setDraft((d) => ({ ...d, dni: e.target.value.replace(/\D/g, "") })); setFormError(""); }}
+              placeholder="8 dígitos"
+              className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="draft-name" className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Nombre completo</label>
+            <input
+              id="draft-name"
+              type="text"
+              value={draft.fullName}
+              onChange={(e) => { setDraft((d) => ({ ...d, fullName: e.target.value })); setFormError(""); }}
+              placeholder="Apellidos y nombres"
+              className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label htmlFor="draft-grade" className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Grado</label>
+              <select
+                id="draft-grade"
+                value={draft.grade}
+                onChange={(e) => { setDraft((d) => ({ ...d, grade: e.target.value, section: "" })); setFormError(""); }}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
+              >
+                {ADMIN_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
             </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">DNI</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={8}
-                  value={draft.dni}
-                  onChange={(e) => { setDraft((d) => ({ ...d, dni: e.target.value.replace(/\D/g, "") })); setFormError(""); }}
-                  placeholder="8 dígitos"
-                  className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
-                  autoFocus
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Nombre completo</label>
-                <input
-                  type="text"
-                  value={draft.fullName}
-                  onChange={(e) => { setDraft((d) => ({ ...d, fullName: e.target.value })); setFormError(""); }}
-                  placeholder="Apellidos y nombres"
-                  className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Grado</label>
-                  <select
-                    value={draft.grade}
-                    onChange={(e) => { setDraft((d) => ({ ...d, grade: e.target.value, section: "" })); setFormError(""); }}
-                    className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
-                  >
-                    {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Sección</label>
-                  <select
-                    value={draft.section}
-                    onChange={(e) => { setDraft((d) => ({ ...d, section: e.target.value })); setFormError(""); }}
-                    className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
-                  >
-                    <option value="">Elegir...</option>
-                    {draftSections.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  {draftSections.length === 0 && <p className="text-[11px] text-amber-600">No hay secciones creadas para este grado.</p>}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Turno</label>
-                <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-                  {(["Mañana", "Tarde"] as const).map((t) => (
-                    <button key={t} onClick={() => setDraft((d) => ({ ...d, shift: t }))} className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${draft.shift === t ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>{t}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {formError && <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>}
-
-            <div className="flex gap-2 pt-1">
-              <Button variant="outline" onClick={() => setShowNew(false)} disabled={saving} className="flex-1">Cancelar</Button>
-              <Button onClick={handleCreate} disabled={saving} className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear alumno"}
-              </Button>
+            <div className="space-y-1.5">
+              <label htmlFor="draft-section" className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Sección</label>
+              <select
+                id="draft-section"
+                value={draft.section}
+                onChange={(e) => { setDraft((d) => ({ ...d, section: e.target.value })); setFormError(""); }}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E] text-[#0F172A]"
+              >
+                <option value="">Elegir...</option>
+                {draftSections.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {draftSections.length === 0 && <p className="text-[11px] text-amber-600">No hay secciones creadas para este grado.</p>}
             </div>
           </div>
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Turno</p>
+            <FilterPills
+              value={draft.shift}
+              onChange={(t) => setDraft((d) => ({ ...d, shift: t }))}
+              options={[
+                { value: "Mañana", label: "Mañana" },
+                { value: "Tarde", label: "Tarde" },
+              ]}
+            />
+          </div>
         </div>
-      )}
+        {formError && <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>}
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" onClick={() => setShowNew(false)} disabled={saving} className="flex-1">Cancelar</Button>
+          <Button onClick={handleCreate} disabled={saving} className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear alumno"}
+          </Button>
+        </div>
+      </Modal>
 
-      {/* Modal: Ver detalle */}
-      {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDetail(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+      <Modal open={!!detail} onClose={() => setDetail(null)} titleId="student-detail-title">
+        {detail && (
+          <>
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1E2A5E]">Detalle del alumno</h2>
-              <button onClick={() => setDetail(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+              <h2 id="student-detail-title" className="text-xl font-bold text-[#1E2A5E]">Detalle del alumno</h2>
+              <ModalCloseButton onClose={() => setDetail(null)} />
             </div>
             <div className="flex items-center gap-3">
               <Avatar className="h-12 w-12 shrink-0"><AvatarFallback className="bg-[#2563EB] text-white text-sm font-bold">{detail.initials}</AvatarFallback></Avatar>
@@ -491,20 +457,50 @@ export default function AdminStudentsPage() {
               <div className="rounded-xl bg-gray-50 p-3 col-span-2"><p className="text-[10px] font-semibold text-[#64748B] uppercase">Apoderado</p><p className="font-semibold text-[#0F172A] mt-0.5">{detail.parent_name ?? "Sin apoderado vinculado"}{detail.parent_phone ? ` · ${detail.parent_phone}` : ""}</p></div>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => handleDownloadLibreta(detail.id)}
-                disabled={downloadingLibreta}
-                className="flex-1 gap-2"
-              >
+              <Button variant="outline" onClick={() => handleDownloadLibreta(detail.id)} disabled={downloadingLibreta} className="flex-1 gap-2">
                 {downloadingLibreta ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 Descargar libreta
               </Button>
               <Button variant="outline" onClick={() => setDetail(null)} className="flex-1">Cerrar</Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={!!pendingUnlink}
+        onClose={() => setPendingUnlink(null)}
+        title="Desvincular apoderado"
+        description={pendingUnlink ? `¿Desvincular al apoderado de ${pendingUnlink.name}?` : undefined}
+        confirmLabel="Desvincular"
+        loading={rowBusy === pendingUnlink?.id}
+        onConfirm={() => {
+          if (!pendingUnlink) return;
+          const st = pendingUnlink;
+          setPendingUnlink(null);
+          handlePatch(st.id, { unlinkParent: true }, `Apoderado desvinculado de ${st.name}.`);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!pendingStatus}
+        onClose={() => setPendingStatus(null)}
+        title="Cambiar estado"
+        description={
+          pendingStatus
+            ? `¿Cambiar el estado de ${pendingStatus.student.name} a "${pendingStatus.status}"?`
+            : undefined
+        }
+        confirmLabel="Cambiar"
+        tone="primary"
+        loading={rowBusy === pendingStatus?.student.id}
+        onConfirm={() => {
+          if (!pendingStatus) return;
+          const { student, status } = pendingStatus;
+          setPendingStatus(null);
+          handlePatch(student.id, { status }, `Estado de ${student.name} actualizado a "${status}".`);
+        }}
+      />
     </div>
   );
 }

@@ -11,20 +11,23 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth";
+import { parseUuidParam } from "@/lib/validate";
 import { fetchCourseCandidates } from "@/lib/courses/queries";
+import { guardAdmin, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
-  const courseId = searchParams.get("courseId");
-  if (!courseId) {
+  const courseIdRaw = searchParams.get("courseId");
+  if (!courseIdRaw) {
     return NextResponse.json({ ok: false, error: "Falta el parámetro courseId." }, { status: 400 });
   }
+  const [courseId, invalid] = parseUuidParam(courseIdRaw);
+  if (invalid) return invalid;
 
   try {
     const result = await fetchCourseCandidates(courseId);
@@ -33,7 +36,6 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error("[admin/courses/assign/suggestions GET] Error:", err);
-    return NextResponse.json({ ok: false, error: "Error interno del servidor." }, { status: 500 });
+    return internalError(err, "admin/courses/assign/suggestions GET");
   }
 }

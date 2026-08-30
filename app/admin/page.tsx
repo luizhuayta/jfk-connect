@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -20,12 +19,12 @@ import {
   UserCog,
   TrendingUp,
   Plus,
-  Bell,
   Loader2,
 } from "lucide-react";
 import AttendanceChart from "@/components/dashboard/admin/AttendanceChart";
 import GradeDistributionChart from "@/components/dashboard/admin/GradeDistributionChart";
-import { toLocalISODate } from "@/lib/format";
+import { useAdminResource } from "@/lib/admin/useAdminList";
+import { AdminPageHeader } from "@/components/admin/shared";
 
 type StatsData = {
   stats: {
@@ -40,11 +39,10 @@ type StatsData = {
   pendingAnnouncements: { title: string; date: string; priority: string }[];
 };
 
-const upcomingEvents = [
-  { title: "Día del Logro", date: "2026-05-28" },
-  { title: "Dia del maestro", date: "2026-07-06" },
-  { title: "Ceremonia de graduacion", date: "2026-12-15" },
-];
+const TABS = [
+  { id: "notas", label: "Ultimas Notas" },
+  { id: "avisos", label: "Avisos Pendientes" },
+] as const;
 
 const quickActions = [
   { label: "Nueva Matricula", href: "/admin/enrollment", open: "nueva=1", icon: Plus, iconBg: "bg-blue-50", iconColor: "text-blue-600" },
@@ -53,32 +51,20 @@ const quickActions = [
   { label: "Enviar Aviso", href: "/admin/announcements", open: "nuevo=1", icon: Plus, iconBg: "bg-amber-50", iconColor: "text-amber-600" },
 ];
 
+function parseStats(d: Record<string, unknown> & { ok: true }): StatsData {
+  return {
+    stats: d.stats as StatsData["stats"],
+    attendanceByDay: (d.attendanceByDay ?? []) as StatsData["attendanceByDay"],
+    gradeDistribution: (d.gradeDistribution ?? []) as StatsData["gradeDistribution"],
+    latestNotes: (d.latestNotes ?? []) as StatsData["latestNotes"],
+    pendingAnnouncements: (d.pendingAnnouncements ?? []) as StatsData["pendingAnnouncements"],
+  };
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("notas");
-  const [data, setData] = useState<StatsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await fetch("/api/admin/stats");
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error);
-        setData(d);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error cargando datos");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  // Solo eventos que aún no pasaron; evita mostrar "Próximo" en fechas vencidas.
-  const upcoming = upcomingEvents.filter((e) => e.date >= toLocalISODate());
+  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]["id"]>("notas");
+  const { data, loading, error } = useAdminResource("/api/admin/stats", parseStats);
 
   const today = new Date().toLocaleDateString("es-PE", {
     weekday: "long",
@@ -128,23 +114,17 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Welcome */}
-      <div>
-        <h1 className="text-3xl font-bold text-[#0F172A]">
-          Bienvenido al Panel Administrativo
-        </h1>
-        <p className="text-muted-foreground mt-2 capitalize">
-          {today}
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Bienvenido al Panel Administrativo"
+        subtitle={today.charAt(0).toUpperCase() + today.slice(1)}
+      />
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
           {error}
         </div>
       )}
 
-      {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {loading ? (
           <div className="col-span-full py-8 text-center">
@@ -179,7 +159,6 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Charts Section */}
       {data && (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="border-none shadow-sm rounded-xl">
@@ -201,19 +180,30 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Tabs Section */}
       <Card className="border-none shadow-sm rounded-xl">
         <CardContent className="p-6">
-          <div className="bg-gray-50 rounded-lg p-1 mb-6">
-            <div className="grid grid-cols-3 gap-1">
-              {[
-                { id: "notas", label: "Ultimas Notas" },
-                { id: "avisos", label: "Avisos Pendientes" },
-                { id: "eventos", label: "Proximos Eventos" },
-              ].map((tab) => (
+          <div className="bg-gray-50 rounded-lg p-1 mb-6" role="tablist" aria-label="Resumen del dashboard">
+            <div className="grid grid-cols-2 gap-1">
+              {TABS.map((tab) => (
                 <button
                   key={tab.id}
+                  type="button"
+                  role="tab"
+                  id={`tab-${tab.id}`}
+                  aria-selected={activeTab === tab.id}
+                  aria-controls={`panel-${tab.id}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
                   onClick={() => setActiveTab(tab.id)}
+                  onKeyDown={(e) => {
+                    const i = TABS.findIndex((t) => t.id === tab.id);
+                    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                      e.preventDefault();
+                      const dir = e.key === "ArrowRight" ? 1 : -1;
+                      const next = TABS[(i + dir + TABS.length) % TABS.length];
+                      setActiveTab(next.id);
+                      document.getElementById(`tab-${next.id}`)?.focus();
+                    }
+                  }}
                   className={`py-1.5 text-xs font-semibold rounded-md transition-colors ${
                     activeTab === tab.id
                       ? "bg-white text-[#0F172A] shadow-sm"
@@ -227,96 +217,63 @@ export default function AdminDashboard() {
           </div>
 
           {activeTab === "notas" && (
-            <div className="border rounded-xl overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50 hover:bg-gray-50">
-                    <TableHead className="text-[#0F172A] font-semibold text-sm">
-                      Estudiante
-                    </TableHead>
-                    <TableHead className="text-[#0F172A] font-semibold text-sm">
-                      Asignatura
-                    </TableHead>
-                    <TableHead className="text-[#0F172A] font-semibold text-sm text-center">
-                      Calificacion
-                    </TableHead>
-                    <TableHead className="text-right text-[#0F172A] font-semibold text-sm">
-                      Fecha
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(data?.latestNotes ?? []).map((row, idx) => (
-                    <TableRow key={idx} className="hover:bg-gray-50/50">
-                      <TableCell className="text-sm font-medium text-[#0F172A]">
-                        {row.student}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {row.subject}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 font-medium text-xs">
-                          {row.grade}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">
-                        {row.date}
-                      </TableCell>
+            <div id="panel-notas" role="tabpanel" aria-labelledby="tab-notas" className="border rounded-xl overflow-hidden">
+              {(data?.latestNotes ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  Aún no hay notas registradas.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 hover:bg-gray-50">
+                      <TableHead className="text-[#0F172A] font-semibold text-sm">Estudiante</TableHead>
+                      <TableHead className="text-[#0F172A] font-semibold text-sm">Asignatura</TableHead>
+                      <TableHead className="text-[#0F172A] font-semibold text-sm text-center">Calificacion</TableHead>
+                      <TableHead className="text-right text-[#0F172A] font-semibold text-sm">Fecha</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {(data?.latestNotes ?? []).map((row, idx) => (
+                      <TableRow key={idx} className="hover:bg-gray-50/50">
+                        <TableCell className="text-sm font-medium text-[#0F172A]">{row.student}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{row.subject}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 font-medium text-xs">
+                            {row.grade}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">{row.date}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
           )}
 
           {activeTab === "avisos" && (
-            <div className="space-y-3">
-              {(data?.pendingAnnouncements ?? []).map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between rounded-xl border p-4"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-[#0F172A]">{item.title}</p>
-                    <p className="text-xs text-muted-foreground">{item.date}</p>
-                  </div>
-                  <Badge
-                    className={`text-xs ${
-                      item.priority === "Alta"
-                        ? "bg-red-50 text-red-600 hover:bg-red-50"
-                        : item.priority === "Media"
-                        ? "bg-amber-50 text-amber-600 hover:bg-amber-50"
-                        : "bg-gray-50 text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {item.priority}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "eventos" && (
-            <div className="space-y-3">
-              {upcoming.length === 0 ? (
+            <div id="panel-avisos" role="tabpanel" aria-labelledby="tab-avisos" className="space-y-3">
+              {(data?.pendingAnnouncements ?? []).length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">
-                  No hay eventos próximos programados.
+                  No hay avisos recientes.
                 </p>
               ) : (
-                upcoming.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between rounded-xl border p-4"
-                  >
+                (data?.pendingAnnouncements ?? []).map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between rounded-xl border p-4">
                     <div>
                       <p className="text-sm font-medium text-[#0F172A]">{item.title}</p>
                       <p className="text-xs text-muted-foreground">{item.date}</p>
                     </div>
                     <Badge
-                      variant="outline"
-                      className="text-xs border-blue-200 text-blue-600 bg-blue-50"
+                      className={`text-xs ${
+                        item.priority === "Alta"
+                          ? "bg-red-50 text-red-600 hover:bg-red-50"
+                          : item.priority === "Media"
+                          ? "bg-amber-50 text-amber-600 hover:bg-amber-50"
+                          : "bg-gray-50 text-gray-600 hover:bg-gray-50"
+                      }`}
                     >
-                      Proximo
+                      {item.priority}
                     </Badge>
                   </div>
                 ))
@@ -326,7 +283,6 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      {/* Acciones Rapidas */}
       <section>
         <h2 className="text-lg font-bold text-[#0F172A] mb-4">
           Acciones Rapidas

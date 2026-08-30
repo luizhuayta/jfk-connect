@@ -1,19 +1,33 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, GraduationCap, UserCog, ShieldCheck, Search, Plus, CheckCircle2, XCircle, Edit, Trash2, Power, Loader2, X, Clock, CalendarDays } from "lucide-react";
+import { Users, GraduationCap, UserCog, ShieldCheck, Plus, CheckCircle2, XCircle, Edit, Trash2, Power, Loader2, Clock, CalendarDays } from "lucide-react";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Modal, { ModalCloseButton } from "@/components/ui/modal";
 import { sectionShift } from "@/lib/section-shift";
 import { useCurriculum } from "@/lib/curriculum/client";
+import { getInitials } from "@/lib/format";
+import { apiGet, apiSend } from "@/lib/client/api";
+import { formatAdminDate } from "@/lib/admin/theme";
+import { useAdminResource, useDebouncedValue, type AdminPagination } from "@/lib/admin/useAdminList";
+import {
+  AdminPageHeader,
+  ConfirmDialog,
+  FilterPills,
+  PaginationBar,
+  SearchInput,
+  StatCard,
+  StatCardGrid,
+} from "@/components/admin/shared";
 
 type Role = "admin" | "docente" | "padre";
 
@@ -42,6 +56,19 @@ interface ScheduleEntry {
   room: string | null;
 }
 
+interface UserCounts {
+  total: number;
+  admin: number;
+  docente: number;
+  padre: number;
+  activo: number;
+  inactivo: number;
+}
+
+const EMPTY_COUNTS: UserCounts = {
+  total: 0, admin: 0, docente: 0, padre: 0, activo: 0, inactivo: 0,
+};
+
 const DAY_ORDER = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
 const ROLE_META: Record<Role, { label: string; badge: string; icon: typeof Users }> = {
@@ -50,26 +77,40 @@ const ROLE_META: Record<Role, { label: string; badge: string; icon: typeof Users
   padre:   { label: "Padre/Apoderado", badge: "bg-amber-100 text-amber-700", icon: UserCog },
 };
 
-function getInitials(name: string): string {
-  return name.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase() ?? "").join("");
-}
-function fmtDate(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" });
+function parseUsersPayload(d: Record<string, unknown> & { ok: true }) {
+  return {
+    users: (d.users ?? []) as UserRecord[],
+    pagination: d.pagination as AdminPagination,
+    counts: (d.counts as UserCounts | undefined) ?? EMPTY_COUNTS,
+  };
 }
 
 export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "activo" | "inactivo">("all");
   const [query, setQuery] = useState("");
-  const [users, setUsers] = useState<UserRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
+  const debouncedQuery = useDebouncedValue(query, 300);
+
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", "50");
+  if (roleFilter !== "all") params.set("role", roleFilter);
+  if (statusFilter !== "all") params.set("status", statusFilter);
+  if (debouncedQuery) params.set("q", debouncedQuery);
+
+  const { data, loading, error, reload } = useAdminResource(
+    `/api/admin/users?${params}`,
+    parseUsersPayload,
+  );
+  const users = data?.users ?? [];
+  const pagination = data?.pagination ?? { page: 1, limit: 50, total: 0, totalPages: 1 };
+  const counts = data?.counts ?? EMPTY_COUNTS;
+
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState<UserRecord | null>(null);
   const [showDelete, setShowDelete] = useState<UserRecord | null>(null);
+  const [pendingToggle, setPendingToggle] = useState<UserRecord | null>(null);
   const [tempPwd, setTempPwd] = useState<string | null>(null);
   const [form, setForm] = useState({ fullName: "", email: "", role: "docente" as Role, phone: "", subject: "", shiftPreference: "Ambos" as string });
   const [editForm, setEditForm] = useState({ fullName: "", role: "docente" as Role, phone: "", isActive: true, subject: "" as string, shiftPreference: "Ambos" as string });
@@ -81,47 +122,11 @@ export default function AdminUsersPage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
-  const loadUsers = async (targetPage: number) => {
-    setLoading(true); setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (roleFilter !== "all") params.set("role", roleFilter);
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      if (query) params.set("q", query);
-      params.set("page", String(targetPage));
-      params.set("limit", "50");
-      const r = await fetch(`/api/admin/users?${params}`);
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setUsers(data.users);
-      setPagination(data.pagination);
-      setPage(targetPage);
-    } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { loadUsers(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [roleFilter, statusFilter]);
   useEffect(() => {
-    const t = setTimeout(() => loadUsers(1), 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-  useEffect(() => {
-    // El query se lee en el cliente (window): usar useSearchParams rompería el
-    // prerender estático de la build (missing-suspense-with-csr-bailout).
     if (new URLSearchParams(window.location.search).get("nuevo") === "1") {
       setShowCreate(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const counts = useMemo(() => ({
-    all: users.length, admin: users.filter((u) => u.role === "admin").length,
-    docente: users.filter((u) => u.role === "docente").length,
-    padre: users.filter((u) => u.role === "padre").length,
-    activo: users.filter((u) => u.is_active).length,
-    inactivo: users.filter((u) => !u.is_active).length,
-  }), [users]);
 
   const handleCreate = async () => {
     if (!form.fullName || !form.email) { toast.error("Nombre y email son obligatorios"); return; }
@@ -130,19 +135,21 @@ export default function AdminUsersPage() {
     try {
       const body: Record<string, unknown> = { fullName: form.fullName, email: form.email, role: form.role, phone: form.phone || undefined };
       if (form.role === "docente") { body.subject = form.subject; body.shiftPreference = form.shiftPreference; }
-      const r = await fetch("/api/admin/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
+      const data = await apiSend("/api/admin/users", "POST", body);
       setShowCreate(false);
       setForm({ fullName: "", email: "", role: "docente", phone: "", subject: "", shiftPreference: "Ambos" });
-      setTempPwd(data.tempPassword);
-      await loadUsers(page);
+      setTempPwd(typeof data.tempPassword === "string" ? data.tempPassword : null);
+      reload();
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
 
   const openEdit = (u: UserRecord) => {
-    setEditForm({ fullName: u.full_name, role: u.role, phone: u.phone ?? "", isActive: u.is_active, subject: (u as UserRecord & { subject?: string }).subject ?? "", shiftPreference: (u as UserRecord & { shift_preference?: string }).shift_preference ?? "Ambos" });
+    setEditForm({
+      fullName: u.full_name, role: u.role, phone: u.phone ?? "",
+      isActive: u.is_active, subject: u.subject ?? "",
+      shiftPreference: u.shift_preference ?? "Ambos",
+    });
     setShowEdit(u);
   };
 
@@ -150,24 +157,30 @@ export default function AdminUsersPage() {
     if (!showEdit) return;
     setActionLoading(true);
     try {
-      const body: Record<string, unknown> = { fullName: editForm.fullName, role: editForm.role, phone: editForm.phone || undefined, isActive: editForm.isActive };
-      if (editForm.role === "docente") { body.subject = editForm.subject || undefined; body.shiftPreference = editForm.shiftPreference; }
-      const r = await fetch(`/api/admin/users/${showEdit.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
+      const body: Record<string, unknown> = {
+        fullName: editForm.fullName, role: editForm.role,
+        phone: editForm.phone || undefined, isActive: editForm.isActive,
+      };
+      if (editForm.role === "docente") {
+        body.subject = editForm.subject || undefined;
+        body.shiftPreference = editForm.shiftPreference;
+      }
+      await apiSend(`/api/admin/users/${showEdit.id}`, "PATCH", body);
       setShowEdit(null);
-      await loadUsers(page);
+      reload();
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
 
-  const handleToggleActive = async (u: UserRecord) => {
+  const handleToggleActive = async () => {
+    if (!pendingToggle) return;
+    setActionLoading(true);
     try {
-      const r = await fetch(`/api/admin/users/${u.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isActive: !u.is_active }) });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      await loadUsers(page);
+      await apiSend(`/api/admin/users/${pendingToggle.id}`, "PATCH", { isActive: !pendingToggle.is_active });
+      setPendingToggle(null);
+      reload();
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
+    finally { setActionLoading(false); }
   };
 
   const openSchedule = async (u: UserRecord) => {
@@ -176,10 +189,8 @@ export default function AdminUsersPage() {
     setScheduleError(null);
     setScheduleLoading(true);
     try {
-      const r = await fetch(`/api/admin/teachers/${u.id}/schedule`);
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setScheduleEntries(data.entries);
+      const data = await apiGet(`/api/admin/teachers/${u.id}/schedule`);
+      setScheduleEntries((data.entries as ScheduleEntry[]) ?? []);
     } catch (err) {
       setScheduleError(err instanceof Error ? err.message : "Error al cargar el horario");
     } finally {
@@ -191,71 +202,58 @@ export default function AdminUsersPage() {
     if (!showDelete) return;
     setActionLoading(true);
     try {
-      const r = await fetch(`/api/admin/users/${showDelete.id}`, { method: "DELETE" });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
+      await apiSend(`/api/admin/users/${showDelete.id}`, "DELETE");
       setShowDelete(null);
-      await loadUsers(page);
+      reload();
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); }
     finally { setActionLoading(false); }
   };
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[#0F172A]">Usuarios</h1>
-          <p className="text-muted-foreground mt-1">Gestión de cuentas del sistema</p>
-        </div>
-        <Button onClick={() => setShowCreate(true)} className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold">
-          <Plus className="h-4 w-4" /> Nuevo usuario
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Usuarios"
+        subtitle="Gestión de cuentas del sistema"
+        action={
+          <Button onClick={() => setShowCreate(true)} className="bg-[#1E2A5E] text-white hover:bg-[#162043] rounded-xl h-10 gap-2 font-semibold">
+            <Plus className="h-4 w-4" /> Nuevo usuario
+          </Button>
+        }
+      />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "Total usuarios",   value: counts.all,     bg: "bg-[#1E2A5E]/5",  text: "text-[#1E2A5E]",   icon: Users },
-          { label: "Docentes",         value: counts.docente, bg: "bg-blue-50",       text: "text-blue-700",    icon: GraduationCap },
-          { label: "Padres/Apoderados",value: counts.padre,   bg: "bg-amber-50",      text: "text-amber-700",   icon: UserCog },
-          { label: "Activos",          value: counts.activo,  bg: "bg-emerald-50",    text: "text-emerald-700", icon: CheckCircle2 },
-        ].map((s) => (
-          <Card key={s.label} className="border-none shadow-sm rounded-xl">
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-full ${s.bg} shrink-0`}>
-                <s.icon className={`h-5 w-5 ${s.text}`} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#0F172A]">{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <StatCardGrid>
+        <StatCard label="Total usuarios" value={counts.total} icon={Users} bg="bg-[#1E2A5E]/5" text="text-[#1E2A5E]" />
+        <StatCard label="Docentes" value={counts.docente} icon={GraduationCap} bg="bg-blue-50" text="text-blue-700" />
+        <StatCard label="Padres/Apoderados" value={counts.padre} icon={UserCog} bg="bg-amber-50" text="text-amber-700" />
+        <StatCard label="Activos" value={counts.activo} icon={CheckCircle2} bg="bg-emerald-50" text="text-emerald-700" />
+      </StatCardGrid>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-          {(["all", "admin", "docente", "padre"] as const).map((r) => (
-            <button key={r} onClick={() => setRoleFilter(r)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${roleFilter === r ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>
-              {r === "all" ? "Todos" : ROLE_META[r].label}
-              <span className="ml-1.5 opacity-70">{r === "all" ? counts.all : counts[r]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1 bg-gray-50 rounded-xl p-1">
-          {(["all", "activo", "inactivo"] as const).map((s) => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${statusFilter === s ? "bg-[#1E2A5E] text-white" : "text-[#64748B] hover:text-[#0F172A]"}`}>
-              {s === "all" ? "Todos" : s}
-            </button>
-          ))}
-        </div>
-        <div className="relative ml-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input type="text" placeholder="Buscar..." value={query} onChange={(e) => setQuery(e.target.value)}
-            className="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 bg-white w-64 focus:outline-none focus:ring-2 focus:ring-[#1E2A5E]/20 focus:border-[#1E2A5E]" />
-        </div>
+        <FilterPills
+          value={roleFilter}
+          onChange={(v) => { setRoleFilter(v); setPage(1); }}
+          options={[
+            { value: "all", label: "Todos", count: counts.total },
+            { value: "admin", label: ROLE_META.admin.label, count: counts.admin },
+            { value: "docente", label: ROLE_META.docente.label, count: counts.docente },
+            { value: "padre", label: ROLE_META.padre.label, count: counts.padre },
+          ]}
+        />
+        <FilterPills
+          value={statusFilter}
+          onChange={(v) => { setStatusFilter(v); setPage(1); }}
+          options={[
+            { value: "all", label: "Todos" },
+            { value: "activo", label: "activo" },
+            { value: "inactivo", label: "inactivo" },
+          ]}
+        />
+        <SearchInput
+          value={query}
+          onChange={(v) => { setQuery(v); setPage(1); }}
+          placeholder="Buscar..."
+          label="Buscar usuarios"
+        />
       </div>
 
       <Card className="border-none shadow-sm rounded-xl overflow-hidden">
@@ -263,7 +261,7 @@ export default function AdminUsersPage() {
           {loading ? (
             <LoadingState label="Cargando usuarios..." className="py-12" />
           ) : error ? (
-            <ErrorState message={error} onRetry={() => loadUsers(page)} />
+            <ErrorState message={error} onRetry={reload} />
           ) : users.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground text-sm">No se encontraron usuarios</div>
           ) : (
@@ -339,7 +337,7 @@ export default function AdminUsersPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground hidden md:table-cell">{u.phone ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">{fmtDate(u.last_login_at)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">{formatAdminDate(u.last_login_at)}</TableCell>
                       <TableCell className="text-center">
                         {u.is_active ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
@@ -354,7 +352,7 @@ export default function AdminUsersPage() {
                       <TableCell className="text-center pr-5">
                         <div className="flex items-center justify-center gap-1">
                           <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors" title="Editar" aria-label="Editar"><Edit className="h-4 w-4" /></button>
-                          <button onClick={() => handleToggleActive(u)} className={`p-1.5 rounded-lg transition-colors ${u.is_active ? "hover:bg-amber-50 text-amber-600" : "hover:bg-emerald-50 text-emerald-600"}`} title={u.is_active ? "Desactivar" : "Activar"} aria-label={u.is_active ? "Desactivar" : "Activar"}><Power className="h-4 w-4" /></button>
+                          <button onClick={() => setPendingToggle(u)} className={`p-1.5 rounded-lg transition-colors ${u.is_active ? "hover:bg-amber-50 text-amber-600" : "hover:bg-emerald-50 text-emerald-600"}`} title={u.is_active ? "Desactivar" : "Activar"} aria-label={u.is_active ? "Desactivar" : "Activar"}><Power className="h-4 w-4" /></button>
                           <button onClick={() => setShowDelete(u)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors" title="Eliminar" aria-label="Eliminar"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </TableCell>
@@ -365,96 +363,69 @@ export default function AdminUsersPage() {
             </Table>
           )}
           {!loading && users.length > 0 && (
-            <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
-              <p className="text-xs text-muted-foreground">
-                Mostrando {users.length} de {pagination.total} usuario{pagination.total !== 1 ? "s" : ""}
-              </p>
-              {pagination.totalPages > 1 && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1 || loading}
-                    onClick={() => loadUsers(page - 1)}
-                    className="h-8 px-3"
-                  >
-                    ← Anterior
-                  </Button>
-                  <span className="text-xs text-muted-foreground font-medium">
-                    Página {page} de {pagination.totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= pagination.totalPages || loading}
-                    onClick={() => loadUsers(page + 1)}
-                    className="h-8 px-3"
-                  >
-                    Siguiente →
-                  </Button>
-                </div>
-              )}
-            </div>
+            <PaginationBar
+              page={page}
+              totalPages={pagination.totalPages}
+              shown={users.length}
+              total={pagination.total}
+              loading={loading}
+              onPage={setPage}
+              noun={pagination.total !== 1 ? "usuarios" : "usuario"}
+            />
           )}
         </CardContent>
       </Card>
 
-      {/* Modal: Crear */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !actionLoading && setShowCreate(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1E2A5E]">Nuevo usuario</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
-            </div>
-            <p className="text-xs text-muted-foreground">La contraseña temporal se genera aleatoriamente y se mostrará tras crear el usuario.</p>
-            <div className="space-y-3">
-              <div><Label className="text-[#1E2A5E]">Nombre completo *</Label>
-                <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Ej: María González" /></div>
-              <div><Label className="text-[#1E2A5E]">Email *</Label>
-                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="maria@ijfk.edu.pe" /></div>
-              <div><Label className="text-[#1E2A5E]">Rol</Label>
-                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
-                  <option value="docente">Docente</option>
-                  <option value="admin">Administrador</option>
-                </select>
-                <p className="text-xs text-muted-foreground mt-1">Los padres se registran independientemente desde la página de registro.</p>
-              </div>
-              {form.role === "docente" && (
-                <>
-                  <div><Label className="text-[#1E2A5E]">Asignatura *</Label>
-                    <select value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
-                      <option value="">Selecciona una asignatura...</option>
-                      {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select></div>
-                  <div><Label className="text-[#1E2A5E]">Turno preferido</Label>
-                    <select value={form.shiftPreference} onChange={(e) => setForm({ ...form, shiftPreference: e.target.value })} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
-                      <option value="Ambos">Ambos turnos</option>
-                      <option value="Mañana">Solo mañana</option>
-                      <option value="Tarde">Solo tarde</option>
-                    </select></div>
-                </>
-              )}
-              <div><Label className="text-[#1E2A5E]">Teléfono (opcional)</Label>
-                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="987 654 321" /></div>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowCreate(false)} disabled={actionLoading} className="flex-1">Cancelar</Button>
-              <Button onClick={handleCreate} disabled={actionLoading} className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]">
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear usuario"}
-              </Button>
-            </div>
-          </div>
+      <Modal open={showCreate} onClose={() => !actionLoading && setShowCreate(false)} titleId="create-user-title" closable={!actionLoading}>
+        <div className="flex items-center justify-between">
+          <h2 id="create-user-title" className="text-xl font-bold text-[#1E2A5E]">Nuevo usuario</h2>
+          <ModalCloseButton onClose={() => setShowCreate(false)} disabled={actionLoading} />
         </div>
-      )}
+        <p className="text-xs text-muted-foreground">La contraseña temporal se genera aleatoriamente y se mostrará tras crear el usuario.</p>
+        <div className="space-y-3">
+          <div><Label className="text-[#1E2A5E]">Nombre completo *</Label>
+            <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Ej: María González" /></div>
+          <div><Label className="text-[#1E2A5E]">Email *</Label>
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="maria@ijfk.edu.pe" /></div>
+          <div><Label className="text-[#1E2A5E]">Rol</Label>
+            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+              <option value="docente">Docente</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">Los padres se registran independientemente desde la página de registro.</p>
+          </div>
+          {form.role === "docente" && (
+            <>
+              <div><Label className="text-[#1E2A5E]">Asignatura *</Label>
+                <select value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+                  <option value="">Selecciona una asignatura...</option>
+                  {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select></div>
+              <div><Label className="text-[#1E2A5E]">Turno preferido</Label>
+                <select value={form.shiftPreference} onChange={(e) => setForm({ ...form, shiftPreference: e.target.value })} className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+                  <option value="Ambos">Ambos turnos</option>
+                  <option value="Mañana">Solo mañana</option>
+                  <option value="Tarde">Solo tarde</option>
+                </select></div>
+            </>
+          )}
+          <div><Label className="text-[#1E2A5E]">Teléfono (opcional)</Label>
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="987 654 321" /></div>
+        </div>
+        <div className="flex gap-2 pt-2">
+          <Button variant="outline" onClick={() => setShowCreate(false)} disabled={actionLoading} className="flex-1">Cancelar</Button>
+          <Button onClick={handleCreate} disabled={actionLoading} className="flex-1 bg-[#1E2A5E] text-white hover:bg-[#162043]">
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear usuario"}
+          </Button>
+        </div>
+      </Modal>
 
-      {/* Modal: Editar */}
-      {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !actionLoading && setShowEdit(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+      <Modal open={!!showEdit} onClose={() => !actionLoading && setShowEdit(null)} titleId="edit-user-title" closable={!actionLoading}>
+        {showEdit && (
+          <>
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1E2A5E]">Editar usuario</h2>
-              <button onClick={() => setShowEdit(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+              <h2 id="edit-user-title" className="text-xl font-bold text-[#1E2A5E]">Editar usuario</h2>
+              <ModalCloseButton onClose={() => setShowEdit(null)} disabled={actionLoading} />
             </div>
             <p className="text-xs text-muted-foreground">{showEdit.email}</p>
             <div className="space-y-3">
@@ -494,65 +465,71 @@ export default function AdminUsersPage() {
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar cambios"}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
-      {/* Modal: Eliminar */}
-      {showDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !actionLoading && setShowDelete(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center"><Trash2 className="h-6 w-6 text-red-600" /></div>
-              <div>
-                <h2 className="text-xl font-bold text-[#0F172A]">Eliminar usuario</h2>
-                <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer</p>
-              </div>
-            </div>
-            <div className="rounded-lg bg-gray-50 p-3 text-sm">
-              <p><strong>{showDelete.full_name}</strong></p>
-              <p className="text-muted-foreground text-xs">{showDelete.email}</p>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowDelete(null)} disabled={actionLoading} className="flex-1">Cancelar</Button>
-              <Button onClick={handleDelete} disabled={actionLoading} className="flex-1 bg-red-600 text-white hover:bg-red-700">
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sí, eliminar"}
-              </Button>
-            </div>
+      <ConfirmDialog
+        open={!!showDelete}
+        onClose={() => setShowDelete(null)}
+        title="Eliminar usuario"
+        description="Esta acción no se puede deshacer"
+        confirmLabel="Sí, eliminar"
+        loading={actionLoading}
+        onConfirm={handleDelete}
+      >
+        {showDelete && (
+          <div className="rounded-lg bg-gray-50 p-3 text-sm">
+            <p><strong>{showDelete.full_name}</strong></p>
+            <p className="text-muted-foreground text-xs">{showDelete.email}</p>
           </div>
-        </div>
-      )}
+        )}
+      </ConfirmDialog>
 
-      {/* Modal: Contraseña temporal */}
-      {tempPwd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setTempPwd(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-emerald-600">¡Usuario creado!</h2>
-              <button onClick={() => setTempPwd(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
-            </div>
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">
-              <p className="font-semibold mb-1">Comparte esta contraseña temporal con el usuario:</p>
-              <code className="block bg-white p-2 rounded text-lg font-mono text-center border border-amber-200">{tempPwd}</code>
-              <p className="text-xs mt-2">El usuario podrá cambiarla al iniciar sesión.</p>
-            </div>
-            <Button onClick={() => setTempPwd(null)} className="w-full bg-[#1E2A5E] text-white hover:bg-[#162043]">Entendido</Button>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={!!pendingToggle}
+        onClose={() => setPendingToggle(null)}
+        title={pendingToggle?.is_active ? "Desactivar usuario" : "Activar usuario"}
+        description={
+          pendingToggle?.is_active
+            ? `¿Desactivar a ${pendingToggle.full_name}? No podrá iniciar sesión.`
+            : `¿Activar a ${pendingToggle?.full_name}?`
+        }
+        confirmLabel={pendingToggle?.is_active ? "Desactivar" : "Activar"}
+        tone={pendingToggle?.is_active ? "danger" : "primary"}
+        loading={actionLoading}
+        onConfirm={handleToggleActive}
+      />
 
-      {/* Modal: Horario del docente */}
-      {showSchedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowSchedule(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <Modal open={!!tempPwd} onClose={() => setTempPwd(null)} titleId="temp-pwd-title">
+        <div className="flex items-center justify-between">
+          <h2 id="temp-pwd-title" className="text-xl font-bold text-emerald-600">¡Usuario creado!</h2>
+          <ModalCloseButton onClose={() => setTempPwd(null)} />
+        </div>
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">
+          <p className="font-semibold mb-1">Comparte esta contraseña temporal con el usuario:</p>
+          <code className="block bg-white p-2 rounded text-lg font-mono text-center border border-amber-200">{tempPwd}</code>
+          <p className="text-xs mt-2">El usuario podrá cambiarla al iniciar sesión.</p>
+        </div>
+        <Button onClick={() => setTempPwd(null)} className="w-full bg-[#1E2A5E] text-white hover:bg-[#162043]">Entendido</Button>
+      </Modal>
+
+      <Modal
+        open={!!showSchedule}
+        onClose={() => setShowSchedule(null)}
+        titleId="schedule-title"
+        className="max-w-2xl max-h-[85vh] flex flex-col p-0 space-y-0 overflow-hidden"
+      >
+        {showSchedule && (
+          <>
             <div className="flex items-start justify-between p-6 pb-4 border-b border-gray-100">
               <div>
-                <h2 className="text-xl font-bold text-[#1E2A5E] flex items-center gap-2">
+                <h2 id="schedule-title" className="text-xl font-bold text-[#1E2A5E] flex items-center gap-2">
                   <CalendarDays className="h-5 w-5" /> Horario
                 </h2>
                 <p className="text-sm text-muted-foreground mt-0.5">{showSchedule.full_name} · {showSchedule.subject ?? "—"}</p>
               </div>
-              <button onClick={() => setShowSchedule(null)} className="p-1 rounded hover:bg-gray-100" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+              <ModalCloseButton onClose={() => setShowSchedule(null)} />
             </div>
             <div className="overflow-y-auto p-6 pt-4">
               {scheduleLoading ? (
@@ -580,10 +557,6 @@ export default function AdminUsersPage() {
                           {scheduleEntries
                             .filter((e) => e.day === day)
                             .sort((a, b) => {
-                              // Orden cronológico real: Mañana (7:45-13:20) siempre
-                              // antes que Tarde (13:30-19:05) — comparar solo por
-                              // `period` mezclaría los turnos, ya que period=1 existe
-                              // en ambos pero son horas de reloj distintas.
                               const shiftDiff = (sectionShift(a.section) === "Tarde" ? 1 : 0) - (sectionShift(b.section) === "Tarde" ? 1 : 0);
                               return shiftDiff !== 0 ? shiftDiff : a.period - b.period;
                             })
@@ -601,9 +574,9 @@ export default function AdminUsersPage() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -8,6 +8,9 @@ import { Bell, AlertTriangle, Info, Megaphone, Plus, Pencil, Trash2, ChevronDown
 import { toast } from "sonner";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
+import { ConfirmDialog } from "@/components/admin/shared";
+import { apiGet, apiSend } from "@/lib/client/api";
+import { formatAdminDate } from "@/lib/admin/theme";
 
 type AnnouncementCategory = "urgente" | "importante" | "general" | "informativo";
 type Announcement = {
@@ -30,10 +33,6 @@ const CATEGORIES = ["urgente", "importante", "general", "informativo"] as Announ
 const AUDIENCES = ["todos", "padres", "docentes", "5to", "3ro", "4to", "2do", "1ro"];
 const EMPTY_DRAFT = { title: "", body: "", category: "general" as AnnouncementCategory, audience: "todos" };
 
-// El API devuelve "YYYY-MM-DDT12:00:00" (mediodía local). Si por compatibilidad
-// llegara una fecha pelada, se normaliza a mediodía.
-function fmtDate(iso: string) { return new Date(iso.includes("T") ? iso : iso + "T12:00:00").toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" }); }
-
 type Draft = typeof EMPTY_DRAFT;
 
 export default function AdminAnnouncementsPage() {
@@ -47,15 +46,15 @@ export default function AdminAnnouncementsPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Announcement | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadItems = async () => {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/announcements");
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setItems(data.announcements);
+      const data = await apiGet("/api/announcements");
+      setItems((data.announcements ?? []) as Announcement[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
     } finally {
@@ -87,15 +86,17 @@ export default function AdminAnnouncementsPage() {
   function openNew() { setDraft(EMPTY_DRAFT); setEditingId(null); setFormError(""); setShowForm(true); }
   function openEdit(a: Announcement) { setDraft({ title: a.title, body: a.body, category: a.category, audience: a.audience }); setEditingId(a.id); setFormError(""); setShowForm(true); }
 
-  async function handleDelete(id: string) {
-    if (!confirm("¿Eliminar este aviso?")) return;
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
     try {
-      const r = await fetch(`/api/announcements/${id}`, { method: "DELETE" });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setItems((prev) => prev.filter((a) => a.id !== id));
+      await apiSend(`/api/announcements/${pendingDelete.id}`, "DELETE");
+      setItems((prev) => prev.filter((a) => a.id !== pendingDelete.id));
+      setPendingDelete(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al eliminar");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -105,19 +106,9 @@ export default function AdminAnnouncementsPage() {
     setSaving(true);
     try {
       if (editingId) {
-        const r = await fetch(`/api/announcements/${editingId}`, {
-          method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(draft),
-        });
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
+        await apiSend(`/api/announcements/${editingId}`, "PATCH", draft);
       } else {
-        const r = await fetch("/api/announcements", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(draft),
-        });
-        const data = await r.json();
-        if (!data.ok) throw new Error(data.error);
+        await apiSend("/api/announcements", "POST", draft);
       }
       setShowForm(false);
       setDraft(EMPTY_DRAFT);
@@ -232,11 +223,11 @@ export default function AdminAnnouncementsPage() {
                             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                           </button>
                           <button onClick={() => openEdit(a)} className="p-1.5 rounded-lg hover:bg-[#2563EB]/10 transition-colors" title="Editar" aria-label="Editar"><Pencil className="h-4 w-4 text-[#2563EB]" /></button>
-                          <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar" aria-label="Eliminar"><Trash2 className="h-4 w-4 text-red-500" /></button>
+                          <button onClick={() => setPendingDelete(a)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar" aria-label="Eliminar"><Trash2 className="h-4 w-4 text-red-500" /></button>
                         </div>
                       </div>
                       <h3 className="mt-1.5 text-sm font-bold text-[#0F172A]">{a.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">{a.sender}<span className="opacity-40">·</span><CalendarDays className="h-3 w-3" />{fmtDate(a.date)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">{a.sender}<span className="opacity-40">·</span><CalendarDays className="h-3 w-3" />{formatAdminDate(a.date)}</p>
                       {!isExpanded && (
                         <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{a.body}</p>
                       )}
@@ -255,6 +246,20 @@ export default function AdminAnnouncementsPage() {
           );
         })}
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        title="Eliminar aviso"
+        description={
+          pendingDelete
+            ? `¿Eliminar «${pendingDelete.title}»? Esta acción no se puede deshacer.`
+            : undefined
+        }
+        confirmLabel="Eliminar"
+        loading={deleting}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }

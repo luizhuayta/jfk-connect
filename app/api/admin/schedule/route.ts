@@ -9,12 +9,15 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query, withTransaction } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { assertSameOrigin } from "@/lib/csrf";
 import { parseBody } from "@/lib/validate";
 import { updateScheduleSchema } from "@/lib/schemas";
 import { findTeacherConflicts, type ScheduleSlotRef } from "@/lib/scheduleConflicts";
 import { sectionShift } from "@/lib/section-shift";
+import {
+  guardAdmin,
+  guardAdminMutation,
+  internalError,
+} from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +46,7 @@ interface EntryRow {
 }
 
 export async function GET(request: NextRequest) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
   try {
@@ -60,19 +63,12 @@ export async function GET(request: NextRequest) {
       entries: r.rows,
     });
   } catch (err) {
-    console.error("[admin/schedule GET] Error:", err);
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/schedule GET");
   }
 }
 
 export async function PATCH(request: NextRequest) {
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   try {
@@ -83,15 +79,18 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Antes de mover nada: simular el resultado final y verificar que ningún
-    // docente quede en dos secciones a la vez. El seed llena
-    // `schedule_entries.teacher_id` con el mismo `teacher_id` de `courses`,
-    // y este mismo endpoint es el único que edita horarios — y solo mueve
-    // día/período/hora, nunca la asignatura ni el docente — así que la
-    // columna se mantiene confiable sin necesidad de resolverla vía join.
     const allEntries = await query<
       { id: string; grade: string; section: string; day: string; period: number; subject: string; teacher_id: string | null }
     >(`SELECT id, grade, section, day, period, subject, teacher_id FROM schedule_entries`);
+
+    const existingIds = new Set(allEntries.rows.map((e) => e.id));
+    const missing = updates.filter((u) => !existingIds.has(u.id));
+    if (missing.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: "Una o más entradas de horario no existen." },
+        { status: 404 },
+      );
+    }
 
     const updateById = new Map(updates.map((u) => [u.id, u]));
     const simulated: (ScheduleSlotRef & { teacherId: string | null })[] = allEntries.rows.map((e) => {
@@ -127,9 +126,6 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Actualizar en una transacción. Primero movemos cada fila a un slot
-    // temporal único para evitar violaciones transitorias del
-    // UNIQUE(grade, section, day, period) al intercambiar períodos.
     await withTransaction(async (client) => {
       for (let i = 0; i < updates.length; i++) {
         await client.query(
@@ -151,10 +147,6 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[admin/schedule PATCH] Error:", err);
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/schedule PATCH");
   }
 }

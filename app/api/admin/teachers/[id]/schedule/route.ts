@@ -1,20 +1,16 @@
 /**
  * GET /api/admin/teachers/[id]/schedule
  *
- * Horario semanal de un docente puntual: día, hora y sección de cada clase
- * que dicta. Se filtra directo por `schedule_entries.teacher_id` — el seed
- * lo llena con el mismo `teacher_id` de `courses`, y el único endpoint que
- * edita horarios (`PATCH /api/admin/schedule`) solo mueve día/período/hora,
- * nunca la asignatura ni el docente, así que se mantiene confiable. No se
- * usa `schedule_entries.teacher` (texto): varios docentes de seed comparten
- * el mismo full_name, así que comparar por nombre sería ambiguo.
+ * Horario semanal de un docente puntual. Se filtra por
+ * `schedule_entries.teacher_id`.
  *
  * Seguridad: solo rol 'admin'.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { parseUuidParam } from "@/lib/validate";
+import { guardAdmin, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -51,11 +47,13 @@ interface Params {
 }
 
 export async function GET(request: NextRequest, { params }: Params) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
   try {
-    const { id } = await params;
+    const { id: rawId } = await params;
+    const [id, invalid] = parseUuidParam(rawId);
+    if (invalid) return invalid;
 
     const teacher = await queryOne<TeacherRow>(
       `SELECT id, full_name, subject FROM users WHERE id = $1 AND role = 'docente'`,
@@ -81,10 +79,6 @@ export async function GET(request: NextRequest, { params }: Params) {
       entries: r.rows,
     });
   } catch (err) {
-    console.error("[admin/teachers/[id]/schedule GET] Error:", err);
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/teachers/[id]/schedule GET");
   }
 }

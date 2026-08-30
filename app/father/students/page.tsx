@@ -16,7 +16,7 @@ import { useFatherStudents } from "@/components/father/useFatherStudents";
 import { honorLinkClass, paperCardClass, quietLinkClass } from "@/components/father/chrome";
 import { cn } from "@/lib/utils";
 
-import { MAX_CHILDREN } from "@/lib/father/claim-student";
+import { MAX_CHILDREN } from "@/lib/father/limits";
 
 const STUDENT_STATUS: Record<string, { label: string; className: string }> = {
   activo: { label: "Matriculado", className: "bg-emerald-100 text-emerald-800" },

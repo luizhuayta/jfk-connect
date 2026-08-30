@@ -16,12 +16,16 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
-import { assertSameOrigin } from "@/lib/csrf";
 import { createStudentSchema } from "@/lib/schemas";
-import { logger } from "@/lib/logger";
 import { SCHOOL_YEAR } from "@/lib/school-year";
+import { parseQuery, studentsListQuerySchema } from "@/lib/admin/params";
+import {
+  guardAdmin,
+  guardAdminMutation,
+  internalError,
+  uniqueConflict,
+} from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +40,6 @@ interface StudentRow {
   shift: string;
   parent_name: string | null;
   parent_phone: string | null;
-  avg_grade: number | null;
-  attendance_rate: number | null;
   status: string;
   enrolled_at: string;
 }
@@ -46,34 +48,37 @@ interface CountRow {
   total: number;
 }
 
+interface KpiRow {
+  total: number;
+  activo: number;
+  retirado: number;
+  trasladado: number;
+  at_risk: number;
+}
+
 export async function GET(request: NextRequest) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
-  try {
-    const { searchParams } = new URL(request.url);
-    const grade = searchParams.get("grade");
-    const section = searchParams.get("section");
-    const status = searchParams.get("status");
-    const q = searchParams.get("q");
+  const [filters, invalid] = parseQuery(request, studentsListQuerySchema);
+  if (invalid) return invalid;
 
-    // Paginación
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
+  try {
+    const { grade, section, status, q, page, limit } = filters;
     const offset = (page - 1) * limit;
 
     const where: string[] = [];
     const params: unknown[] = [];
 
-    if (grade && grade !== "all") {
+    if (grade !== "all") {
       params.push(grade);
       where.push(`s.grade = $${params.length}`);
     }
-    if (section && section !== "all") {
+    if (section !== "ALL") {
       params.push(section);
       where.push(`s.section = $${params.length}`);
     }
-    if (status && status !== "all") {
+    if (status !== "all") {
       params.push(status);
       where.push(`s.status = $${params.length}`);
     }
@@ -89,77 +94,110 @@ export async function GET(request: NextRequest) {
 
     const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
 
-    // Query de total (para paginación)
-    const countParams = [...params];
-    const countR = await query<CountRow>(
-      `SELECT COUNT(*)::int AS total
-       FROM students s
-       LEFT JOIN users p ON p.id = s.parent_id
-       ${whereClause}`,
-      countParams,
-    );
-    const total = countR.rows[0]?.total ?? 0;
-    const totalPages = Math.ceil(total / limit) || 1;
-
-    // Query de datos con LIMIT/OFFSET
-    const dataParams = [...params];
-    dataParams.push(SCHOOL_YEAR);
-    const yearIdx = dataParams.length;
-    dataParams.push(limit);
-    const limitIdx = dataParams.length;
-    dataParams.push(offset);
+    const dataParams = [...params, limit, offset];
+    const limitIdx = dataParams.length - 1;
     const offsetIdx = dataParams.length;
 
-    const r = await query<StudentRow>(
-      `SELECT
-         s.id,
-         s.full_name AS name,
-         COALESCE(s.initials, UPPER(LEFT(s.full_name, 1))) AS initials,
-         s.dni,
-         s.grade,
-         s.grade_num,
-         s.section,
-         s.shift::text AS shift,
-         p.full_name AS parent_name,
-         p.phone AS parent_phone,
-         (
-           SELECT ROUND(AVG(v.score)::numeric, 2)
-           FROM v_area_grades v WHERE v.student_id = s.id AND v.graded = v.expected AND v.year = $${yearIdx}
-         )::float AS avg_grade,
-         (
-           SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE a.status IN ('A','T','J')) / NULLIF(COUNT(*), 0))
-           FROM attendance a WHERE a.student_id = s.id
-         )::int AS attendance_rate,
-         s.status,
-         to_char(s.enrolled_at, 'YYYY-MM-DD') AS enrolled_at
-       FROM students s
-       LEFT JOIN users p ON p.id = s.parent_id
-       ${whereClause}
-       ORDER BY s.grade_num, s.section, s.full_name
-       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-      dataParams,
-    );
+    const [countR, kpiR, list] = await Promise.all([
+      query<CountRow>(
+        `SELECT COUNT(*)::int AS total
+         FROM students s
+         LEFT JOIN users p ON p.id = s.parent_id
+         ${whereClause}`,
+        params,
+      ),
+      query<KpiRow>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE status = 'activo')::int AS activo,
+           COUNT(*) FILTER (WHERE status = 'retirado')::int AS retirado,
+           COUNT(*) FILTER (WHERE status = 'trasladado')::int AS trasladado,
+           COUNT(*) FILTER (
+             WHERE status = 'activo'
+               AND (COALESCE(avg_grade, 99) < 11 OR COALESCE(attendance_rate, 100) < 80)
+           )::int AS at_risk
+         FROM students`,
+      ),
+      query<StudentRow>(
+        `SELECT
+           s.id,
+           s.full_name AS name,
+           COALESCE(s.initials, UPPER(LEFT(s.full_name, 1))) AS initials,
+           s.dni,
+           s.grade,
+           s.grade_num,
+           s.section,
+           s.shift::text AS shift,
+           p.full_name AS parent_name,
+           p.phone AS parent_phone,
+           s.status,
+           to_char(s.enrolled_at, 'YYYY-MM-DD') AS enrolled_at
+         FROM students s
+         LEFT JOIN users p ON p.id = s.parent_id
+         ${whereClause}
+         ORDER BY s.grade_num, s.section, s.full_name
+         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+        dataParams,
+      ),
+    ]);
+
+    const ids = list.rows.map((s) => s.id);
+    const avgBy = new Map<string, number>();
+    const attBy = new Map<string, number>();
+    if (ids.length > 0) {
+      const [avgs, atts] = await Promise.all([
+        query<{ student_id: string; avg_grade: number }>(
+          `SELECT student_id, ROUND(AVG(score)::numeric, 2)::float AS avg_grade
+           FROM v_area_grades
+           WHERE student_id = ANY($1::uuid[]) AND graded = expected AND year = $2
+           GROUP BY student_id`,
+          [ids, SCHOOL_YEAR],
+        ),
+        query<{ student_id: string; attendance_rate: number }>(
+          `SELECT student_id,
+                  ROUND(100.0 * COUNT(*) FILTER (WHERE status IN ('A','T','J')) / NULLIF(COUNT(*), 0))::int AS attendance_rate
+           FROM attendance
+           WHERE student_id = ANY($1::uuid[])
+           GROUP BY student_id`,
+          [ids],
+        ),
+      ]);
+      for (const row of avgs.rows) avgBy.set(row.student_id, row.avg_grade);
+      for (const row of atts.rows) attBy.set(row.student_id, row.attendance_rate);
+    }
+
+    const students = list.rows.map((s) => ({
+      ...s,
+      avg_grade: avgBy.get(s.id) ?? null,
+      attendance_rate: attBy.get(s.id) ?? null,
+    }));
+
+    const total = countR.rows[0]?.total ?? 0;
+    const kpi = kpiR.rows[0] ?? {
+      total: 0, activo: 0, retirado: 0, trasladado: 0, at_risk: 0,
+    };
 
     return NextResponse.json({
       ok: true,
-      students: r.rows,
+      students,
+      counts: {
+        total: kpi.total,
+        activo: kpi.activo,
+        retirado: kpi.retirado,
+        trasladado: kpi.trasladado,
+        atRisk: kpi.at_risk,
+      },
       pagination: {
         page,
         limit,
         total,
-        totalPages,
+        totalPages: Math.ceil(total / limit) || 1,
       },
     });
   } catch (err) {
-    logger.error({ err, route: "admin/students" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/students");
   }
 }
-
-// ─── POST: crear alumno ──────────────────────────────────────────────────────
 
 const GRADE_NUM: Record<string, number> = {
   "1ro": 1,
@@ -178,10 +216,7 @@ function initialsOf(fullName: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   const [parsed, validationError] = await parseBody(
@@ -193,7 +228,6 @@ export async function POST(request: NextRequest) {
   const { dni, fullName, grade, section, shift } = parsed;
 
   try {
-    // DNI duplicado → 409
     const existing = await queryOne<{ id: string }>(
       "SELECT id FROM students WHERE dni = $1",
       [dni],
@@ -237,10 +271,8 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (err) {
-    logger.error({ err, route: "admin/students POST" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    const conflict = uniqueConflict(err, "Ya existe un alumno con ese DNI.");
+    if (conflict) return conflict;
+    return internalError(err, "admin/students POST");
   }
 }

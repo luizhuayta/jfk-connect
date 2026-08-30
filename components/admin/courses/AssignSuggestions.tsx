@@ -13,6 +13,8 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import type { CandidateScore } from "@/lib/courses/assignment";
+import { ConfirmDialog } from "@/components/admin/shared";
+import { apiGet, apiSend } from "@/lib/client/api";
 
 interface SuggestionsResponse {
   ok: boolean;
@@ -48,6 +50,10 @@ export default function AssignSuggestions({
   const [assigningTeacherId, setAssigningTeacherId] = useState<string | null>(null);
   const [explainingTeacherId, setExplainingTeacherId] = useState<string | null>(null);
   const [explanations, setExplanations] = useState<Map<string, string>>(new Map());
+  const [pendingAssign, setPendingAssign] = useState<{
+    teacherId: string;
+    teacherName: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -56,10 +62,10 @@ export default function AssignSuggestions({
       setLoading(true);
       setError(null);
       try {
-        const r = await fetch(`/api/admin/courses/assign/suggestions?courseId=${courseId}`);
-        const data: SuggestionsResponse = await r.json();
+        const data = (await apiGet(
+          `/api/admin/courses/assign/suggestions?courseId=${encodeURIComponent(courseId)}`,
+        )) as SuggestionsResponse & { ok: true };
         if (!active) return;
-        if (!data.ok) throw new Error(data.error ?? "Error cargando sugerencias");
         setCandidates(data.candidates ?? []);
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : "Error cargando sugerencias");
@@ -72,17 +78,22 @@ export default function AssignSuggestions({
     };
   }, [open, courseId]);
 
+  function requestAssign(teacherId: string, teacherName: string) {
+    if (currentTeacherName) {
+      setPendingAssign({ teacherId, teacherName });
+      return;
+    }
+    void handleAssign(teacherId, teacherName);
+  }
+
   async function handleAssign(teacherId: string, teacherName: string) {
     setAssigningTeacherId(teacherId);
     try {
-      const r = await fetch("/api/admin/courses/assign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId, teacherId }),
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      toast.success(data.message ?? `${teacherName} asignado.`);
+      const data = await apiSend("/api/admin/courses/assign", "POST", { courseId, teacherId });
+      toast.success(
+        (typeof data.message === "string" && data.message) || `${teacherName} asignado.`,
+      );
+      setPendingAssign(null);
       onAssigned(teacherId, teacherName);
       setOpen(false);
     } catch (err) {
@@ -95,14 +106,13 @@ export default function AssignSuggestions({
   async function handleExplain(teacherId: string) {
     setExplainingTeacherId(teacherId);
     try {
-      const r = await fetch("/api/admin/courses/assign/explain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId, teacherId }),
+      const data = await apiSend("/api/admin/courses/assign/explain", "POST", {
+        courseId,
+        teacherId,
       });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error);
-      setExplanations((prev) => new Map(prev).set(teacherId, data.explanation));
+      const explanation =
+        typeof data.explanation === "string" ? data.explanation : "";
+      setExplanations((prev) => new Map(prev).set(teacherId, explanation));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al generar la explicación");
     } finally {
@@ -111,6 +121,7 @@ export default function AssignSuggestions({
   }
 
   return (
+    <>
     <Sheet open={open} onOpenChange={setOpen}>
       <Button
         variant="outline"
@@ -183,7 +194,7 @@ export default function AssignSuggestions({
                   <div className="flex items-center gap-2 pt-1">
                     <Button
                       size="sm"
-                      onClick={() => handleAssign(c.teacherId, c.teacherName)}
+                      onClick={() => requestAssign(c.teacherId, c.teacherName)}
                       disabled={assigningTeacherId === c.teacherId}
                       className="h-7 text-xs bg-[#1E2A5E] text-white hover:bg-[#162043] flex-1"
                     >
@@ -219,5 +230,22 @@ export default function AssignSuggestions({
         </div>
       </SheetContent>
     </Sheet>
+    <ConfirmDialog
+      open={pendingAssign !== null}
+      onClose={() => setPendingAssign(null)}
+      title="Reasignar docente"
+      description={
+        currentTeacherName && pendingAssign
+          ? `Este curso ya está a cargo de ${currentTeacherName}. ¿Asignar a ${pendingAssign.teacherName}?`
+          : undefined
+      }
+      confirmLabel="Reasignar"
+      tone="primary"
+      loading={assigningTeacherId !== null}
+      onConfirm={() => {
+        if (pendingAssign) void handleAssign(pendingAssign.teacherId, pendingAssign.teacherName);
+      }}
+    />
+    </>
   );
 }

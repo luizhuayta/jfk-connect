@@ -10,11 +10,9 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { parseBody } from "@/lib/validate";
-import { assertSameOrigin } from "@/lib/csrf";
+import { parseBody, parseUuidParam } from "@/lib/validate";
 import { updateEnrollmentSchema } from "@/lib/schemas";
-import { logger } from "@/lib/logger";
+import { guardAdminMutation, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +21,7 @@ interface Params {
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   const [parsed, validationError] = await parseBody(
@@ -36,7 +31,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (validationError) return validationError;
 
   try {
-    const { id } = await params;
+    const { id: rawId } = await params;
+    const [id, invalid] = parseUuidParam(rawId);
+    if (invalid) return invalid;
 
     const updates: string[] = [];
     const sqlParams: unknown[] = [];
@@ -57,7 +54,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       sqlParams.push(parsed.actividadesPaid);
       updates.push(`actividades_paid = $${sqlParams.length}`);
     }
-    // Registrar la fecha solo cuando se marca un pago nuevo
     if (parsed.apafaPaid === true || parsed.actividadesPaid === true) {
       updates.push(`last_payment_date = CURRENT_DATE`);
     }
@@ -90,12 +86,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       );
     }
 
-    return NextResponse.json({ ok: true, enrollment: r.rows[0] });
+    const row = r.rows[0];
+    return NextResponse.json({
+      ok: true,
+      enrollment: {
+        id: row.id,
+        status: row.status,
+        docsSubmitted: row.docs_submitted,
+        apafaPaid: row.apafa_paid,
+        actividadesPaid: row.actividades_paid,
+        lastPaymentDate: row.last_payment_date,
+      },
+    });
   } catch (err) {
-    logger.error({ err, route: "admin/enrollments/[id] PATCH" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/enrollments/[id] PATCH");
   }
 }

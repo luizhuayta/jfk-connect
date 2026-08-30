@@ -25,15 +25,14 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query, queryOne, withTransaction } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
 import { parseBody } from "@/lib/validate";
-import { assertSameOrigin } from "@/lib/csrf";
 import { assignCourseTeacherSchema } from "@/lib/schemas";
-import { logger } from "@/lib/logger";
 import { fetchCatalog } from "@/lib/curriculum/server";
 import { areaMatches, type CandidateTeacher, type CandidateCourse } from "@/lib/courses/assignment";
 import { findTeacherConflicts, type ScheduleSlotRef } from "@/lib/scheduleConflicts";
 import { sectionShift } from "@/lib/section-shift";
+import { recordAdminAction } from "@/lib/admin/audit";
+import { guardAdminMutation, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -55,10 +54,7 @@ interface TeacherRow {
 }
 
 export async function POST(request: NextRequest) {
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [admin, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   const [parsed, validationError] = await parseBody(request, assignCourseTeacherSchema);
@@ -164,7 +160,6 @@ export async function POST(request: NextRequest) {
         teacherId,
         courseId,
       ]);
-      // Antes desincronizado: la reasignación no tocaba schedule_entries.
       await client.query(
         `UPDATE schedule_entries SET teacher_id = $1, teacher = $2
          WHERE grade = $3 AND section = $4 AND subject = $5`,
@@ -172,12 +167,20 @@ export async function POST(request: NextRequest) {
       );
     });
 
+    await recordAdminAction({
+      actorId: admin.id,
+      action: "course.assign_teacher",
+      entityType: "course",
+      entityId: courseId,
+      summary: `${teacher.full_name} asignado a ${course.name} — ${course.grade} "${course.section}".`,
+      meta: { teacherId, courseName: course.name, grade: course.grade, section: course.section },
+    });
+
     return NextResponse.json({
       ok: true,
       message: `${teacher.full_name} asignado a ${course.name} — ${course.grade} "${course.section}".`,
     });
   } catch (err) {
-    logger.error({ err, route: "admin/courses/assign" }, "error inesperado");
-    return NextResponse.json({ ok: false, error: "Error interno del servidor." }, { status: 500 });
+    return internalError(err, "admin/courses/assign");
   }
 }

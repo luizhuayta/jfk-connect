@@ -15,3 +15,30 @@ export async function readApiJson(response: Response): Promise<Record<string, un
   }
   return data as Record<string, unknown> & { ok: true };
 }
+
+export async function apiGet(
+  url: string,
+  init?: RequestInit,
+): Promise<Record<string, unknown> & { ok: true }> {
+  const r = await fetch(url, init);
+  return readApiJson(r);
+}
+
+export async function apiSend(
+  url: string,
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  body?: unknown,
+  init?: RequestInit,
+): Promise<Record<string, unknown> & { ok: true }> {
+  const headers = new Headers(init?.headers);
+  if (body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const r = await fetch(url, {
+    ...init,
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : init?.body,
+  });
+  return readApiJson(r);
+}

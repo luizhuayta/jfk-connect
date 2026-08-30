@@ -9,7 +9,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { guardAdmin, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ interface SummaryRow {
 }
 
 export async function GET(request: NextRequest) {
-  const [, denied] = await requireRole(request, ["admin"]);
+  const [, denied] = await guardAdmin(request);
   if (denied) return denied;
 
   try {
@@ -54,10 +54,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ ok: true, stats });
   } catch (err) {
-    console.error("[admin/attendance/summary GET] Error:", err);
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/attendance/summary GET");
   }
 }

@@ -11,11 +11,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
-import { requireRole } from "@/lib/auth";
-import { parseBody } from "@/lib/validate";
-import { assertSameOrigin } from "@/lib/csrf";
+import { parseBody, parseUuidParam } from "@/lib/validate";
 import { updateUserSchema } from "@/lib/schemas";
-import { logger } from "@/lib/logger";
+import { recordAdminAction } from "@/lib/admin/audit";
+import { guardAdminMutation, internalError } from "@/lib/api/admin-route";
 
 export const dynamic = "force-dynamic";
 
@@ -24,20 +23,18 @@ interface Params {
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  // Proteger: solo admin
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [admin, denied] = await requireRole(request, ["admin"]);
+  const [admin, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   try {
-    const { id } = await params;
+    const { id: rawId } = await params;
+    const [id, invalid] = parseUuidParam(rawId);
+    if (invalid) return invalid;
+
     const [parsed, validationError] = await parseBody(request, updateUserSchema);
     if (validationError) return validationError;
     const body = parsed;
 
-    // Evitar que un admin se desactive a sí mismo
     if (
       typeof body.isActive === "boolean" &&
       body.isActive === false &&
@@ -79,7 +76,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (typeof body.password === "string" && body.password.length >= 8) {
       sqlParams.push(await hashPassword(body.password));
       updates.push(`password_hash = $${sqlParams.length}`);
-      // Si el admin resetea la contraseña, forzar cambio en el próximo login
       updates.push(`must_change_password = true`);
     }
 
@@ -91,7 +87,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     sqlParams.push(id);
-    const r = await query(
+    const r = await query<{
+      id: string;
+      email: string;
+      full_name: string;
+      role: string;
+      phone: string | null;
+      is_active: boolean;
+      created_at: string;
+      last_login_at: string | null;
+      avatar_url: string | null;
+    }>(
       `UPDATE users SET ${updates.join(", ")}, updated_at = now()
        WHERE id = $${sqlParams.length}
        RETURNING id, email, full_name, role, phone, is_active, created_at, last_login_at, avatar_url`,
@@ -105,28 +111,61 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       );
     }
 
-    return NextResponse.json({ ok: true, user: r.rows[0] });
+    const updated = r.rows[0];
+    const audits: Promise<void>[] = [];
+    if (body.role) {
+      audits.push(
+        recordAdminAction({
+          actorId: admin.id,
+          action: "user.role_change",
+          entityType: "user",
+          entityId: id,
+          summary: `Cambió el rol de ${updated.email} a ${body.role}.`,
+          meta: { email: updated.email, role: body.role },
+        }),
+      );
+    }
+    if (typeof body.isActive === "boolean") {
+      audits.push(
+        recordAdminAction({
+          actorId: admin.id,
+          action: body.isActive ? "user.activate" : "user.deactivate",
+          entityType: "user",
+          entityId: id,
+          summary: `${body.isActive ? "Activó" : "Desactivó"} a ${updated.email}.`,
+          meta: { email: updated.email, isActive: body.isActive },
+        }),
+      );
+    }
+    if (typeof body.password === "string") {
+      audits.push(
+        recordAdminAction({
+          actorId: admin.id,
+          action: "user.password_reset",
+          entityType: "user",
+          entityId: id,
+          summary: `Reseteó la contraseña de ${updated.email}.`,
+          meta: { email: updated.email },
+        }),
+      );
+    }
+    await Promise.all(audits);
+
+    return NextResponse.json({ ok: true, user: updated });
   } catch (err) {
-    logger.error({ err, route: "admin/users/[id] PATCH" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/users/[id] PATCH");
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
-  // Proteger: solo admin
-  const blocked = assertSameOrigin(request);
-  if (blocked) return blocked;
-
-  const [admin, denied] = await requireRole(request, ["admin"]);
+  const [admin, denied] = await guardAdminMutation(request);
   if (denied) return denied;
 
   try {
-    const { id } = await params;
+    const { id: rawId } = await params;
+    const [id, invalid] = parseUuidParam(rawId);
+    if (invalid) return invalid;
 
-    // Evitar auto-eliminación
     if (id === admin.id) {
       return NextResponse.json(
         { ok: false, error: "No puedes eliminar tu propia cuenta." },
@@ -134,8 +173,8 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       );
     }
 
-    const r = await query(
-      "DELETE FROM users WHERE id = $1 RETURNING id, email",
+    const r = await query<{ id: string; email: string; role: string }>(
+      "DELETE FROM users WHERE id = $1 RETURNING id, email, role",
       [id],
     );
 
@@ -146,15 +185,21 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       );
     }
 
+    const deleted = r.rows[0];
+    await recordAdminAction({
+      actorId: admin.id,
+      action: "user.delete",
+      entityType: "user",
+      entityId: id,
+      summary: `Eliminó a ${deleted.email}.`,
+      meta: { email: deleted.email, role: deleted.role },
+    });
+
     return NextResponse.json({
       ok: true,
-      message: `Usuario ${r.rows[0].email} eliminado.`,
+      message: `Usuario ${deleted.email} eliminado.`,
     });
   } catch (err) {
-    logger.error({ err, route: "admin/users/[id] DELETE" }, "error inesperado");
-    return NextResponse.json(
-      { ok: false, error: "Error interno del servidor." },
-      { status: 500 },
-    );
+    return internalError(err, "admin/users/[id] DELETE");
   }
 }
